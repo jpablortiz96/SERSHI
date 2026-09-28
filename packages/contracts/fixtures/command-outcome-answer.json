@@ -1,0 +1,12 @@
+{
+  "status": "answered",
+  "reply": "Hello. I'm SERSHI. I can tell you about this computer's system, memory and processor. Language understanding arrives once an AI provider is connected.",
+  "detail": {
+    "kind": "answer",
+    "topic": "greeting"
+  },
+  "toolId": null,
+  "data": null,
+  "confirmation": null,
+  "durationMs": null
+}

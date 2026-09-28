@@ -18,7 +18,7 @@ use crate::assistant::{
 };
 use crate::executor::{ConfirmationRequest, ExecutionOutcome, ToolExecutor};
 use crate::ids::ToolId;
-use crate::intent::{Intent, IntentResolver};
+use crate::intent::{AnswerTopic, Intent, IntentResolver};
 use crate::permission::PermissionGrants;
 use crate::policy::DenialReason;
 use crate::tool::{ToolCall, ToolDefinition};
@@ -51,13 +51,52 @@ pub enum CommandStatus {
     Rejected,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum RejectionReason {
+    Empty,
+    TooLong,
+    Busy,
+}
+
+/// Structured facts behind a reply, so each surface can phrase it in the
+/// user's interface language instead of relaying the English `reply`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "kind"
+)]
+pub enum OutcomeDetail {
+    Answer {
+        topic: AnswerTopic,
+    },
+    Unavailable {
+        capability: String,
+        milestone: String,
+    },
+    Denied {
+        reason: DenialReason,
+    },
+    Rejected {
+        reason: RejectionReason,
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
+        max_chars: usize,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct CommandOutcome {
     pub status: CommandStatus,
-    /// What SERSHI says back. Composed from tool summaries and fixed copy.
+    /// What SERSHI says back, in canonical English. Surfaces localise from
+    /// `status`, `tool_id`, `data` and `detail`, and fall back to this text
+    /// for anything they cannot phrase themselves.
     pub reply: String,
+    pub detail: Option<OutcomeDetail>,
     pub tool_id: Option<ToolId>,
     pub data: Option<Value>,
     pub confirmation: Option<ConfirmationRequest>,
@@ -69,6 +108,7 @@ impl CommandOutcome {
         Self {
             status,
             reply: reply.into(),
+            detail: None,
             tool_id: None,
             data: None,
             confirmation: None,
@@ -151,20 +191,29 @@ impl AssistantService {
         notify: &mut dyn FnMut(ServiceEvent),
     ) -> CommandOutcome {
         let text = request.text.trim();
-        if text.is_empty() {
-            return CommandOutcome::new(CommandStatus::Rejected, "Type or say a command.");
-        }
-        if text.chars().count() > MAX_COMMAND_CHARS {
-            return CommandOutcome::new(
-                CommandStatus::Rejected,
+        let rejection = if text.is_empty() {
+            Some((RejectionReason::Empty, "Type or say a command.".to_owned()))
+        } else if text.chars().count() > MAX_COMMAND_CHARS {
+            Some((
+                RejectionReason::TooLong,
                 format!("That command is too long. Keep it under {MAX_COMMAND_CHARS} characters."),
-            );
-        }
-        if self.machine.state().is_busy() {
-            return CommandOutcome::new(
-                CommandStatus::Rejected,
-                "I'm still working on the previous request.",
-            );
+            ))
+        } else if self.machine.state().is_busy() {
+            Some((
+                RejectionReason::Busy,
+                "I'm still working on the previous request.".to_owned(),
+            ))
+        } else {
+            None
+        };
+        if let Some((reason, reply)) = rejection {
+            return CommandOutcome {
+                detail: Some(OutcomeDetail::Rejected {
+                    reason,
+                    max_chars: MAX_COMMAND_CHARS,
+                }),
+                ..CommandOutcome::new(CommandStatus::Rejected, reply)
+            };
         }
 
         let watermark = self.activity.recent(1).first().map_or(0, |e| e.id);
@@ -177,23 +226,30 @@ impl AssistantService {
 
         let outcome = match self.resolver.resolve(text) {
             Intent::UseTool(call) => self.run_tool(&call, notify),
-            Intent::Reply(reply) => {
+            Intent::Answer(topic) => {
                 self.transition(AssistantEvent::Completed, notify);
-                CommandOutcome::new(CommandStatus::Answered, reply)
+                CommandOutcome {
+                    detail: Some(OutcomeDetail::Answer { topic }),
+                    ..CommandOutcome::new(CommandStatus::Answered, topic.canonical_text())
+                }
             }
-            Intent::NotYetAvailable {
-                capability,
-                milestone,
-            } => {
+            Intent::NotYetAvailable(capability) => {
+                let (label, milestone) = (capability.label, capability.milestone);
                 self.record(NewActivity::new(
                     ActivityKind::CapabilityUnavailable,
-                    format!("{capability} is planned for {milestone}"),
+                    format!("{label} is planned for {milestone}"),
                 ));
                 self.transition(AssistantEvent::AttentionNeeded, notify);
-                CommandOutcome::new(
-                    CommandStatus::Unavailable,
-                    format!("{capability} isn't available yet — it's planned for {milestone}."),
-                )
+                CommandOutcome {
+                    detail: Some(OutcomeDetail::Unavailable {
+                        capability: capability.id.to_owned(),
+                        milestone: milestone.to_owned(),
+                    }),
+                    ..CommandOutcome::new(
+                        CommandStatus::Unavailable,
+                        format!("{label} isn't available yet — it's planned for {milestone}."),
+                    )
+                }
             }
             Intent::NotUnderstood => {
                 self.transition(AssistantEvent::AttentionNeeded, notify);
@@ -257,7 +313,7 @@ impl AssistantService {
             }
             ExecutionOutcome::Denied { tool_id, reason } => {
                 self.transition(AssistantEvent::AttentionNeeded, notify);
-                let why = match reason {
+                let why = match &reason {
                     DenialReason::UnknownTool => "that tool isn't installed",
                     DenialReason::Prohibited => "it is blocked by policy",
                     DenialReason::UnsupportedPlatform => "it isn't supported on this computer",
@@ -267,6 +323,7 @@ impl AssistantService {
                 };
                 CommandOutcome {
                     tool_id: Some(tool_id),
+                    detail: Some(OutcomeDetail::Denied { reason }),
                     ..CommandOutcome::new(
                         CommandStatus::Denied,
                         format!("I can't use {tool_name} because {why}."),
@@ -421,6 +478,13 @@ mod tests {
         let mut service = service_with(FakeSystem::ok(), PermissionGrants::default());
         let (open, _) = submit(&mut service, "Open Spotify");
         assert_eq!(open.status, CommandStatus::Unavailable);
+        assert_eq!(
+            open.detail,
+            Some(OutcomeDetail::Unavailable {
+                capability: "apps.launch".into(),
+                milestone: "v0.1".into()
+            })
+        );
         let (unknown, _) = submit(&mut service, "zxqv");
         assert_eq!(unknown.status, CommandStatus::NotUnderstood);
     }

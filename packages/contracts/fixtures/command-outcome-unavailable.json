@@ -1,6 +1,11 @@
 {
   "status": "unavailable",
   "reply": "Opening and closing applications isn't available yet — it's planned for v0.1.",
+  "detail": {
+    "kind": "unavailable",
+    "capability": "apps.launch",
+    "milestone": "v0.1"
+  },
   "toolId": null,
   "data": null,
   "confirmation": null,

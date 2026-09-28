@@ -53,10 +53,17 @@ fn write_contract_fixtures() {
         &mut |_| {},
     );
 
+    let answer = service.submit(
+        &CommandRequest {
+            text: "hola".into(),
+        },
+        &mut |_| {},
+    );
     write("system-snapshot", &FakeSystem::ok().snapshot().unwrap());
     write("assistant-snapshot", &service.snapshot());
     write("command-outcome-completed", &outcome);
     write("command-outcome-unavailable", &unavailable);
+    write("command-outcome-answer", &answer);
     write("activity", &service.recent_activity(10));
     write("tool-definitions", &service.tool_definitions());
 }

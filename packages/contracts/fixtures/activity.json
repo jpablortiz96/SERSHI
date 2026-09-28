@@ -1,5 +1,13 @@
 [
   {
+    "id": 6,
+    "atMs": 1767225600000,
+    "kind": "commandReceived",
+    "toolId": null,
+    "summary": "Command received",
+    "durationMs": null
+  },
+  {
     "id": 5,
     "atMs": 1767225600000,
     "kind": "capabilityUnavailable",
