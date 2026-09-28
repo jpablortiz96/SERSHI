@@ -1,0 +1,16 @@
+[package]
+name = "sershi-platform"
+description = "Operating-system adapters for SERSHI ports. Windows-specific code lives in `src/windows`."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+sershi-core.workspace = true
+sysinfo.workspace = true
+
+[lints]
+workspace = true
