@@ -7,6 +7,7 @@
 //! tool/policy pipeline and the platform adapters.
 
 mod commands;
+mod confirmation;
 mod integration;
 mod runtime;
 mod surfaces;
@@ -24,6 +25,7 @@ pub fn run() {
         .setup(|app| {
             let runtime = runtime::Runtime::new()?;
             app.manage(runtime);
+            app.manage(confirmation::ConfirmationSurface::default());
             let integration = integration::setup(app.handle());
             app.manage(integration);
             surfaces::place_companion(app.handle());
@@ -38,8 +40,8 @@ pub fn run() {
             commands::get_runtime_info,
             commands::list_activity,
             commands::submit_command,
-            commands::decide_confirmation,
-            commands::get_pending_confirmation,
+            confirmation::get_confirmation_context,
+            confirmation::decide_confirmation,
             commands::get_application_catalog,
             commands::refresh_application_catalog,
             commands::get_integration_status,
@@ -50,10 +52,19 @@ pub fn run() {
             commands::preview_assistant_state,
             commands::quit_app,
         ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!());
 
-    if let Err(error) = app {
-        eprintln!("SERSHI failed to start: {error}");
-        std::process::exit(1);
+    match app {
+        Ok(app) => app.run(|app, event| {
+            // Any exit path (tray, Settings, OS shutdown): nothing pending
+            // survives, and nothing can be approved on the way out.
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                confirmation::shutdown(app);
+            }
+        }),
+        Err(error) => {
+            eprintln!("SERSHI failed to start: {error}");
+            std::process::exit(1);
+        }
     }
 }

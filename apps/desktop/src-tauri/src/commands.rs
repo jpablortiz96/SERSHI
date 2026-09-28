@@ -4,16 +4,16 @@
 
 use sershi_core::activity::ActivityEntry;
 use sershi_core::assistant::{AssistantSnapshot, AssistantState};
-use sershi_core::confirmation::ConfirmationRequest;
 use sershi_core::ipc::{
     ApplicationCatalogInfo, IntegrationStatus, IpcError, IpcErrorCode, RuntimeInfo, TrayLabels,
 };
 use sershi_core::platform::Platform;
 use sershi_core::ports::SystemInfoProvider;
-use sershi_core::service::{CommandOutcome, CommandRequest, ConfirmationDecision, ServiceEvent};
+use sershi_core::service::{CommandOutcome, CommandRequest, ServiceEvent};
 use sershi_core::system::SystemSnapshot;
 use tauri::{AppHandle, State};
 
+use crate::confirmation;
 use crate::integration;
 use crate::runtime::{Runtime, broadcast, schedule_settle};
 use crate::surfaces;
@@ -62,6 +62,8 @@ pub fn list_activity(
 /// Runs a command. Runs off the main thread (application discovery and
 /// launching can take a moment) and broadcasts each state change as it
 /// happens, so every surface shows Thinking → Planning → Executing live.
+/// If the command needs approval, the trusted confirmation surface opens;
+/// the outcome returned here never contains its id.
 #[tauri::command(async)]
 pub fn submit_command(
     app: AppHandle,
@@ -72,32 +74,9 @@ pub fn submit_command(
         let outcome = s.submit(&request, &mut |event| broadcast(&app, event));
         (outcome, s.snapshot())
     })?;
+    confirmation::sync(&app);
     schedule_settle(&app, &snapshot);
     Ok(outcome)
-}
-
-/// The user's decision on a pending confirmation. The UI can only name the
-/// confirmation and answer yes/no; the stored call is what runs.
-#[tauri::command(async)]
-pub fn decide_confirmation(
-    app: AppHandle,
-    runtime: State<'_, Runtime>,
-    decision: ConfirmationDecision,
-) -> Result<CommandOutcome, IpcError> {
-    let (outcome, snapshot) = runtime.with_service(|s| {
-        let outcome = s.decide(&decision, &mut |event| broadcast(&app, event));
-        (outcome, s.snapshot())
-    })?;
-    schedule_settle(&app, &snapshot);
-    Ok(outcome)
-}
-
-/// Lets a reloaded Command Center restore a confirmation still pending.
-#[tauri::command]
-pub fn get_pending_confirmation(
-    runtime: State<'_, Runtime>,
-) -> Result<Option<ConfirmationRequest>, IpcError> {
-    runtime.with_service(|s| s.pending_confirmation())
 }
 
 fn catalog_info(runtime: &Runtime) -> ApplicationCatalogInfo {
@@ -190,5 +169,5 @@ pub fn preview_assistant_state(
 
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
-    app.exit(0);
+    surfaces::quit(&app);
 }

@@ -14,8 +14,6 @@
     "allow-get-runtime-info",
     "allow-list-activity",
     "allow-submit-command",
-    "allow-decide-confirmation",
-    "allow-get-pending-confirmation",
     "allow-get-application-catalog",
     "allow-refresh-application-catalog",
     "allow-get-integration-status",

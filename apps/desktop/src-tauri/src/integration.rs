@@ -108,7 +108,7 @@ fn create_tray(app: &AppHandle) -> tauri::Result<TrayItems> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => surfaces::show_all(app),
             "hide" => surfaces::hide_all(app),
-            "quit" => app.exit(0),
+            "quit" => surfaces::quit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {

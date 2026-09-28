@@ -20,6 +20,8 @@ use sershi_core::tool::ToolRegistry;
 use sershi_platform::SysinfoSystemInfo;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::confirmation;
+
 /// Event carrying an `AssistantSnapshot` to every window.
 pub const STATE_EVENT: &str = "sershi://assistant-state";
 /// Event carrying a new `ActivityEntry` to every window.
@@ -123,12 +125,19 @@ pub fn announce_ready(app: &AppHandle) {
     }
 }
 
+/// Expires the pending confirmation shortly after its TTL, so the surface
+/// closes and the Command Center updates without user action. Idempotent:
+/// if the confirmation was decided or replaced, nothing is overdue.
 fn schedule_expiry(app: &AppHandle) {
     let app = app.clone();
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(CONFIRMATION_TTL_MS + 250));
         let runtime = app.state::<Runtime>();
-        let _ = runtime.with_service(|s| s.expire_confirmations(&mut |e| broadcast(&app, e)));
+        if let Ok(Some(outcome)) =
+            runtime.with_service(|s| s.expire_confirmations(&mut |e| broadcast(&app, e)))
+        {
+            confirmation::expired(&app, &outcome);
+        }
     });
 }
 

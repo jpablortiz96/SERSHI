@@ -15,6 +15,7 @@ use tauri::{
     WindowEvent,
 };
 
+use crate::confirmation::{self, CONFIRMATION};
 use crate::runtime::{Runtime, broadcast, schedule_settle};
 
 /// Asks the Command Center to focus its command input.
@@ -75,10 +76,15 @@ pub fn show_command_center(app: &AppHandle) {
 
 /// Summon: show the Command Center, focus the command input, and mark the
 /// assistant as attending. Used by the companion, tray, shortcut and a
-/// second launch of SERSHI.
+/// second launch of SERSHI. If an approval is pending, its trusted surface
+/// comes forward instead of the command input; summoning never decides it.
 pub fn summon(app: &AppHandle) {
     show_command_center(app);
-    let _ = app.emit_to(MAIN, FOCUS_COMMAND_EVENT, ());
+    if app.get_webview_window(CONFIRMATION).is_some() {
+        confirmation::focus_if_open(app);
+    } else {
+        let _ = app.emit_to(MAIN, FOCUS_COMMAND_EVENT, ());
+    }
     let runtime = app.state::<Runtime>();
     if let Ok(Some(snapshot)) = runtime.with_service(|s| {
         matches!(
@@ -120,22 +126,38 @@ pub fn hide_command_center(app: &AppHandle) {
 /// Returns an attending or waiting assistant to idle, cancelling any pending
 /// approval.
 pub fn dismiss(app: &AppHandle, runtime: &Runtime) -> Result<(), IpcError> {
-    let snapshot = runtime.with_service(|s| {
-        s.dismiss(&mut |event| broadcast(app, event));
-        s.snapshot()
+    let (cancelled, snapshot) = runtime.with_service(|s| {
+        let cancelled = s.dismiss(&mut |event| broadcast(app, event));
+        (cancelled, s.snapshot())
     })?;
+    confirmation::cancelled(app, cancelled);
     schedule_settle(app, &snapshot);
     Ok(())
 }
 
 /// Closing the Command Center hides it; SERSHI keeps living in the companion
-/// and tray. Quitting is explicit (Settings or tray).
+/// and tray. Quitting is explicit (Settings or tray). Closing the
+/// confirmation surface cancels its confirmation.
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
-    if window.label() != MAIN {
+    let WindowEvent::CloseRequested { api, .. } = event else {
         return;
+    };
+    match window.label() {
+        MAIN => {
+            api.prevent_close();
+            hide_command_center(window.app_handle());
+        }
+        CONFIRMATION => {
+            api.prevent_close();
+            confirmation::on_close_requested(window.app_handle());
+        }
+        _ => {}
     }
-    if let WindowEvent::CloseRequested { api, .. } = event {
-        api.prevent_close();
-        hide_command_center(window.app_handle());
-    }
+}
+
+/// Quit: pending approvals are cancelled and the surface destroyed before
+/// the process exits, so nothing can execute.
+pub fn quit(app: &AppHandle) {
+    confirmation::shutdown(app);
+    app.exit(0);
 }

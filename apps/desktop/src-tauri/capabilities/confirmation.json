@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "confirmation",
+  "description": "The trusted confirmation surface: reads its assigned confirmation and returns the human decision. Nothing else — no events, no window control, no other commands.",
+  "windows": ["confirmation"],
+  "permissions": ["allow-get-confirmation-context", "allow-decide-confirmation"]
+}
