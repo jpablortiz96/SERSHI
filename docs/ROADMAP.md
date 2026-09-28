@@ -14,6 +14,7 @@ validation.
 - ✅ Command Center (Home, Activity, Settings) and procedural companion
 - ✅ Design tokens, motion system, reduced motion, accessibility foundations
 - ✅ Contract generation, CI on Ubuntu and Windows
+- ✅ Localization foundation: English, Español (Latinoamérica), Português (Brasil)
 - ⏳ Manual Windows validation ([checklist](WINDOWS_PLATFORM.md#manual-validation-checklist))
 
 ## v0.1 — Operator
@@ -54,6 +55,8 @@ user-initiated, visible and audited.
 **Objective:** hands-free, private voice interaction.
 
 - Local wake word, VAD, STT (whisper.cpp / faster-whisper), TTS (Piper)
+- Conversation language independent of the interface language (detected per
+  request or chosen by the user; see LOCALIZATION.md)
 - Push-to-talk, mute, wake word off; real audio-driven visualisation
 - Optional cloud STT/TTS adapters (e.g. Deepgram, ElevenLabs)
 

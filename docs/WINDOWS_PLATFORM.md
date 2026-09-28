@@ -22,6 +22,8 @@ steps to validate on a physical Windows machine.
 | Companion drag vs click                            | `Companion.tsx`                              | ⚠️ click verified; drag needs a window manager | —         | REQUIRES_WINDOWS_VALIDATION      |
 | Close Command Center hides (app keeps running)     | `surfaces.rs::on_window_event`               | ⚠️ not exercised                     | —                     | REQUIRES_WINDOWS_VALIDATION      |
 | Strict CSP with production build                   | `tauri.conf.json`                            | ✅ release binary ran under Xvfb (WebKitGTK) | —                     | REQUIRES_WINDOWS_VALIDATION      |
+| Interface language: automatic detection from the Windows display language | `i18n/detect.ts` (`navigator.languages`) | ⚠️ container has no pt_BR/es locales; validated in Chromium with a pt-BR locale | — | REQUIRES_WINDOWS_VALIDATION |
+| Interface language: persistence across restarts and sync between windows | `i18n/preferences.ts`, `i18n/store.ts` (localStorage) | ✅ Tauri app restarted under Xvfb kept Español | — | REQUIRES_WINDOWS_VALIDATION |
 | NSIS installer                                     | `bundle.targets`                             | —                                   | —                     | REQUIRES_WINDOWS_VALIDATION      |
 | Open/close applications, battery, global shortcut, tray, notifications, credentials, microphone, screen capture, startup | Not implemented | — | — | Planned (see ROADMAP) |
 
@@ -113,6 +115,23 @@ Pass / Fail / Notes, then update the status table above.
 17. Windows "Show animations" off (Settings → Accessibility → Visual effects): loops
     stop; states remain distinguishable by colour and label.
 18. Narrator reads the state label and SERSHI's replies.
+
+**Language** (see [LOCALIZATION.md](LOCALIZATION.md))
+
+19a. With Windows in English and no saved preference, SERSHI starts in English.
+19b. Settings → General → Language → **Español**: the Command Center updates
+     immediately (navigation, Home, rails, command bar hints, earlier replies).
+19c. The companion follows: Narrator reads it as "Abrir el Centro de control de
+     SERSHI. Estado: Listo." and the status follows the state. (REQUIRES_WINDOWS_VALIDATION: cross-window sync via
+     the `storage` event.)
+19d. Switch to **Português**: no overflow or clipped text in navigation, Settings
+     rows, the language picker, the state preview grid, telemetry and activity.
+19e. Quit SERSHI (Settings → About → Quit) and relaunch: Português is still
+     selected.
+19f. Choose **Automatic**: the interface follows the Windows display language.
+     Change Windows' display language to Español (or Português), sign out and in,
+     relaunch SERSHI: it starts in that language. Any other language → English.
+     (REQUIRES_WINDOWS_VALIDATION: WebView2 language reporting.)
 
 **Production build**
 

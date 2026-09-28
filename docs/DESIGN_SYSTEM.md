@@ -188,6 +188,15 @@ the mark. Icons label actions; they never replace text for important meaning.
 - Reduced motion: see [MOTION_SYSTEM.md](MOTION_SYSTEM.md#reduced-motion).
 - Voice is never required; every action has a keyboard path.
 
+## Localization and layout
+
+Copy comes from `src/i18n` ([LOCALIZATION.md](LOCALIZATION.md)). Spanish and
+Portuguese strings are often noticeably longer than English, so layouts wrap instead of shrinking
+type: rails and row headers use `flex-wrap`, Settings values wrap under their
+labels, hint groups never break internally, and the greeting uses
+`text-wrap: balance`. Language names in the picker are endonyms (English,
+Español, Português) so anyone can find their own.
+
 ## Themes
 
 A theme is a partial token override (`createTheme({ state: { listening: … } })`)

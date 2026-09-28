@@ -27,7 +27,8 @@ User → Request → Intent/Plan → ToolCall → Policy → Permission → Risk
 | `PolicyDecision`      | `policy`                               | `Allow` · `Confirm { reason, can_remember }` · `Deny(reason)`                            |
 | `ConfirmationRequest` | `executor`                             | What the user must approve                                                                |
 | `ExecutionOutcome`    | `executor`                             | `completed` · `confirmationRequired` · `denied` · `failed`                               |
-| `CommandOutcome`      | `service`                              | What the UI receives: status, reply, tool id, data, duration                             |
+| `CommandOutcome`      | `service`                              | What the UI receives: status, tool id, data, structured `detail`, duration, and a canonical English `reply` used as fallback |
+| `OutcomeDetail`       | `service`                              | `answer` · `unavailable` (capability id, milestone) · `denied` (reason) · `rejected` (reason) — lets surfaces phrase replies in the interface language |
 | `ActivityEntry`       | `activity`                             | Audit record; never contains user content                                                |
 | `PlatformCapability`  | `platform`                             | Honest per-platform capability status                                                    |
 | `AgentPlan`           | _v0.1+_                                | Ordered `ToolCall`s with dependencies; rendered as the Planning state                    |
@@ -46,7 +47,8 @@ owns only presentation and the session transcript.
 1. **Request.** Text arrives from the command bar (later: voice transcript, routine
    trigger, quick command). Validated for length and emptiness; rejected while busy.
 2. **Intent.** An `IntentResolver` maps the request to an `Intent`.
-   - Today: `KeywordIntentResolver` — deterministic, small, honest. Calls it
+   - Today: `KeywordIntentResolver` — deterministic, small, honest, with English,
+     Spanish and Portuguese keywords ([LOCALIZATION.md](LOCALIZATION.md)). Calls it
      produces carry `CallOrigin::User` because they are a direct mapping of the
      user's words.
    - v0.1: an LLM-backed resolver presents tool definitions as function schemas and

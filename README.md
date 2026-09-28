@@ -34,6 +34,7 @@ deliberately minimal.
 | Typed command pipeline: intent → policy → tool → audit → response           | Confirmation UI, persistent settings (v0.1)                    |
 | Safe tools: system info, memory, processor load                             | Voice (v0.3), e-mail/calendar (v0.4), skills (v0.5)            |
 | Live telemetry, activity log, developer state preview                       | Installer for end users (v0.9)                                 |
+| Interface in English, Español and Português, switchable live                | Conversation language independent of the UI (v0.3)             |
 
 Anything SERSHI can't do yet, it says so. Windows-specific window behaviour is
 **not yet validated on Windows hardware** — see
@@ -90,7 +91,7 @@ docs/                    architecture, security, design, ADRs
 [Product](docs/PRODUCT.md) · [Architecture](docs/ARCHITECTURE.md) ·
 [Agent model](docs/AGENT_MODEL.md) · [Security](docs/SECURITY.md) ·
 [Design system](docs/DESIGN_SYSTEM.md) · [Motion](docs/MOTION_SYSTEM.md) ·
-[Brand](docs/BRAND.md) · [Windows](docs/WINDOWS_PLATFORM.md) ·
+[Brand](docs/BRAND.md) · [Localization](docs/LOCALIZATION.md) · [Windows](docs/WINDOWS_PLATFORM.md) ·
 [Testing](docs/TESTING.md) · [Skills](docs/SKILLS.md) · [Memory](docs/MEMORY.md) ·
 [Roadmap](docs/ROADMAP.md) · [Decisions](docs/adr/README.md)
 

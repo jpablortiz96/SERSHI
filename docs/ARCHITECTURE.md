@@ -210,6 +210,9 @@ tested definition. Any non-sleeping state can `Fail`; busy states cannot `Sleep`
   `AssistantState`, replaceable by future companion packs.
 - **Styling** — CSS Modules + design tokens as CSS custom properties. No utility
   framework; no hard-coded visual values ([DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)).
+- **Localization** — `src/i18n` owns every user-facing string (en-US, es-419,
+  pt-BR). The core returns structured outcomes; the UI phrases them in the
+  interface language. See [LOCALIZATION.md](LOCALIZATION.md).
 - **Browser preview** — `pnpm dev:web` runs the UI without the Rust core. Every
   surface shows honest "not connected" states; `?preview=<state>` previews visuals.
 
