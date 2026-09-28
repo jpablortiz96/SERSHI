@@ -1,0 +1,142 @@
+//! Activity: a bounded, privacy-conscious record of what SERSHI did.
+//!
+//! Entries record *what happened* (a tool ran, a call was denied), never the
+//! user's words, file contents, tool payloads or secrets. Summaries are
+//! composed by SERSHI from fixed templates and tool metadata, which is what
+//! makes this log safe to display, persist and export.
+
+use std::collections::VecDeque;
+
+use serde::Serialize;
+
+use crate::ids::ToolId;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum ActivityKind {
+    SystemReady,
+    CommandReceived,
+    ToolRequested,
+    ToolCompleted,
+    ToolFailed,
+    ToolDenied,
+    ConfirmationRequired,
+    CapabilityUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityEntry {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub id: u64,
+    /// Unix epoch milliseconds.
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub at_ms: u64,
+    pub kind: ActivityKind,
+    pub tool_id: Option<ToolId>,
+    /// Human-readable, system-composed. Must never contain user content.
+    pub summary: String,
+    /// Wall time of a completed or failed tool execution.
+    pub duration_ms: Option<u32>,
+}
+
+/// Default number of entries kept in memory.
+pub const DEFAULT_CAPACITY: usize = 200;
+
+#[derive(Debug, Clone)]
+pub struct ActivityLog {
+    entries: VecDeque<ActivityEntry>,
+    capacity: usize,
+    next_id: u64,
+}
+
+impl Default for ActivityLog {
+    fn default() -> Self {
+        Self::with_capacity(DEFAULT_CAPACITY)
+    }
+}
+
+/// A new entry before the log assigns its id.
+#[derive(Debug, Clone)]
+pub struct NewActivity {
+    pub kind: ActivityKind,
+    pub tool_id: Option<ToolId>,
+    pub summary: String,
+    pub duration_ms: Option<u32>,
+}
+
+impl NewActivity {
+    pub fn new(kind: ActivityKind, summary: impl Into<String>) -> Self {
+        Self {
+            kind,
+            tool_id: None,
+            summary: summary.into(),
+            duration_ms: None,
+        }
+    }
+
+    pub fn tool(mut self, tool_id: &ToolId) -> Self {
+        self.tool_id = Some(tool_id.clone());
+        self
+    }
+
+    pub fn duration(mut self, duration_ms: u32) -> Self {
+        self.duration_ms = Some(duration_ms);
+        self
+    }
+}
+
+impl ActivityLog {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            entries: VecDeque::with_capacity(capacity.min(DEFAULT_CAPACITY)),
+            capacity: capacity.max(1),
+            next_id: 1,
+        }
+    }
+
+    pub fn record(&mut self, at_ms: u64, activity: NewActivity) -> ActivityEntry {
+        let entry = ActivityEntry {
+            id: self.next_id,
+            at_ms,
+            kind: activity.kind,
+            tool_id: activity.tool_id,
+            summary: activity.summary,
+            duration_ms: activity.duration_ms,
+        };
+        self.next_id += 1;
+        if self.entries.len() == self.capacity {
+            self.entries.pop_front();
+        }
+        self.entries.push_back(entry.clone());
+        entry
+    }
+
+    /// Most recent first.
+    pub fn recent(&self, limit: usize) -> Vec<ActivityEntry> {
+        self.entries.iter().rev().take(limit).cloned().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keeps_most_recent_entries_within_capacity() {
+        let mut log = ActivityLog::with_capacity(3);
+        for i in 0..5 {
+            log.record(
+                i,
+                NewActivity::new(ActivityKind::ToolCompleted, format!("#{i}")),
+            );
+        }
+        let recent = log.recent(10);
+        assert_eq!(recent.len(), 3);
+        assert_eq!(recent[0].summary, "#4");
+        assert_eq!(recent[2].summary, "#2");
+        assert_eq!(recent[0].id, 5, "ids stay monotonic across eviction");
+    }
+}

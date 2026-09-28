@@ -1,0 +1,22 @@
+[package]
+name = "sershi-core"
+description = "Portable SERSHI domain: assistant state, tools, policy, permissions and activity."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[features]
+# Enables TypeScript contract generation (`cargo test -p sershi-core --features ts`).
+ts = ["dep:ts-rs"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ts-rs = { workspace = true, optional = true }
+
+[lints]
+workspace = true
