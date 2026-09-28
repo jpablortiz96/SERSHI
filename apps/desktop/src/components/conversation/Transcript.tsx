@@ -2,8 +2,8 @@ import type { CommandStatus } from "@sershi/contracts";
 import { useEffect, useRef } from "react";
 
 import { useI18n, type I18n } from "../../i18n";
-import { composeReply } from "../../i18n/domain";
-import type { Message, Reply } from "../../state/conversation";
+import { applicationName, asApplicationResult, composeReply } from "../../i18n/domain";
+import { useConversation, type Message, type Reply } from "../../state/conversation";
 import styles from "./Transcript.module.css";
 
 type Status = CommandStatus | "offline";
@@ -16,6 +16,9 @@ const STATUS_WITH_LABEL = [
   "failed",
   "offline",
   "rejected",
+  "unresolved",
+  "cancelled",
+  "expired",
 ] as const satisfies readonly Status[];
 
 type LabelledStatus = (typeof STATUS_WITH_LABEL)[number];
@@ -31,6 +34,8 @@ function statusOf(reply: Reply): Status {
       return "offline";
     case "unreachable":
       return "failed";
+    case "expired":
+      return "expired";
   }
 }
 
@@ -42,7 +47,37 @@ function replyText({ t, format }: I18n, reply: Reply): string {
       return t("reply.offline");
     case "unreachable":
       return t("reply.coreUnreachable");
+    case "expired":
+      return t("reply.expired");
   }
+}
+
+/** For an ambiguous application request: one button per candidate. */
+function Candidates({ reply }: { reply: Reply }) {
+  const { t } = useI18n();
+  const submit = useConversation((s) => s.submit);
+  if (reply.kind !== "outcome") return null;
+  const result = asApplicationResult(reply.outcome.data);
+  if (result?.kind !== "ambiguous") return null;
+  const closing = reply.outcome.toolId === "system.close_application";
+  return (
+    <ul className={styles.candidates}>
+      {result.candidates.map((app) => (
+        <li key={app.id}>
+          <button
+            type="button"
+            onClick={() => {
+              // Re-ask with the exact Windows name, in the user's language.
+              const command = closing ? "reply.apps.closeCommand" : "reply.apps.openCommand";
+              void submit(t(command, { app: app.displayName }));
+            }}
+          >
+            {applicationName(t, app)}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /** The session conversation. SERSHI's replies are announced to screen readers. */
@@ -72,6 +107,7 @@ export function Transcript({ messages }: { messages: Message[] }) {
           return (
             <li key={m.id} className={styles.message} data-role="sershi" data-status={status}>
               <p className={styles.reply}>{replyText(i18n, m.reply)}</p>
+              <Candidates reply={m.reply} />
               <p className={styles.meta}>
                 {hasLabel(status) && <span>{t(`transcript.status.${status}`)}</span>}
                 {outcome?.toolId && <span className="t-mono">{outcome.toolId}</span>}

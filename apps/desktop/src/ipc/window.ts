@@ -17,7 +17,4 @@ export const currentWindow = {
   toggleMaximize: () => {
     run(() => getCurrentWindow().toggleMaximize());
   },
-  hide: () => {
-    run(() => getCurrentWindow().hide());
-  },
 };

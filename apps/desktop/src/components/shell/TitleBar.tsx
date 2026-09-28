@@ -1,5 +1,5 @@
 import { useI18n, type MessageKey } from "../../i18n";
-import { currentWindow } from "../../ipc";
+import { currentWindow, sershi } from "../../ipc";
 import { useAssistantStore, type Connection } from "../../state/assistant";
 import { CloseIcon, Mark, MaximizeIcon, MinimizeIcon } from "./icons";
 import styles from "./TitleBar.module.css";
@@ -80,7 +80,11 @@ export function TitleBar({ view, onNavigate }: TitleBarProps) {
             type="button"
             aria-label={t("window.hide")}
             data-variant="close"
-            onClick={currentWindow.hide}
+            onClick={() => {
+              // Rust hides the window and cancels any pending approval;
+              // SERSHI keeps running in the companion and tray.
+              sershi.hideCommandCenter().catch(() => undefined);
+            }}
           >
             <CloseIcon />
           </button>

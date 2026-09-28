@@ -60,8 +60,37 @@
   --rule: var(--state-error);
 }
 .message[data-status="notUnderstood"],
-.message[data-status="rejected"] {
+.message[data-status="rejected"],
+.message[data-status="cancelled"],
+.message[data-status="expired"] {
   --rule: var(--state-offline);
+}
+.message[data-status="unresolved"] {
+  --rule: var(--state-warning);
+}
+
+.candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidates button {
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.02);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  font-size: var(--type-small-size);
+  color: var(--text-primary);
+  transition: box-shadow var(--duration-default) var(--ease-standard);
+}
+
+.candidates button:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-color) 45%, transparent);
 }
 
 .reply {

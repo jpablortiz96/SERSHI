@@ -3,10 +3,14 @@ import {
   isActivityEntry,
   isAssistantSnapshot,
   isCommandOutcome,
+  isConfirmationRequest,
+  isNullPayload,
   isSystemSnapshot,
   type ActivityEntry,
   type AssistantSnapshot,
   type AssistantState,
+  type ConfirmationRequest,
+  type TrayLabels,
 } from "@sershi/contracts";
 
 import { call, subscribe } from "./client";
@@ -24,7 +28,24 @@ export const sershi = {
   getRuntimeInfo: () => call("get_runtime_info", {}),
   listActivity: (limit: number) => call("list_activity", { limit }, isActivityList),
   submitCommand: (text: string) => call("submit_command", { request: { text } }, isCommandOutcome),
+  decideConfirmation: (request: ConfirmationRequest, approved: boolean) =>
+    call(
+      "decide_confirmation",
+      { decision: { confirmationId: request.id, toolId: request.toolId, approved } },
+      isCommandOutcome,
+    ),
+  getPendingConfirmation: () =>
+    call(
+      "get_pending_confirmation",
+      {},
+      (v): v is ConfirmationRequest | null => v === null || isConfirmationRequest(v),
+    ),
+  getApplicationCatalog: () => call("get_application_catalog", {}),
+  refreshApplicationCatalog: () => call("refresh_application_catalog", {}),
+  getIntegrationStatus: () => call("get_integration_status", {}),
+  setTrayLabels: (labels: TrayLabels) => call("set_tray_labels", { labels }),
   summonCommandCenter: () => call("summon_command_center", {}),
+  hideCommandCenter: () => call("hide_command_center", {}),
   dismissAssistant: () => call("dismiss_assistant", {}),
   previewState: (state: AssistantState | null) =>
     call("preview_assistant_state", { state }, isAssistantSnapshot),
@@ -34,4 +55,5 @@ export const sershi = {
     subscribe(EVENTS.assistantState, isAssistantSnapshot, handler),
   onActivity: (handler: (entry: ActivityEntry) => void) =>
     subscribe(EVENTS.activity, isActivityEntry, handler),
+  onFocusCommand: (handler: () => void) => subscribe(EVENTS.focusCommand, isNullPayload, handler),
 };

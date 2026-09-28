@@ -1,6 +1,4 @@
 import { ASSISTANT_STATES, type AssistantState } from "@sershi/contracts";
-import type { ReactNode } from "react";
-
 import {
   MESSAGES,
   SUPPORTED_LOCALES,
@@ -20,6 +18,8 @@ import { desktopRuntime, sershi } from "../../ipc";
 import { useAssistantStore } from "../../state/assistant";
 import { useRuntimeInfo } from "../../state/runtime";
 import styles from "./Page.module.css";
+import { Pill, Row, Section } from "./SettingsParts";
+import { CatalogInspector, WindowsIntegration } from "./WindowsIntegration";
 
 export function SettingsView() {
   const info = useRuntimeInfo();
@@ -42,6 +42,8 @@ export function SettingsView() {
           value={t("settings.conversation.value")}
         />
       </Section>
+
+      <WindowsIntegration />
 
       <Section title={t("settings.sections.privacy")}>
         <Row label={t("settings.privacy.typed")} value={t("settings.privacy.typedValue")} />
@@ -91,7 +93,12 @@ export function SettingsView() {
           : desktopOnly}
       </Section>
 
-      {developerMode && <StatePreview />}
+      {developerMode && (
+        <>
+          <StatePreview />
+          <CatalogInspector />
+        </>
+      )}
 
       <Section title={t("settings.sections.about")}>
         <Row
@@ -224,40 +231,5 @@ function StatePreview() {
         ))}
       </div>
     </Section>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className={styles.section} aria-label={title}>
-      <h2 className="t-label">{title}</h2>
-      <div className={styles.rows}>{children}</div>
-    </section>
-  );
-}
-
-function Row({ label, detail, value }: { label: string; detail?: ReactNode; value: ReactNode }) {
-  return (
-    <div className={styles.row}>
-      <div>
-        <p className={styles.rowLabel}>{label}</p>
-        {detail && <p className={styles.rowDetail}>{detail}</p>}
-      </div>
-      <div className={styles.rowValue}>{value}</div>
-    </div>
-  );
-}
-
-function Pill({
-  tone,
-  children,
-}: {
-  tone: "success" | "warning" | "neutral";
-  children: ReactNode;
-}) {
-  return (
-    <span className={styles.pill} data-tone={tone}>
-      {children}
-    </span>
   );
 }

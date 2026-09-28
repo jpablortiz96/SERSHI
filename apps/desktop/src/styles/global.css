@@ -106,6 +106,9 @@ button:disabled {
 [data-state="warning"] {
   --state-color: var(--state-warning);
 }
+[data-state="awaitingConfirmation"] {
+  --state-color: var(--state-awaiting-confirmation);
+}
 [data-state="error"] {
   --state-color: var(--state-error);
 }

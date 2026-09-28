@@ -5,6 +5,8 @@
  */
 import type {
   ActivityEntry,
+  ApplicationResult,
+  ApplicationSummary,
   AssistantState,
   CapabilityStatus,
   CommandOutcome,
@@ -20,7 +22,23 @@ const TOOL_KEYS: Partial<Record<string, PlainKey>> = {
   "system.get_info": "tools.systemInfo",
   "system.get_memory": "tools.memory",
   "system.get_cpu": "tools.cpu",
+  "system.open_application": "tools.openApplication",
+  "system.close_application": "tools.closeApplication",
 };
+
+/** Windows components have stable ids and localized names. */
+const BUILTIN_APP_KEYS: Partial<Record<string, PlainKey>> = {
+  "windows.calculator": "apps.calculator",
+  "windows.notepad": "apps.notepad",
+  "windows.explorer": "apps.explorer",
+  "windows.settings": "apps.settings",
+};
+
+/** An application's name: localized for Windows components, otherwise as Windows shows it. */
+export function applicationName(t: Translate, app: Pick<ApplicationSummary, "id" | "displayName">) {
+  const key = BUILTIN_APP_KEYS[app.id];
+  return key ? t(key) : app.displayName;
+}
 
 const CAPABILITY_KEYS: Partial<Record<string, PlainKey>> = {
   "system.telemetry": "capabilities.telemetry",
@@ -69,6 +87,20 @@ export function platformName(t: Translate, platform: Platform): string {
 }
 
 export function describeActivity(t: Translate, entry: ActivityEntry): string {
+  const event = describeEvent(t, entry);
+  // `subject` is a trusted, resolved name (never raw input).
+  const subject = entry.subject;
+  if (!subject) return event;
+  if (entry.kind === "toolCompleted" && entry.toolId === "system.open_application") {
+    return t("activity.events.appOpened", { app: subject });
+  }
+  if (entry.kind === "toolCompleted" && entry.toolId === "system.close_application") {
+    return t("activity.events.appCloseRequested", { app: subject });
+  }
+  return t("activity.withSubject", { event, subject });
+}
+
+function describeEvent(t: Translate, entry: ActivityEntry): string {
   const tool = toolName(t, entry.toolId);
   switch (entry.kind) {
     case "systemReady":
@@ -87,6 +119,14 @@ export function describeActivity(t: Translate, entry: ActivityEntry): string {
       return t("activity.events.confirmationRequired", { tool });
     case "capabilityUnavailable":
       return t("activity.events.capabilityUnavailable");
+    case "toolDeclined":
+      return t("activity.events.toolDeclined", { tool });
+    case "confirmationApproved":
+      return t("activity.events.confirmationApproved", { tool });
+    case "confirmationCancelled":
+      return t("activity.events.confirmationCancelled", { tool });
+    case "confirmationExpired":
+      return t("activity.events.confirmationExpired", { tool });
   }
 }
 
@@ -141,6 +181,48 @@ function completedReply(t: Translate, f: Formatters, outcome: CommandOutcome): s
   }
 }
 
+const APPLICATION_RESULT_KINDS = [
+  "opened",
+  "notFound",
+  "ambiguous",
+  "launchFailed",
+  "closeRequested",
+  "notRunning",
+  "closeUnsupported",
+  "catalogUnavailable",
+] as const satisfies readonly ApplicationResult["kind"][];
+
+/** Narrows tool output data to an application result. */
+export function asApplicationResult(data: unknown): ApplicationResult | null {
+  if (!isObj(data) || typeof data.kind !== "string") return null;
+  return (APPLICATION_RESULT_KINDS as readonly string[]).includes(data.kind)
+    ? (data as ApplicationResult)
+    : null;
+}
+
+function applicationReply(t: Translate, result: ApplicationResult): string {
+  switch (result.kind) {
+    case "opened":
+      return t("reply.apps.opened", { app: applicationName(t, result.application) });
+    case "notFound":
+      return t("reply.apps.notFound", { app: result.query });
+    case "ambiguous":
+      return t("reply.apps.ambiguous", { query: result.query });
+    case "launchFailed":
+      return t(`reply.apps.launchFailed.${result.reason}`, {
+        app: applicationName(t, result.application),
+      });
+    case "closeRequested":
+      return t("reply.apps.closeRequested", { app: applicationName(t, result.application) });
+    case "notRunning":
+      return t("reply.apps.notRunning", { app: applicationName(t, result.application) });
+    case "closeUnsupported":
+      return t("reply.apps.closeUnsupported", { app: applicationName(t, result.application) });
+    case "catalogUnavailable":
+      return t("reply.apps.catalogUnavailable");
+  }
+}
+
 /**
  * Renders a command outcome in the interface language. Falls back to the
  * core's canonical English `reply` for anything it cannot phrase (e.g. a tool
@@ -149,9 +231,17 @@ function completedReply(t: Translate, f: Formatters, outcome: CommandOutcome): s
 export function composeReply(t: Translate, f: Formatters, outcome: CommandOutcome): string {
   const tool = toolName(t, outcome.toolId);
   const detail = outcome.detail;
+  const app = asApplicationResult(outcome.data);
   switch (outcome.status) {
     case "completed":
+      if (app) return applicationReply(t, app);
       return completedReply(t, f, outcome) ?? outcome.reply;
+    case "unresolved":
+      return app ? applicationReply(t, app) : outcome.reply;
+    case "cancelled":
+      return t("reply.cancelled");
+    case "expired":
+      return t("reply.expired");
     case "answered":
       return detail?.kind === "answer" ? t(`reply.answer.${detail.topic}`) : outcome.reply;
     case "needsConfirmation":
@@ -170,6 +260,7 @@ export function composeReply(t: Translate, f: Formatters, outcome: CommandOutcom
     case "notUnderstood":
       return t("reply.notUnderstood");
     case "failed":
+      if (app) return applicationReply(t, app);
       return t("reply.failed", { tool });
     case "rejected":
       if (detail?.kind !== "rejected") return outcome.reply;

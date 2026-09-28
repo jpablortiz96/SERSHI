@@ -45,6 +45,7 @@ export const enUS = {
     speaking: { label: "Speaking", line: "Responding…" },
     success: { label: "Done", line: "Completed." },
     warning: { label: "Needs attention", line: "Something needs your attention." },
+    awaitingConfirmation: { label: "Waiting for you", line: "Waiting for your approval." },
     error: { label: "Couldn't complete", line: "Something went wrong. Details are in Activity." },
   },
 
@@ -63,6 +64,7 @@ export const enUS = {
       memory: "How much memory am I using?",
       cpu: "What's my processor load?",
       system: "Tell me about this computer",
+      notepad: "Open Notepad",
     },
   },
 
@@ -89,6 +91,9 @@ export const enUS = {
       failed: "Failed",
       offline: "Core not connected",
       rejected: "Not sent",
+      unresolved: "No action taken",
+      cancelled: "Cancelled",
+      expired: "Expired",
     },
   },
 
@@ -113,12 +118,36 @@ export const enUS = {
     answer: {
       greeting:
         "Hello. I'm SERSHI. I can tell you about this computer's system, memory and processor. Language understanding arrives once an AI provider is connected.",
-      help: "Right now I can report system information, memory usage and processor load. Try “How much memory am I using?”. Opening apps, files, voice and connected services are on the roadmap.",
+      help: "I can report system information, memory usage and processor load, and open or close installed applications. Try “Open Notepad”. Files, voice and connected services are on the roadmap.",
     },
     rejected: {
       empty: "Type or say a command.",
       tooLong: "That command is too long. Keep it under {max} characters.",
       busy: "I'm still working on the previous request.",
+      unknownConfirmation: "That request is no longer waiting for approval.",
+    },
+    cancelled: "Cancelled. Nothing was changed.",
+    expired: "This request expired. Ask SERSHI again if you still want to do it.",
+    apps: {
+      opened: "Opened {app}.",
+      notFound: "I couldn't find {app} on this computer.",
+      ambiguous: "I found more than one match for “{query}”. Which one do you want?",
+      launchFailed: {
+        targetMissing:
+          "I found {app}, but it isn't where Windows says it is. It may have been moved or uninstalled.",
+        accessDenied: "Windows blocked SERSHI from opening {app}.",
+        elevationRequired:
+          "{app} needs administrator rights. SERSHI doesn't request elevation — open it yourself if you trust it.",
+        unsupported: "SERSHI found {app}, but this type of application isn't supported yet.",
+        timedOut: "{app} didn't respond in time. It may still be starting.",
+        failed: "I found {app}, but Windows couldn't open it.",
+      },
+      closeRequested: "Asked {app} to close. It may ask you to save your work first.",
+      notRunning: "{app} isn't running.",
+      closeUnsupported: "SERSHI can't close {app} safely yet.",
+      catalogUnavailable: "I couldn't read the list of installed applications.",
+      openCommand: "Open {app}",
+      closeCommand: "Close {app}",
     },
     offline:
       "I'm running as a browser preview, so my core isn't connected. Launch the desktop app (pnpm dev) to talk to me.",
@@ -154,6 +183,7 @@ export const enUS = {
       tool: "Tool",
       duration: "Duration",
     },
+    withSubject: "{event} · {subject}",
     events: {
       systemReady: "SERSHI core started",
       commandReceived: "Command received",
@@ -163,6 +193,12 @@ export const enUS = {
       toolDenied: "Blocked {tool} by policy",
       confirmationRequired: "{tool} is waiting for your approval",
       capabilityUnavailable: "Requested a capability planned for a later version",
+      toolDeclined: "Couldn't complete: {tool}",
+      confirmationApproved: "Approved: {tool}",
+      confirmationCancelled: "Cancelled: {tool}",
+      confirmationExpired: "Approval expired: {tool}",
+      appOpened: "Opened {app}",
+      appCloseRequested: "Asked {app} to close",
     },
   },
 
@@ -171,6 +207,7 @@ export const enUS = {
     lede: "What SERSHI can do, what it is allowed to do, and what it keeps. More preferences arrive with persistent settings in v0.1.",
     sections: {
       general: "General",
+      windows: "Windows integration",
       privacy: "Privacy",
       tools: "Tools & permissions",
       platform: "Platform",
@@ -200,7 +237,7 @@ export const enUS = {
       analyticsValue: "None. SERSHI sends nothing anywhere.",
     },
     toolsFootnote:
-      "Every tool passes the policy engine before it runs. Only read-only system information is allowed by default; anything else asks first.",
+      "Every tool passes the policy engine before it runs. Reading system information and opening installed applications are allowed by default; anything else asks first.",
     risk: {
       safe: "Safe",
       sensitive: "Sensitive",
@@ -213,11 +250,42 @@ export const enUS = {
       unsupported: "Unsupported",
     },
     desktopOnly: "Available in the desktop app.",
+    featureStatus: {
+      active: "Active",
+      unavailable: "Unavailable",
+      planned: "Planned",
+    },
+    windows: {
+      appControl: "Application control",
+      appControlDetail: "Open and close installed applications by name.",
+      tray: "System tray",
+      trayDetail: "SERSHI stays available when the Command Center is closed.",
+      shortcut: "Global shortcut",
+      shortcutDetail: "Summons SERSHI from any application.",
+      shortcutUnavailable: "Another application is using this shortcut.",
+      startup: "Start with Windows",
+      catalog: "Installed applications",
+      catalogCount: "{count} found",
+      catalogScanned: "Scanned at {time} in {duration}",
+      catalogNotScanned: "Scanned the first time you open an application.",
+      catalogUnsupported: "Available on Windows",
+      catalogFailed: "The application list couldn't be read.",
+      refresh: "Refresh",
+      refreshing: "Scanning…",
+    },
+    sources: {
+      builtIn: "Windows",
+      packagedApp: "Microsoft Store",
+      startMenu: "Start menu",
+      appPaths: "App Paths",
+    },
     developer: {
       footnote:
         "Visual only: previews how every surface renders a state. Behaviour and policy always use the real state. Developer builds only.",
       groupLabel: "Preview assistant state",
       live: "Live",
+      catalog: "Discovered applications",
+      previewConfirmation: "Preview confirmation",
     },
     about: {
       version: "Version",
@@ -240,6 +308,44 @@ export const enUS = {
     systemInfo: "System information",
     memory: "Memory usage",
     cpu: "Processor usage",
+    openApplication: "Open application",
+    closeApplication: "Close application",
+  },
+
+  apps: {
+    calculator: "Calculator",
+    notepad: "Notepad",
+    explorer: "File Explorer",
+    settings: "Settings",
+  },
+
+  confirm: {
+    label: "Approval required",
+    closeApplication: {
+      title: "Close {app}?",
+      body: "SERSHI will ask {app} to close its windows.",
+      risk: "Unsaved work may be lost if the application doesn't ask to save first.",
+      confirm: "Close {app}",
+    },
+    runTool: {
+      title: "Allow {tool}?",
+      body: "SERSHI needs your approval to use {tool}.",
+      confirm: "Allow",
+    },
+    reason: {
+      permissionUndecided: "You haven't granted this permission yet.",
+      highRisk: "This action may not be reversible.",
+      agentInitiatedSensitiveAction: "This action was proposed automatically.",
+    },
+    cancel: "Cancel",
+    expires: "Expires in {seconds} s",
+    preview: "Preview only — nothing will run.",
+  },
+
+  tray: {
+    open: "Open SERSHI",
+    hide: "Hide SERSHI",
+    quit: "Quit SERSHI",
   },
 
   capabilities: {

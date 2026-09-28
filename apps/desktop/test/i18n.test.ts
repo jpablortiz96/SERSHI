@@ -41,9 +41,13 @@ describe("locale resources", () => {
     for (const locale of ["es-419", "pt-BR"] as const) {
       const table = flattenMessages(MESSAGES[locale]);
       const identical = [...canonical].filter(([k, v]) => table.get(k) === v).map(([k]) => k);
-      // Only brand names, key caps, units and the shared "SERSHI — {state}" pattern may match.
+      // Only brand names, key caps, units and punctuation-only patterns may match.
       expect(identical.sort()).toEqual(
         [
+          "activity.withSubject",
+          "settings.sources.appPaths",
+          "settings.sources.builtIn",
+          "settings.sources.packagedApp",
           "command.keyEnter",
           "command.keyEscape",
           "core.label",
@@ -178,6 +182,7 @@ describe("core outcomes are phrased in the interface language", () => {
       atMs: 0,
       kind: "toolCompleted",
       toolId: "system.get_memory",
+      subject: null,
       summary: "Memory usage completed",
       durationMs: 0,
     });

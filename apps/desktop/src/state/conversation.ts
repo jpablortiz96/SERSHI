@@ -10,13 +10,16 @@ import type { CommandOutcome } from "@sershi/contracts";
 import { create } from "zustand";
 
 import { desktopRuntime, sershi } from "../ipc";
+import { useConfirmation } from "./confirmation";
 
 export type Reply =
   | { kind: "outcome"; outcome: CommandOutcome }
   /** Browser preview: no core to answer. */
   | { kind: "offline" }
   /** The IPC call itself failed. */
-  | { kind: "unreachable" };
+  | { kind: "unreachable" }
+  /** A confirmation dialog timed out before the user decided. */
+  | { kind: "expired" };
 
 export type Message =
   { id: number; role: "user"; text: string } | { id: number; role: "sershi"; reply: Reply };
@@ -25,6 +28,8 @@ interface ConversationStore {
   messages: Message[];
   pending: boolean;
   submit: (text: string) => Promise<void>;
+  /** Adds a reply that did not come from `submit` (e.g. a confirmation decision). */
+  addReply: (reply: Reply) => void;
   clear: () => void;
 }
 
@@ -46,6 +51,9 @@ export const useConversation = create<ConversationStore>((set, get) => {
     clear: () => {
       set({ messages: [] });
     },
+    addReply: (reply) => {
+      push({ role: "sershi", reply });
+    },
     submit: async (raw) => {
       const text = raw.trim();
       if (!text || get().pending) return;
@@ -58,8 +66,13 @@ export const useConversation = create<ConversationStore>((set, get) => {
 
       set({ pending: true });
       try {
+        // A new request replaces any pending approval (the core cancels it too).
+        useConfirmation.getState().clear();
         const outcome = await sershi.submitCommand(text);
         push({ role: "sershi", reply: { kind: "outcome", outcome } });
+        if (outcome.status === "needsConfirmation" && outcome.confirmation) {
+          useConfirmation.getState().show(outcome.confirmation);
+        }
       } catch {
         push({ role: "sershi", reply: { kind: "unreachable" } });
       } finally {

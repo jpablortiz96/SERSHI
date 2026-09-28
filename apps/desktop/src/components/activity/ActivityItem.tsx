@@ -14,7 +14,11 @@ export const KIND_TONE: Record<
   toolCompleted: "success",
   toolFailed: "error",
   toolDenied: "error",
+  toolDeclined: "warning",
   confirmationRequired: "warning",
+  confirmationApproved: "neutral",
+  confirmationCancelled: "neutral",
+  confirmationExpired: "neutral",
   capabilityUnavailable: "warning",
 };
 

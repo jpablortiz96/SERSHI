@@ -13,6 +13,7 @@ const SUGGESTIONS = [
   "home.suggestions.memory",
   "home.suggestions.cpu",
   "home.suggestions.system",
+  "home.suggestions.notepad",
 ] as const;
 
 export function HomeView({ onViewActivity }: { onViewActivity: () => void }) {

@@ -233,6 +233,18 @@
 .core[data-state="warning"] .flash {
   animation: ripple var(--duration-cinematic) var(--ease-enter) 1 both;
 }
+/* Waiting for approval: a slow, steady invitation — no loops speed up,
+   nothing flashes. Holds until the user decides or the request expires. */
+.core[data-state="awaitingConfirmation"] .halo {
+  animation: attention 3.2s var(--ease-breathe) infinite;
+}
+.core[data-state="awaitingConfirmation"] .field {
+  opacity: 1;
+}
+.core[data-state="awaitingConfirmation"] .orbit {
+  animation-play-state: paused;
+}
+
 .core[data-state="error"] .body {
   animation: contract var(--duration-slow) var(--ease-spring) 1 both;
 }

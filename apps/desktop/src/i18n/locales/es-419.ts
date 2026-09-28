@@ -41,6 +41,7 @@ export const es419: Messages = {
     speaking: { label: "Hablando", line: "Respondiendo…" },
     success: { label: "Hecho", line: "Completado." },
     warning: { label: "Requiere atención", line: "Algo requiere tu atención." },
+    awaitingConfirmation: { label: "Esperando aprobación", line: "Esperando tu aprobación." },
     error: {
       label: "No se pudo completar",
       line: "Algo salió mal. Los detalles están en Actividad.",
@@ -62,6 +63,7 @@ export const es419: Messages = {
       memory: "¿Cuánta memoria estoy usando?",
       cpu: "¿Cuál es la carga del procesador?",
       system: "Háblame de esta computadora",
+      notepad: "Abre el Bloc de notas",
     },
   },
 
@@ -88,6 +90,9 @@ export const es419: Messages = {
       failed: "Falló",
       offline: "Núcleo no conectado",
       rejected: "No enviado",
+      unresolved: "Sin acción",
+      cancelled: "Cancelado",
+      expired: "Vencido",
     },
   },
 
@@ -115,12 +120,38 @@ export const es419: Messages = {
     answer: {
       greeting:
         "Hola. Soy SERSHI. Puedo contarte sobre el sistema, la memoria y el procesador de esta computadora. La comprensión del lenguaje llegará cuando se conecte un proveedor de IA.",
-      help: "Por ahora puedo informarte sobre el sistema, el uso de memoria y la carga del procesador. Prueba con «¿Cuánta memoria estoy usando?». Abrir aplicaciones, archivos, la voz y los servicios conectados están en la hoja de ruta.",
+      help: "Puedo informarte sobre el sistema, el uso de memoria y la carga del procesador, y abrir o cerrar aplicaciones instaladas. Prueba con «Abre el Bloc de notas». Los archivos, la voz y los servicios conectados están en la hoja de ruta.",
     },
     rejected: {
       empty: "Escribe o di un comando.",
       tooLong: "Ese comando es demasiado largo. Usa menos de {max} caracteres.",
       busy: "Todavía estoy trabajando en la solicitud anterior.",
+      unknownConfirmation: "Esa solicitud ya no está esperando aprobación.",
+    },
+    cancelled: "Cancelado. No se cambió nada.",
+    expired: "Esta solicitud venció. Pídeselo de nuevo a SERSHI si todavía quieres hacerlo.",
+    apps: {
+      opened: "Abrí {app}.",
+      notFound: "No encontré {app} en esta computadora.",
+      ambiguous: "Encontré más de una coincidencia para «{query}». ¿Cuál quieres?",
+      launchFailed: {
+        targetMissing:
+          "Encontré {app}, pero no está donde Windows indica. Puede que se haya movido o desinstalado.",
+        accessDenied: "Windows no permitió que SERSHI abriera {app}.",
+        elevationRequired:
+          "{app} necesita permisos de administrador. SERSHI no solicita elevación: ábrelo tú si confías en él.",
+        unsupported:
+          "SERSHI encontró {app}, pero este tipo de aplicación todavía no es compatible.",
+        timedOut: "{app} no respondió a tiempo. Puede que todavía se esté iniciando.",
+        failed: "Encontré {app}, pero Windows no pudo abrirlo.",
+      },
+      closeRequested:
+        "Le pedí a {app} que se cierre. Puede que te pida guardar tu trabajo primero.",
+      notRunning: "{app} no se está ejecutando.",
+      closeUnsupported: "SERSHI todavía no puede cerrar {app} de forma segura.",
+      catalogUnavailable: "No pude leer la lista de aplicaciones instaladas.",
+      openCommand: "Abre {app}",
+      closeCommand: "Cierra {app}",
     },
     offline:
       "Me estoy ejecutando como vista previa en el navegador, así que mi núcleo no está conectado. Abre la aplicación de escritorio (pnpm dev) para hablar conmigo.",
@@ -156,6 +187,7 @@ export const es419: Messages = {
       tool: "Herramienta",
       duration: "Duración",
     },
+    withSubject: "{event} · {subject}",
     events: {
       systemReady: "Núcleo de SERSHI iniciado",
       commandReceived: "Comando recibido",
@@ -165,6 +197,12 @@ export const es419: Messages = {
       toolDenied: "Bloqueado por la política: {tool}",
       confirmationRequired: "Esperando tu aprobación: {tool}",
       capabilityUnavailable: "Se solicitó una función planificada para una versión futura",
+      toolDeclined: "No se pudo completar: {tool}",
+      confirmationApproved: "Aprobado: {tool}",
+      confirmationCancelled: "Cancelado: {tool}",
+      confirmationExpired: "Aprobación vencida: {tool}",
+      appOpened: "Se abrió {app}",
+      appCloseRequested: "Se pidió cerrar {app}",
     },
   },
 
@@ -173,6 +211,7 @@ export const es419: Messages = {
     lede: "Lo que SERSHI puede hacer, lo que tiene permitido hacer y lo que guarda. Más preferencias llegarán con la configuración persistente en v0.1.",
     sections: {
       general: "General",
+      windows: "Integración con Windows",
       privacy: "Privacidad",
       tools: "Herramientas y permisos",
       platform: "Plataforma",
@@ -202,7 +241,7 @@ export const es419: Messages = {
       analyticsValue: "Ninguna. SERSHI no envía nada a ningún lado.",
     },
     toolsFootnote:
-      "Cada herramienta pasa por el motor de políticas antes de ejecutarse. De forma predeterminada solo se permite leer información del sistema; todo lo demás pide permiso primero.",
+      "Cada herramienta pasa por el motor de políticas antes de ejecutarse. De forma predeterminada se permite leer información del sistema y abrir aplicaciones instaladas; todo lo demás pide permiso primero.",
     risk: {
       safe: "Segura",
       sensitive: "Sensible",
@@ -215,11 +254,42 @@ export const es419: Messages = {
       unsupported: "No compatible",
     },
     desktopOnly: "Disponible en la aplicación de escritorio.",
+    featureStatus: {
+      active: "Disponible",
+      unavailable: "No disponible",
+      planned: "Planificado",
+    },
+    windows: {
+      appControl: "Control de aplicaciones",
+      appControlDetail: "Abre y cierra aplicaciones instaladas por su nombre.",
+      tray: "Bandeja del sistema",
+      trayDetail: "SERSHI sigue disponible cuando cierras el Centro de control.",
+      shortcut: "Atajo global",
+      shortcutDetail: "Llama a SERSHI desde cualquier aplicación.",
+      shortcutUnavailable: "Otra aplicación está usando este atajo.",
+      startup: "Iniciar con Windows",
+      catalog: "Aplicaciones instaladas",
+      catalogCount: "{count} encontradas",
+      catalogScanned: "Analizadas a las {time} en {duration}",
+      catalogNotScanned: "Se analizan la primera vez que abres una aplicación.",
+      catalogUnsupported: "Disponible en Windows",
+      catalogFailed: "No se pudo leer la lista de aplicaciones.",
+      refresh: "Actualizar",
+      refreshing: "Analizando…",
+    },
+    sources: {
+      builtIn: "Windows",
+      packagedApp: "Microsoft Store",
+      startMenu: "Menú Inicio",
+      appPaths: "App Paths",
+    },
     developer: {
       footnote:
         "Solo visual: muestra cómo cada superficie representa un estado. El comportamiento y la política siempre usan el estado real. Solo en compilaciones de desarrollo.",
       groupLabel: "Vista previa del estado del asistente",
       live: "En vivo",
+      catalog: "Aplicaciones detectadas",
+      previewConfirmation: "Vista previa de confirmación",
     },
     about: {
       version: "Versión",
@@ -242,6 +312,44 @@ export const es419: Messages = {
     systemInfo: "Información del sistema",
     memory: "Uso de memoria",
     cpu: "Uso del procesador",
+    openApplication: "Abrir aplicación",
+    closeApplication: "Cerrar aplicación",
+  },
+
+  apps: {
+    calculator: "Calculadora",
+    notepad: "Bloc de notas",
+    explorer: "Explorador de archivos",
+    settings: "Configuración",
+  },
+
+  confirm: {
+    label: "Se requiere aprobación",
+    closeApplication: {
+      title: "¿Cerrar {app}?",
+      body: "SERSHI le pedirá a {app} que cierre sus ventanas.",
+      risk: "Podrías perder el trabajo sin guardar si la aplicación no pide guardarlo primero.",
+      confirm: "Cerrar {app}",
+    },
+    runTool: {
+      title: "¿Permitir {tool}?",
+      body: "SERSHI necesita tu aprobación para usar {tool}.",
+      confirm: "Permitir",
+    },
+    reason: {
+      permissionUndecided: "Todavía no concediste este permiso.",
+      highRisk: "Puede que esta acción no se pueda deshacer.",
+      agentInitiatedSensitiveAction: "Esta acción se propuso de forma automática.",
+    },
+    cancel: "Cancelar",
+    expires: "Vence en {seconds} s",
+    preview: "Solo vista previa: no se ejecutará nada.",
+  },
+
+  tray: {
+    open: "Abrir SERSHI",
+    hide: "Ocultar SERSHI",
+    quit: "Salir de SERSHI",
   },
 
   capabilities: {

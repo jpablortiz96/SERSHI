@@ -20,6 +20,15 @@ export function CommandBar() {
   const { submit, pending } = useConversation();
   const { t } = useI18n();
 
+  // Summon (companion, tray, global shortcut) focuses the command input.
+  useEffect(
+    () =>
+      sershi.onFocusCommand(() => {
+        input.current?.focus();
+      }),
+    [],
+  );
+
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       const target = e.target as HTMLElement | null;

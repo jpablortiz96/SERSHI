@@ -1,0 +1,210 @@
+/* Trusted approval surface: calm, specific, unmistakably SERSHI's own. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: rgb(4 5 7 / 0.62);
+  animation: fade var(--duration-default) var(--ease-standard) both;
+}
+
+.dialog {
+  position: relative;
+  width: min(460px, 100%);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  background: var(--surface-overlay);
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-e3);
+  animation: rise var(--duration-slow) var(--ease-enter) both;
+  outline: none;
+}
+
+/* A single line of state light along the top edge. */
+.dialog::before {
+  content: "";
+  position: absolute;
+  inset: 0 var(--space-8) auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--state-color) 80%, transparent),
+    transparent
+  );
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.glyph {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--state-color);
+  box-shadow: 0 0 10px var(--state-color);
+}
+
+.risk {
+  --tone: var(--state-success);
+  margin-left: auto;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 45%, transparent);
+  font-size: var(--type-caption-size);
+  color: color-mix(in oklab, var(--tone) 85%, var(--text-primary));
+}
+
+.risk[data-risk="sensitive"] {
+  --tone: var(--state-warning);
+}
+.risk[data-risk="highRisk"] {
+  --tone: var(--state-error);
+}
+
+.title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--type-title-size);
+  line-height: var(--type-title-line);
+  font-weight: var(--type-title-weight);
+  letter-spacing: var(--type-title-tracking);
+  overflow-wrap: anywhere;
+}
+
+.body {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.body p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.caution {
+  color: var(--text-primary) !important;
+}
+
+.reason {
+  font-size: var(--type-small-size);
+  color: var(--text-tertiary) !important;
+}
+
+.expiry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-5) 0 var(--space-6);
+  color: var(--text-tertiary);
+}
+
+.countdown {
+  font-size: var(--type-caption-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.meter {
+  flex: 1;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-active);
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  background: color-mix(in oklab, var(--state-color) 70%, transparent);
+  transform-origin: left;
+  animation: deplete var(--expiry-ms) linear both;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.cancel,
+.confirm {
+  min-height: 38px;
+  padding: var(--space-2) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  font-size: var(--type-small-size);
+  font-weight: 520;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-default) var(--ease-standard),
+    transform var(--duration-default) var(--ease-spring);
+}
+
+.cancel {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--text-primary);
+}
+
+.cancel:hover {
+  background: var(--surface-hover);
+}
+
+.confirm {
+  background: var(--color-frost);
+  color: var(--text-inverse);
+}
+
+.confirm:hover {
+  box-shadow: 0 0 18px -4px color-mix(in oklab, var(--state-color) 80%, transparent);
+}
+
+.cancel:active,
+.confirm:active {
+  transform: scale(0.97);
+  transition-duration: var(--duration-instant);
+}
+
+.cancel:disabled,
+.confirm:disabled {
+  opacity: var(--opacity-disabled);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes deplete {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog {
+    animation-duration: var(--duration-instant);
+  }
+  .meter i {
+    animation: none;
+  }
+}
