@@ -21,7 +21,7 @@ steps to validate on a physical Windows machine.
 | Companion placement above the taskbar (work area, DPI scaling, multi-monitor) | `surfaces.rs::place_companion` | ✅ single 1600×1000 screen at scale 1 | —         | REQUIRES_WINDOWS_VALIDATION      |
 | Companion drag vs click                            | `Companion.tsx`                              | ⚠️ click verified; drag needs a window manager | —         | REQUIRES_WINDOWS_VALIDATION      |
 | Close Command Center hides (app keeps running)     | `surfaces.rs::on_window_event`               | ⚠️ not exercised                     | —                     | REQUIRES_WINDOWS_VALIDATION      |
-| Strict CSP with production build                   | `tauri.conf.json`                            | ⚠️ dev CSP exercised only            | —                     | REQUIRES_WINDOWS_VALIDATION      |
+| Strict CSP with production build                   | `tauri.conf.json`                            | ✅ release binary ran under Xvfb (WebKitGTK) | —                     | REQUIRES_WINDOWS_VALIDATION      |
 | NSIS installer                                     | `bundle.targets`                             | —                                   | —                     | REQUIRES_WINDOWS_VALIDATION      |
 | Open/close applications, battery, global shortcut, tray, notifications, credentials, microphone, screen capture, startup | Not implemented | — | — | Planned (see ROADMAP) |
 
