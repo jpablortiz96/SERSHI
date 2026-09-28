@@ -1,0 +1,68 @@
+[
+  {
+    "id": "system.get_cpu",
+    "name": "Processor usage",
+    "description": "Processor model, core count and current load.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "outputSchema": {
+      "type": "object"
+    },
+    "permissions": [
+      "system.info.read"
+    ],
+    "risk": "safe",
+    "timeoutMs": 2000,
+    "platforms": [
+      "windows",
+      "linux",
+      "macos"
+    ]
+  },
+  {
+    "id": "system.get_info",
+    "name": "System information",
+    "description": "Operating system, architecture, processor, memory and uptime.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "outputSchema": {
+      "type": "object"
+    },
+    "permissions": [
+      "system.info.read"
+    ],
+    "risk": "safe",
+    "timeoutMs": 2000,
+    "platforms": [
+      "windows",
+      "linux",
+      "macos"
+    ]
+  },
+  {
+    "id": "system.get_memory",
+    "name": "Memory usage",
+    "description": "Total and used physical memory.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "outputSchema": {
+      "type": "object"
+    },
+    "permissions": [
+      "system.info.read"
+    ],
+    "risk": "safe",
+    "timeoutMs": 2000,
+    "platforms": [
+      "windows",
+      "linux",
+      "macos"
+    ]
+  }
+]

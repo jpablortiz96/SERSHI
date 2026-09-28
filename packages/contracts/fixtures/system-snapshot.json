@@ -1,0 +1,18 @@
+{
+  "os": {
+    "platform": "windows",
+    "name": "Windows 11 Pro",
+    "version": "24H2",
+    "arch": "x86_64"
+  },
+  "cpu": {
+    "brand": "Test CPU",
+    "logicalCores": 16,
+    "usagePercent": 18.4
+  },
+  "memory": {
+    "totalBytes": 34359738368,
+    "usedBytes": 12884901888
+  },
+  "uptimeSecs": 3600
+}

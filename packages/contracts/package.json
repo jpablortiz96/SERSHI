@@ -1,0 +1,14 @@
+{
+  "name": "@sershi/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Typed IPC contracts between the SERSHI UI and core. Types in src/generated are produced from Rust by ts-rs.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}

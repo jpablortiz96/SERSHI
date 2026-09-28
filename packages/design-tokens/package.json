@@ -1,0 +1,14 @@
+{
+  "name": "@sershi/design-tokens",
+  "version": "0.0.1",
+  "private": true,
+  "description": "SERSHI design tokens, applied at runtime as CSS custom properties.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}

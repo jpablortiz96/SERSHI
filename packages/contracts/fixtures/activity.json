@@ -1,0 +1,42 @@
+[
+  {
+    "id": 5,
+    "atMs": 1767225600000,
+    "kind": "capabilityUnavailable",
+    "toolId": null,
+    "summary": "Opening and closing applications is planned for v0.1",
+    "durationMs": null
+  },
+  {
+    "id": 4,
+    "atMs": 1767225600000,
+    "kind": "commandReceived",
+    "toolId": null,
+    "summary": "Command received",
+    "durationMs": null
+  },
+  {
+    "id": 3,
+    "atMs": 1767225600000,
+    "kind": "toolCompleted",
+    "toolId": "system.get_memory",
+    "summary": "Memory usage completed",
+    "durationMs": 0
+  },
+  {
+    "id": 2,
+    "atMs": 1767225600000,
+    "kind": "toolRequested",
+    "toolId": "system.get_memory",
+    "summary": "Requested Memory usage",
+    "durationMs": null
+  },
+  {
+    "id": 1,
+    "atMs": 1767225600000,
+    "kind": "commandReceived",
+    "toolId": null,
+    "summary": "Command received",
+    "durationMs": null
+  }
+]

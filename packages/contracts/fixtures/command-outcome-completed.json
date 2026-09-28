@@ -1,0 +1,11 @@
+{
+  "status": "completed",
+  "reply": "You're using 12.0 GB of 32.0 GB memory (38%).",
+  "toolId": "system.get_memory",
+  "data": {
+    "totalBytes": 34359738368,
+    "usedBytes": 12884901888
+  },
+  "confirmation": null,
+  "durationMs": 0
+}
