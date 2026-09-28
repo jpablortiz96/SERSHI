@@ -128,8 +128,11 @@
 }
 
 .hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1) 0;
   margin: var(--space-3) 0 0;
-  text-align: center;
   font-size: var(--type-caption-size);
   color: var(--text-tertiary);
 }
@@ -140,8 +143,15 @@
   color: var(--text-secondary);
 }
 
-.hints span {
-  margin: 0 var(--space-1);
+/* Separators between hint groups; groups never break internally. */
+.hints > span {
+  white-space: nowrap;
+}
+
+.hints > span + span::before {
+  content: "·";
+  margin: 0 var(--space-2);
+  color: var(--text-disabled);
 }
 
 @keyframes pending {

@@ -1,105 +1,112 @@
-import {
-  ASSISTANT_STATES,
-  type AssistantState,
-  type CapabilityStatus,
-  type RiskLevel,
-} from "@sershi/contracts";
-
+import { ASSISTANT_STATES, type AssistantState } from "@sershi/contracts";
 import type { ReactNode } from "react";
 
-import { STATE_COPY } from "../../components/core/stateCopy";
+import {
+  MESSAGES,
+  SUPPORTED_LOCALES,
+  useI18n,
+  useLocaleStore,
+  type LocalePreference,
+} from "../../i18n";
+import {
+  capabilityLabelFor,
+  capabilityStatus,
+  platformName,
+  riskLabel,
+  stateLabel,
+  toolName,
+} from "../../i18n/domain";
 import { desktopRuntime, sershi } from "../../ipc";
 import { useAssistantStore } from "../../state/assistant";
 import { useRuntimeInfo } from "../../state/runtime";
 import styles from "./Page.module.css";
 
-const CAPABILITY_COPY: Record<CapabilityStatus, string> = {
-  available: "Available",
-  requiresWindowsValidation: "Requires Windows validation",
-  planned: "Planned",
-  unsupported: "Unsupported",
-};
-
-const RISK_COPY: Record<RiskLevel, string> = {
-  safe: "Safe",
-  sensitive: "Sensitive",
-  highRisk: "High risk",
-};
-
-const DESKTOP_ONLY = "Available in the desktop app.";
-
 export function SettingsView() {
   const info = useRuntimeInfo();
+  const { t } = useI18n();
   const developerMode = info?.developerBuild ?? !desktopRuntime;
+  const desktopOnly = <p className={styles.empty}>{t("settings.desktopOnly")}</p>;
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Settings</h1>
-        <p className={styles.lede}>
-          What SERSHI can do, what it is allowed to do, and what it keeps. Editable preferences
-          arrive with persistent settings in v0.1.
-        </p>
+        <h1 className={styles.title}>{t("settings.title")}</h1>
+        <p className={styles.lede}>{t("settings.lede")}</p>
       </header>
 
-      <Section title="Privacy">
-        <Row label="What you type" value="Never written to the activity log" />
-        <Row label="Conversation" value="Kept in memory for this session only" />
-        <Row label="Microphone and screen" value="Not used — voice and vision are not built yet" />
-        <Row label="Analytics" value="None. SERSHI sends nothing anywhere." />
+      <Section title={t("settings.sections.general")}>
+        <LanguagePicker />
+        <Row
+          label={t("settings.conversation.label")}
+          detail={t("settings.conversation.detail")}
+          value={t("settings.conversation.value")}
+        />
       </Section>
 
-      <Section title="Tools & permissions">
-        {info ? (
-          info.tools.map((tool) => (
-            <Row
-              key={tool.id}
-              label={tool.name}
-              detail={<span className="t-mono">{tool.id}</span>}
-              value={
-                <span className={styles.pills}>
-                  <Pill tone={tool.risk === "safe" ? "success" : "warning"}>
-                    {RISK_COPY[tool.risk]}
+      <Section title={t("settings.sections.privacy")}>
+        <Row label={t("settings.privacy.typed")} value={t("settings.privacy.typedValue")} />
+        <Row
+          label={t("settings.privacy.conversation")}
+          value={t("settings.privacy.conversationValue")}
+        />
+        <Row label={t("settings.privacy.devices")} value={t("settings.privacy.devicesValue")} />
+        <Row label={t("settings.privacy.analytics")} value={t("settings.privacy.analyticsValue")} />
+      </Section>
+
+      <Section title={t("settings.sections.tools")}>
+        {info
+          ? info.tools.map((tool) => (
+              <Row
+                key={tool.id}
+                label={toolName(t, tool.id, tool.name)}
+                detail={<span className="t-mono">{tool.id}</span>}
+                value={
+                  <span className={styles.pills}>
+                    <Pill tone={tool.risk === "safe" ? "success" : "warning"}>
+                      {riskLabel(t, tool.risk)}
+                    </Pill>
+                    <span className="t-mono">{tool.permissions.join(", ")}</span>
+                  </span>
+                }
+              />
+            ))
+          : desktopOnly}
+        <p className={styles.footnote}>{t("settings.toolsFootnote")}</p>
+      </Section>
+
+      <Section title={t("settings.sections.platform")}>
+        {info
+          ? info.capabilities.map((c) => (
+              <Row
+                key={c.id}
+                label={capabilityLabelFor(t, c)}
+                value={
+                  <Pill tone={c.status === "available" ? "success" : "neutral"}>
+                    {capabilityStatus(t, c.status)}
+                    {c.milestone ? ` · ${c.milestone}` : ""}
                   </Pill>
-                  <span className="t-mono">{tool.permissions.join(", ")}</span>
-                </span>
-              }
-            />
-          ))
-        ) : (
-          <p className={styles.empty}>{DESKTOP_ONLY}</p>
-        )}
-        <p className={styles.footnote}>
-          Every tool passes the policy engine before it runs. Only read-only system information is
-          allowed by default; anything else asks first.
-        </p>
-      </Section>
-
-      <Section title="Platform">
-        {info ? (
-          info.capabilities.map((c) => (
-            <Row
-              key={c.id}
-              label={c.label}
-              value={
-                <Pill tone={c.status === "available" ? "success" : "neutral"}>
-                  {CAPABILITY_COPY[c.status]}
-                  {c.milestone ? ` · ${c.milestone}` : ""}
-                </Pill>
-              }
-            />
-          ))
-        ) : (
-          <p className={styles.empty}>{DESKTOP_ONLY}</p>
-        )}
+                }
+              />
+            ))
+          : desktopOnly}
       </Section>
 
       {developerMode && <StatePreview />}
 
-      <Section title="About">
-        <Row label="Version" value={info ? `${info.version} · pre-alpha` : "Browser preview"} />
-        <Row label="Platform" value={info?.platform ?? "—"} />
-        <Row label="License" value="Apache-2.0" />
+      <Section title={t("settings.sections.about")}>
+        <Row
+          label={t("settings.about.version")}
+          value={
+            info
+              ? t("settings.about.versionValue", { version: info.version })
+              : t("settings.about.browserPreview")
+          }
+        />
+        <Row
+          label={t("settings.about.platform")}
+          value={info ? platformName(t, info.platform) : "—"}
+        />
+        <Row label={t("settings.about.license")} value="Apache-2.0" />
         {desktopRuntime && (
           <div className={styles.actions}>
             <button
@@ -109,7 +116,7 @@ export function SettingsView() {
                 sershi.quit().catch(() => undefined);
               }}
             >
-              Quit SERSHI
+              {t("settings.about.quit")}
             </button>
           </div>
         )}
@@ -118,7 +125,62 @@ export function SettingsView() {
   );
 }
 
+const LANGUAGE_OPTIONS: readonly LocalePreference[] = ["auto", ...SUPPORTED_LOCALES];
+
+/**
+ * Interface language. A manual choice overrides the system language and is
+ * remembered; "Automatic" follows the operating system again.
+ */
+function LanguagePicker() {
+  const { t } = useI18n();
+  const preference = useLocaleStore((s) => s.preference);
+  const systemLocale = useLocaleStore((s) => s.systemLocale);
+  const setPreference = useLocaleStore((s) => s.setPreference);
+
+  return (
+    <div className={styles.rowStacked}>
+      <div>
+        <p className={styles.rowLabel} id="language-label">
+          {t("settings.language.label")}
+        </p>
+        <p className={styles.rowDetail}>{t("settings.language.detail")}</p>
+      </div>
+      <div className={styles.choices} role="radiogroup" aria-labelledby="language-label">
+        {LANGUAGE_OPTIONS.map((option) => {
+          const auto = option === "auto";
+          return (
+            <label key={option} className={styles.choice}>
+              <input
+                type="radio"
+                name="ui-locale"
+                value={option}
+                checked={preference === option}
+                onChange={() => {
+                  setPreference(option);
+                }}
+              />
+              <span className={styles.choiceText}>
+                <span lang={auto ? undefined : option}>
+                  {auto ? t("settings.language.automatic") : MESSAGES[option].meta.languageName}
+                </span>
+                {auto && (
+                  <span className={styles.choiceDetail}>
+                    {t("settings.language.automaticDetail", {
+                      language: MESSAGES[systemLocale].meta.languageName,
+                    })}
+                  </span>
+                )}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function StatePreview() {
+  const { t } = useI18n();
   const serverPreview = useAssistantStore((s) => s.snapshot.previewState);
   const localPreview = useAssistantStore((s) => s.localPreview);
   const setLocalPreview = useAssistantStore((s) => s.setLocalPreview);
@@ -130,12 +192,13 @@ function StatePreview() {
   };
 
   return (
-    <Section title="Developer · State preview">
-      <p className={styles.footnote}>
-        Visual only: previews how every surface renders a state. Behaviour and policy always use the
-        real state. Developer builds only.
-      </p>
-      <div className={styles.stateGrid} role="group" aria-label="Preview assistant state">
+    <Section title={t("settings.sections.developer")}>
+      <p className={styles.footnote}>{t("settings.developer.footnote")}</p>
+      <div
+        className={styles.stateGrid}
+        role="group"
+        aria-label={t("settings.developer.groupLabel")}
+      >
         <button
           type="button"
           aria-pressed={active === null}
@@ -143,7 +206,7 @@ function StatePreview() {
             preview(null);
           }}
         >
-          Live
+          {t("settings.developer.live")}
         </button>
         {ASSISTANT_STATES.map((s) => (
           <button
@@ -156,7 +219,7 @@ function StatePreview() {
             }}
           >
             <i aria-hidden="true" />
-            {STATE_COPY[s].label}
+            {stateLabel(t, s)}
           </button>
         ))}
       </div>

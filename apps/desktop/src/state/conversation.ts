@@ -1,20 +1,25 @@
 /**
  * Session conversation. Held in memory only and discarded on exit — the core
  * never stores what the user typed (see docs/MEMORY.md, "Session memory").
+ *
+ * SERSHI's replies are kept as structured outcomes, not sentences, so they are
+ * phrased at render time in the current interface language and re-render
+ * when the user switches language.
  */
-import type { CommandStatus, ToolId } from "@sershi/contracts";
+import type { CommandOutcome } from "@sershi/contracts";
 import { create } from "zustand";
 
-import { desktopRuntime, IpcFailure, sershi } from "../ipc";
+import { desktopRuntime, sershi } from "../ipc";
 
-export interface Message {
-  id: number;
-  role: "user" | "sershi";
-  text: string;
-  status?: CommandStatus | "offline";
-  toolId?: ToolId | null;
-  durationMs?: number | null;
-}
+export type Reply =
+  | { kind: "outcome"; outcome: CommandOutcome }
+  /** Browser preview: no core to answer. */
+  | { kind: "offline" }
+  /** The IPC call itself failed. */
+  | { kind: "unreachable" };
+
+export type Message =
+  { id: number; role: "user"; text: string } | { id: number; role: "sershi"; reply: Reply };
 
 interface ConversationStore {
   messages: Message[];
@@ -28,8 +33,10 @@ const MAX_MESSAGES = 40;
 
 let nextId = 1;
 
+type NewMessage = { role: "user"; text: string } | { role: "sershi"; reply: Reply };
+
 export const useConversation = create<ConversationStore>((set, get) => {
-  const push = (message: Omit<Message, "id">) => {
+  const push = (message: NewMessage) => {
     set((s) => ({ messages: [...s.messages, { ...message, id: nextId++ }].slice(-MAX_MESSAGES) }));
   };
 
@@ -45,31 +52,16 @@ export const useConversation = create<ConversationStore>((set, get) => {
       push({ role: "user", text });
 
       if (!desktopRuntime) {
-        push({
-          role: "sershi",
-          status: "offline",
-          text: "I'm running as a browser preview, so my core isn't connected. Launch the desktop app (pnpm dev) to talk to me.",
-        });
+        push({ role: "sershi", reply: { kind: "offline" } });
         return;
       }
 
       set({ pending: true });
       try {
         const outcome = await sershi.submitCommand(text);
-        push({
-          role: "sershi",
-          text: outcome.reply,
-          status: outcome.status,
-          toolId: outcome.toolId,
-          durationMs: outcome.durationMs,
-        });
-      } catch (error) {
-        push({
-          role: "sershi",
-          status: "failed",
-          text:
-            error instanceof IpcFailure ? error.message : "Something went wrong reaching my core.",
-        });
+        push({ role: "sershi", reply: { kind: "outcome", outcome } });
+      } catch {
+        push({ role: "sershi", reply: { kind: "unreachable" } });
       } finally {
         set({ pending: false });
       }

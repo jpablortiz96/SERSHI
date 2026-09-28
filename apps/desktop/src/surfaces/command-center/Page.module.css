@@ -53,14 +53,80 @@
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
   align-items: center;
   gap: var(--space-6);
   padding: var(--space-3) 0;
 }
 
-.row + .row {
+.row + .row,
+.rowStacked + .row {
   border-top: 1px solid var(--border-faint);
+}
+
+/* A row whose control needs the full width (e.g. the language picker). */
+.rowStacked {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-3) 0 var(--space-4);
+}
+
+.rowStacked p {
+  margin: 0;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.choice {
+  position: relative;
+  display: flex;
+  cursor: pointer;
+}
+
+.choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.choiceText {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 0.02);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  font-size: var(--type-small-size);
+  color: var(--text-secondary);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-default) var(--ease-standard),
+    background-color var(--duration-default) var(--ease-standard);
+}
+
+.choiceDetail {
+  font-size: var(--type-caption-size);
+  color: var(--text-tertiary);
+}
+
+.choice:hover .choiceText {
+  color: var(--text-primary);
+}
+
+.choice input:checked + .choiceText {
+  color: var(--text-primary);
+  background: color-mix(in oklab, var(--state-color) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-color) 60%, transparent);
+}
+
+.choice input:focus-visible + .choiceText {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 .row p {
@@ -80,10 +146,13 @@
   font-size: var(--type-small-size);
   color: var(--text-secondary);
   text-align: right;
+  text-wrap: pretty;
 }
 
 .pills {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: var(--space-3);
   color: var(--text-tertiary);

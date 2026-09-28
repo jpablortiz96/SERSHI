@@ -28,11 +28,15 @@
 
 .metricHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
+  gap: 0 var(--space-3);
 }
 
 .value {
+  margin-left: auto;
+  white-space: nowrap;
   font-size: var(--type-metric-size);
   line-height: var(--type-metric-line);
   font-weight: var(--type-metric-weight);

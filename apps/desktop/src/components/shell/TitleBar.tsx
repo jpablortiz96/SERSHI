@@ -1,3 +1,4 @@
+import { useI18n, type MessageKey } from "../../i18n";
 import { currentWindow } from "../../ipc";
 import { useAssistantStore, type Connection } from "../../state/assistant";
 import { CloseIcon, Mark, MaximizeIcon, MinimizeIcon } from "./icons";
@@ -5,17 +6,17 @@ import styles from "./TitleBar.module.css";
 
 export type View = "home" | "activity" | "settings";
 
-export const VIEWS: { id: View; label: string }[] = [
-  { id: "home", label: "Home" },
-  { id: "activity", label: "Activity" },
-  { id: "settings", label: "Settings" },
+export const VIEWS: { id: View; label: MessageKey & `nav.${View}` }[] = [
+  { id: "home", label: "nav.home" },
+  { id: "activity", label: "nav.activity" },
+  { id: "settings", label: "nav.settings" },
 ];
 
-const CONNECTION_COPY: Record<Connection, string> = {
-  connecting: "Connecting to core",
-  live: "Local core",
-  browserPreview: "Browser preview",
-  failed: "Core unavailable",
+const CONNECTION_KEYS: Record<Connection, MessageKey & `connection.${Connection}`> = {
+  connecting: "connection.connecting",
+  live: "connection.live",
+  browserPreview: "connection.browserPreview",
+  failed: "connection.failed",
 };
 
 interface TitleBarProps {
@@ -30,6 +31,7 @@ interface TitleBarProps {
  */
 export function TitleBar({ view, onNavigate }: TitleBarProps) {
   const connection = useAssistantStore((s) => s.connection);
+  const { t } = useI18n();
 
   return (
     <header className={styles.bar} data-tauri-drag-region>
@@ -38,10 +40,10 @@ export function TitleBar({ view, onNavigate }: TitleBarProps) {
           <Mark />
         </span>
         <span className={styles.wordmark}>SERSHI</span>
-        <span className={styles.phase}>Pre-alpha</span>
+        <span className={styles.phase}>{t("app.phase")}</span>
       </div>
 
-      <nav className={styles.nav} aria-label="Command Center">
+      <nav className={styles.nav} aria-label={t("nav.label")}>
         {VIEWS.map((v, i) => (
           <button
             key={v.id}
@@ -53,7 +55,7 @@ export function TitleBar({ view, onNavigate }: TitleBarProps) {
               onNavigate(v.id);
             }}
           >
-            {v.label}
+            {t(v.label)}
           </button>
         ))}
       </nav>
@@ -61,18 +63,22 @@ export function TitleBar({ view, onNavigate }: TitleBarProps) {
       <div className={styles.end} data-tauri-drag-region>
         <span className={styles.connection} data-connection={connection}>
           <i aria-hidden="true" />
-          {CONNECTION_COPY[connection]}
+          {t(CONNECTION_KEYS[connection])}
         </span>
         <div className={styles.controls}>
-          <button type="button" aria-label="Minimize" onClick={currentWindow.minimize}>
+          <button type="button" aria-label={t("window.minimize")} onClick={currentWindow.minimize}>
             <MinimizeIcon />
           </button>
-          <button type="button" aria-label="Maximize" onClick={currentWindow.toggleMaximize}>
+          <button
+            type="button"
+            aria-label={t("window.maximize")}
+            onClick={currentWindow.toggleMaximize}
+          >
             <MaximizeIcon />
           </button>
           <button
             type="button"
-            aria-label="Hide Command Center"
+            aria-label={t("window.hide")}
             data-variant="close"
             onClick={currentWindow.hide}
           >

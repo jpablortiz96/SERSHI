@@ -1,8 +1,9 @@
 import type { AssistantState } from "@sershi/contracts";
 import type { CSSProperties } from "react";
 
+import { useI18n } from "../../i18n";
+import { stateLabel } from "../../i18n/domain";
 import styles from "./Core.module.css";
-import { STATE_COPY } from "./stateCopy";
 
 interface CoreProps {
   state: AssistantState;
@@ -26,13 +27,14 @@ interface CoreProps {
  * thread; state changes re-tint through the registered `--state-color`.
  */
 export function Core({ state, size, pulseKey = 0, className }: CoreProps) {
+  const { t } = useI18n();
   return (
     <div
       className={className ? `${styles.core} ${className}` : styles.core}
       data-state={state}
       style={{ "--core-size": `${size}px` } as CSSProperties}
       role="img"
-      aria-label={`SERSHI — ${STATE_COPY[state].label}`}
+      aria-label={t("core.label", { state: stateLabel(t, state) })}
     >
       <div className={styles.halo} />
       <div className={styles.field} />

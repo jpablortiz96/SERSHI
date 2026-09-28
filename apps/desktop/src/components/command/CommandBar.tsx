@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from "react";
 
+import { useI18n } from "../../i18n";
 import { sershi } from "../../ipc";
 import { useConversation } from "../../state/conversation";
 import { ArrowUpIcon, MicIcon } from "../shell/icons";
@@ -17,6 +18,7 @@ export function CommandBar() {
   const input = useRef<HTMLInputElement>(null);
   const history = useRef<string[]>([]);
   const { submit, pending } = useConversation();
+  const { t } = useI18n();
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -68,8 +70,8 @@ export function CommandBar() {
             setText(e.target.value);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Ask SERSHI or type a command"
-          aria-label="Command"
+          placeholder={t("command.placeholder")}
+          aria-label={t("command.label")}
           autoComplete="off"
           spellCheck={false}
           autoFocus
@@ -78,8 +80,8 @@ export function CommandBar() {
           type="button"
           className={styles.icon}
           disabled
-          aria-label="Voice input, coming in v0.3"
-          data-tip="Voice arrives in v0.3"
+          aria-label={t("command.voice")}
+          data-tip={t("command.voiceTip")}
         >
           <MicIcon />
         </button>
@@ -87,14 +89,24 @@ export function CommandBar() {
           type="submit"
           className={styles.send}
           disabled={!text.trim() || pending}
-          aria-label="Send"
+          aria-label={t("command.send")}
         >
           <ArrowUpIcon />
         </button>
       </div>
       <p className={styles.hints} aria-hidden="true">
-        <kbd>Enter</kbd> send <span>·</span> <kbd>/</kbd> focus <span>·</span> <kbd>↑</kbd> last
-        command <span>·</span> <kbd>Esc</kbd> dismiss
+        <span>
+          <kbd>{t("command.keyEnter")}</kbd> {t("command.hintSend")}
+        </span>
+        <span>
+          <kbd>/</kbd> {t("command.hintFocus")}
+        </span>
+        <span>
+          <kbd>↑</kbd> {t("command.hintRecall")}
+        </span>
+        <span>
+          <kbd>{t("command.keyEscape")}</kbd> {t("command.hintDismiss")}
+        </span>
       </p>
     </form>
   );

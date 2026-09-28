@@ -1,13 +1,14 @@
 import type { SystemSnapshot } from "@sershi/contracts";
 import { useEffect, useState } from "react";
 
-import { desktopRuntime, IpcFailure, sershi } from "../ipc";
+import { desktopRuntime, sershi } from "../ipc";
 
 export interface Telemetry {
   snapshot: SystemSnapshot | null;
   /** Recent CPU readings (0–100), oldest first. */
   cpuHistory: number[];
-  error: string | null;
+  /** Why no snapshot is available (rendered as localized copy). */
+  error: "browserPreview" | "unavailable" | null;
 }
 
 const HISTORY = 36;
@@ -20,7 +21,7 @@ export function useTelemetry(intervalMs = 2000): Telemetry {
   const [telemetry, setTelemetry] = useState<Telemetry>({
     snapshot: null,
     cpuHistory: [],
-    error: desktopRuntime ? null : "Unavailable in browser preview",
+    error: desktopRuntime ? null : "browserPreview",
   });
 
   useEffect(() => {
@@ -40,13 +41,8 @@ export function useTelemetry(intervalMs = 2000): Telemetry {
               ? t.cpuHistory
               : [...t.cpuHistory, snapshot.cpu.usagePercent].slice(-HISTORY),
         }));
-      } catch (error) {
-        if (!cancelled) {
-          setTelemetry((t) => ({
-            ...t,
-            error: error instanceof IpcFailure ? error.message : "Telemetry unavailable",
-          }));
-        }
+      } catch {
+        if (!cancelled) setTelemetry((t) => ({ ...t, error: "unavailable" }));
       }
     };
 

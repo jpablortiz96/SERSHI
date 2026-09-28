@@ -1,7 +1,8 @@
 import { useEffect, useRef, type PointerEvent } from "react";
 
 import { Core } from "../../components/core/Core";
-import { STATE_COPY } from "../../components/core/stateCopy";
+import { useI18n } from "../../i18n";
+import { stateLabel } from "../../i18n/domain";
 import { currentWindow, sershi } from "../../ipc";
 import { connectAssistant, useAssistantStore, useDisplayState } from "../../state/assistant";
 import styles from "./Companion.module.css";
@@ -18,6 +19,7 @@ export function Companion() {
   const state = useDisplayState();
   const revision = useAssistantStore((s) => s.snapshot.revision);
   const press = useRef<{ x: number; y: number } | null>(null);
+  const { t } = useI18n();
 
   useEffect(connectAssistant, []);
 
@@ -45,7 +47,7 @@ export function Companion() {
       <button
         type="button"
         className={styles.companion}
-        aria-label={`Open SERSHI Command Center. SERSHI is ${STATE_COPY[state].label.toLowerCase()}.`}
+        aria-label={t("companion.open", { state: stateLabel(t, state) })}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

@@ -30,8 +30,8 @@ describe("command bar (browser preview)", () => {
     await screen.findByDisplayValue("");
     const { messages } = useConversation.getState();
     expect(messages.map((m) => m.role)).toEqual(["user", "sershi"]);
-    expect(messages[1]?.status).toBe("offline");
-    expect(messages[1]?.text).toMatch(/core isn't connected/);
+    const reply = messages[1];
+    expect(reply?.role === "sershi" && reply.reply.kind).toBe("offline");
   });
 
   it("recalls the previous command with ArrowUp", () => {
