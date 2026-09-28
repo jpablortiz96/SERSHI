@@ -13,6 +13,9 @@ publish = false
 ts = ["dep:ts-rs"]
 
 [dependencies]
+# OS CSPRNG for confirmation ids (ProcessPrng on Windows, getrandom(2) on
+# Linux). Small, widely audited, already in the lockfile via Tauri.
+getrandom = "0.3"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

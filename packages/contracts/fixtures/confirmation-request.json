@@ -1,0 +1,18 @@
+{
+  "action": "closeApplication",
+  "canRemember": false,
+  "expiresAtMs": 1767225660000,
+  "id": "0123456789abcdef0123456789abcdef",
+  "level": "standard",
+  "reason": "permissionUndecided",
+  "risk": "sensitive",
+  "subject": {
+    "application": {
+      "displayName": "Spotify",
+      "id": "spotify",
+      "source": "packagedApp"
+    },
+    "kind": "application"
+  },
+  "toolId": "system.close_application"
+}

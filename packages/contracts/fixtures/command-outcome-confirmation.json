@@ -1,25 +1,8 @@
 {
-  "confirmation": {
-    "action": "closeApplication",
-    "canRemember": false,
-    "expiresAtMs": 1767225690000,
-    "id": "0123456789abcdef0123456789abcdef",
-    "reason": "permissionUndecided",
-    "risk": "sensitive",
-    "subject": {
-      "application": {
-        "displayName": "Spotify",
-        "id": "spotify",
-        "source": "packagedApp"
-      },
-      "kind": "application"
-    },
-    "toolId": "system.close_application"
-  },
-  "data": null,
-  "detail": null,
-  "durationMs": null,
-  "reply": "Close application needs your approval before it can run.",
   "status": "needsConfirmation",
-  "toolId": "system.close_application"
+  "reply": "Close application is waiting for your approval in the confirmation window.",
+  "detail": null,
+  "toolId": "system.close_application",
+  "data": null,
+  "durationMs": null
 }

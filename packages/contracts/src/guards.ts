@@ -84,6 +84,7 @@ export function isConfirmationRequest(v: unknown): v is ConfirmationRequest {
     isStr(v.toolId) &&
     isStr(v.action) &&
     isStr(v.risk) &&
+    isStr(v.level) &&
     isNum(v.expiresAtMs) &&
     typeof v.canRemember === "boolean"
   );
@@ -95,7 +96,8 @@ export function isCommandOutcome(v: unknown): v is CommandOutcome {
     isStr(v.status) &&
     isStr(v.reply) &&
     isNullable(v.toolId, isStr) &&
-    isNullable(v.confirmation, isConfirmationRequest)
+    // The Command Center never receives confirmation authorization data.
+    !("confirmation" in v)
   );
 }
 

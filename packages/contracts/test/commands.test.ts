@@ -18,12 +18,28 @@ function rustCommands(): string[] {
   return [...block.matchAll(/"([a-z_]+)"/g)].map((m) => m[1] ?? "");
 }
 
-function grantedCommands(capability: string): string[] {
-  const json = JSON.parse(
-    readFileSync(resolve(tauriDir, "capabilities", `${capability}.json`), "utf8"),
-  ) as { permissions: string[] };
-  return json.permissions
-    .filter((p) => p.startsWith("allow-"))
+interface Capability {
+  windows: string[];
+  permissions: string[];
+}
+
+function capability(name: string): Capability {
+  return JSON.parse(
+    readFileSync(resolve(tauriDir, "capabilities", `${name}.json`), "utf8"),
+  ) as Capability;
+}
+
+function allPermissions(name: string): string[] {
+  return capability(name).permissions;
+}
+
+function capabilityWindows(name: string): string[] {
+  return capability(name).windows;
+}
+
+function grantedCommands(name: string): string[] {
+  return capability(name)
+    .permissions.filter((p) => p.startsWith("allow-"))
     .map((p) => p.slice("allow-".length).replaceAll("-", "_"));
 }
 
@@ -33,7 +49,7 @@ describe("IPC command surface", () => {
   });
 
   it("capabilities only grant declared commands", () => {
-    for (const cap of ["command-center", "companion"]) {
+    for (const cap of ["command-center", "companion", "confirmation"]) {
       for (const command of grantedCommands(cap)) {
         expect(COMMAND_NAMES).toContain(command);
       }
@@ -44,11 +60,37 @@ describe("IPC command surface", () => {
     expect(grantedCommands("companion").sort()).toEqual(
       ["get_assistant_snapshot", "summon_command_center"].sort(),
     );
+    expect(allPermissions("companion")).not.toContain("allow-decide-confirmation");
   });
 
-  it("confirmation decisions are main-window only; the companion cannot approve anything", () => {
-    expect(grantedCommands("command-center")).toContain("decide_confirmation");
-    expect(grantedCommands("companion")).not.toContain("decide_confirmation");
+  it("the Command Center cannot decide or read confirmations", () => {
+    const granted = grantedCommands("command-center");
+    expect(granted).not.toContain("decide_confirmation");
+    expect(granted).not.toContain("get_confirmation_context");
+  });
+
+  it("the confirmation window has exactly two commands and no other permission", () => {
+    expect(allPermissions("confirmation").sort()).toEqual(
+      ["allow-decide-confirmation", "allow-get-confirmation-context"].sort(),
+    );
+    expect(capabilityWindows("confirmation")).toEqual(["confirmation"]);
+  });
+
+  it("only the confirmation window can decide confirmations", () => {
+    const deciders = ["command-center", "companion", "confirmation"].filter((cap) =>
+      grantedCommands(cap).includes("decide_confirmation"),
+    );
+    expect(deciders).toEqual(["confirmation"]);
+  });
+
+  it("every capability names its window explicitly (no wildcards)", () => {
+    expect(capabilityWindows("command-center")).toEqual(["main"]);
+    expect(capabilityWindows("companion")).toEqual(["companion"]);
+    for (const cap of ["command-center", "companion", "confirmation"]) {
+      for (const window of capabilityWindows(cap)) {
+        expect(window).not.toMatch(/[*?]/);
+      }
+    }
   });
 
   it("no command resembles generic execution", () => {

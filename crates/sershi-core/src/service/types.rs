@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::activity::ActivityEntry;
 use crate::assistant::AssistantSnapshot;
-use crate::confirmation::{ConfirmationId, ConfirmationRequest};
+use crate::confirmation::ConfirmationId;
 use crate::ids::ToolId;
 use crate::intent::AnswerTopic;
 use crate::policy::DenialReason;
@@ -20,15 +20,25 @@ pub struct CommandRequest {
     pub text: String,
 }
 
-/// The user's answer to a pending confirmation. This is all a surface can
-/// send: the action itself is stored in the core.
+/// The human's answer on the trusted confirmation surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum ConfirmationChoice {
+    Approve,
+    Cancel,
+}
+
+/// Everything a surface can send about a confirmation: which one, and the
+/// decision. The tool, its input, the target, the risk and the permission
+/// are all resolved from the core's stored action; any other field is
+/// rejected (`deny_unknown_fields`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmationDecision {
     pub confirmation_id: ConfirmationId,
-    pub tool_id: ToolId,
-    pub approved: bool,
+    pub decision: ConfirmationChoice,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -64,7 +74,7 @@ pub enum RejectionReason {
     Empty,
     TooLong,
     Busy,
-    /// The confirmation id is unknown, already decided, or for another tool.
+    /// The confirmation id is unknown, already decided or replaced.
     UnknownConfirmation,
 }
 
@@ -107,7 +117,6 @@ pub struct CommandOutcome {
     pub detail: Option<OutcomeDetail>,
     pub tool_id: Option<ToolId>,
     pub data: Option<Value>,
-    pub confirmation: Option<ConfirmationRequest>,
     pub duration_ms: Option<u32>,
 }
 
@@ -119,7 +128,6 @@ impl CommandOutcome {
             detail: None,
             tool_id: None,
             data: None,
-            confirmation: None,
             duration_ms: None,
         }
     }

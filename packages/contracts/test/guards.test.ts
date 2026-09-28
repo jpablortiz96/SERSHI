@@ -8,6 +8,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import activity from "../fixtures/activity.json";
 import ambiguous from "../fixtures/command-outcome-ambiguous.json";
 import confirmation from "../fixtures/command-outcome-confirmation.json";
+import confirmationRequest from "../fixtures/confirmation-request.json";
 import notFound from "../fixtures/command-outcome-not-found.json";
 import opened from "../fixtures/command-outcome-opened.json";
 import assistantSnapshot from "../fixtures/assistant-snapshot.json";
@@ -95,15 +96,35 @@ describe("guards reject malformed payloads", () => {
   });
 
   it("confirmation requests carry only structured, trusted fields", () => {
-    const request = confirmation.confirmation;
-    expect(isConfirmationRequest(request)).toBe(true);
-    expect(Object.keys(request).sort()).toEqual(
-      ["action", "canRemember", "expiresAtMs", "id", "reason", "risk", "subject", "toolId"].sort(),
+    expect(isConfirmationRequest(confirmationRequest)).toBe(true);
+    expect(Object.keys(confirmationRequest).sort()).toEqual(
+      [
+        "action",
+        "canRemember",
+        "expiresAtMs",
+        "id",
+        "level",
+        "reason",
+        "risk",
+        "subject",
+        "toolId",
+      ].sort(),
     );
-    expect(request.canRemember).toBe(false);
-    expect(request.subject.application.displayName).toBe("Spotify");
-    const serialized = JSON.stringify(request);
+    expect(confirmationRequest.canRemember).toBe(false);
+    expect(confirmationRequest.level).toBe("standard");
+    expect(confirmationRequest.subject.application.displayName).toBe("Spotify");
+    const serialized = JSON.stringify(confirmationRequest);
     expect(serialized).not.toMatch(/[A-Za-z]:\\|\.exe|AppData/i);
+    // Nothing the user typed.
+    expect(serialized).not.toMatch(/Close Spotify/i);
+  });
+
+  it("the Command Center's outcome only says approval is pending", () => {
+    expect(isCommandOutcome(confirmation)).toBe(true);
+    expect(confirmation.status).toBe("needsConfirmation");
+    expect(Object.keys(confirmation)).not.toContain("confirmation");
+    expect(JSON.stringify(confirmation)).not.toMatch(/[0-9a-f]{32}/);
+    expect(isCommandOutcome({ ...confirmation, confirmation: confirmationRequest })).toBe(false);
   });
 
   it("application outcomes never expose paths or launch targets", () => {

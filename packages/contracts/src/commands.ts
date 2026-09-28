@@ -24,8 +24,10 @@ export interface CommandMap {
   get_runtime_info: { args: NoArgs; result: RuntimeInfo };
   list_activity: { args: { limit: number }; result: ActivityEntry[] };
   submit_command: { args: { request: CommandRequest }; result: CommandOutcome };
-  decide_confirmation: { args: { decision: ConfirmationDecision }; result: CommandOutcome };
-  get_pending_confirmation: { args: NoArgs; result: ConfirmationRequest | null };
+  /** Confirmation window only: its assigned confirmation. */
+  get_confirmation_context: { args: NoArgs; result: ConfirmationRequest };
+  /** Confirmation window only: `{ confirmationId, decision }`, nothing else. */
+  decide_confirmation: { args: { decision: ConfirmationDecision }; result: null };
   get_application_catalog: { args: NoArgs; result: ApplicationCatalogInfo };
   refresh_application_catalog: { args: NoArgs; result: ApplicationCatalogInfo };
   get_integration_status: { args: NoArgs; result: IntegrationStatus };
@@ -45,8 +47,8 @@ export const COMMAND_NAMES = [
   "get_runtime_info",
   "list_activity",
   "submit_command",
+  "get_confirmation_context",
   "decide_confirmation",
-  "get_pending_confirmation",
   "get_application_catalog",
   "refresh_application_catalog",
   "get_integration_status",
@@ -64,12 +66,18 @@ export const EVENTS = {
   activity: "sershi://activity",
   /** The Command Center should focus its command input (summon/shortcut). */
   focusCommand: "sershi://focus-command",
+  /**
+   * Main window only: the outcome of a confirmation decided elsewhere
+   * (approved, cancelled or expired on the trusted surface).
+   */
+  commandOutcome: "sershi://command-outcome",
 } as const;
 
 export interface EventMap {
   [EVENTS.assistantState]: AssistantSnapshot;
   [EVENTS.activity]: ActivityEntry;
   [EVENTS.focusCommand]: null;
+  [EVENTS.commandOutcome]: CommandOutcome;
 }
 
 export type EventName = keyof EventMap;

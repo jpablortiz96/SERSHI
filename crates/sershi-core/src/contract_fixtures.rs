@@ -58,9 +58,10 @@ fn write_contract_fixtures() {
     let ambiguous = submit(&mut service, "open visual studio");
     let confirmation = submit(&mut service, "Close Spotify");
 
-    // Confirmation ids are random; pin one so the fixture is stable.
-    let mut confirmation = serde_json::to_value(&confirmation).unwrap();
-    confirmation["confirmation"]["id"] = "0123456789abcdef0123456789abcdef".into();
+    // What only the trusted confirmation surface receives. Ids are random;
+    // pin one so the fixture is stable.
+    let mut request = serde_json::to_value(service.pending_confirmation().unwrap()).unwrap();
+    request["id"] = "0123456789abcdef0123456789abcdef".into();
 
     write("system-snapshot", &FakeSystem::ok().snapshot().unwrap());
     write("assistant-snapshot", &service.snapshot());
@@ -71,6 +72,7 @@ fn write_contract_fixtures() {
     write("command-outcome-not-found", &not_found);
     write("command-outcome-ambiguous", &ambiguous);
     write("command-outcome-confirmation", &confirmation);
+    write("confirmation-request", &request);
     write("activity", &service.recent_activity(20));
     write("tool-definitions", &service.tool_definitions());
 }

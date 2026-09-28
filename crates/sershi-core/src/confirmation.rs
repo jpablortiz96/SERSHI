@@ -1,14 +1,18 @@
 //! Trusted confirmations.
 //!
 //! When policy requires approval, the exact tool call is stored here, in the
-//! core, under a random one-time id. The UI receives only a description built
-//! from structured fields (action, trusted subject, risk) and can answer only
-//! with a decision for that id. Rust decides whether the id is known, pending,
-//! unexpired and for the same tool; the stored call — never anything sent by
-//! the UI — is what runs.
-
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hasher};
+//! core, under a one-time id drawn from the operating system's CSPRNG. The
+//! trusted confirmation surface receives only a description built from
+//! structured fields (action, trusted subject, risk) and can answer only with
+//! a decision for that id. The stored call — never anything sent by a
+//! surface — is what runs.
+//!
+//! One confirmation is pending at a time: SERSHI has one user, and a second
+//! concurrent approval adds no value while making the user's decision harder
+//! to read. A new request cancels the pending one (nothing runs).
+//!
+//! State lives only in memory. A restart or crash discards it, and nothing
+//! here is ever persisted (no storage, logs or files).
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
@@ -18,11 +22,12 @@ use crate::ids::ToolId;
 use crate::policy::ConfirmationReason;
 use crate::tool::{RiskLevel, ToolCall};
 
-/// How long a confirmation stays valid.
-pub const CONFIRMATION_TTL_MS: u64 = 90_000;
+/// How long a confirmation stays valid. Long enough to read and decide
+/// deliberately; short enough that no stale authorization lingers.
+pub const CONFIRMATION_TTL_MS: u64 = 60_000;
 
-/// Upper bound on simultaneously pending confirmations.
-const MAX_PENDING: usize = 8;
+/// Random bytes in a confirmation id (128 bits).
+pub const CONFIRMATION_ID_BYTES: usize = 16;
 
 /// What the user is asked to approve. The UI renders localized copy per
 /// action; it never displays text supplied by a tool or a model.
@@ -33,6 +38,31 @@ pub enum ConfirmationAction {
     CloseApplication,
     /// Generic fallback for tools without a dedicated confirmation.
     RunTool,
+}
+
+/// How strong the approval interaction must be.
+///
+/// Today both levels use the same explicit Cancel / Approve interaction;
+/// `highRisk` is presented with stronger warning copy. Reserved for later
+/// (not implemented): a `critical` level whose approval requires more than a
+/// click — hold to confirm, typing the target's name, a second confirmation,
+/// or Windows Hello for payments, credentials, security settings and
+/// permanent deletion. See docs/SECURITY.md.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum ConfirmationLevel {
+    Standard,
+    HighRisk,
+}
+
+impl ConfirmationLevel {
+    pub fn for_risk(risk: RiskLevel) -> Self {
+        match risk {
+            RiskLevel::HighRisk => Self::HighRisk,
+            RiskLevel::Safe | RiskLevel::Sensitive => Self::Standard,
+        }
+    }
 }
 
 /// The resolved target of a confirmation, from trusted discovery data.
@@ -47,7 +77,13 @@ pub enum ConfirmationSubject {
     Application { application: ApplicationSummary },
 }
 
-/// A random, one-time identifier (32 lowercase hex characters).
+/// A one-time identifier: 128 bits from the OS CSPRNG, as 32 lowercase hex
+/// characters.
+///
+/// Not a password. Security does not rest on its secrecy: only the core
+/// issues ids, only the trusted confirmation surface may present one, and
+/// each works once, for one stored action, for a short time. It is
+/// unpredictable so that it cannot be guessed or reused across requests.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export, type = "string"))]
 pub struct ConfirmationId(String);
@@ -61,7 +97,7 @@ impl Serialize for ConfirmationId {
 impl<'de> Deserialize<'de> for ConfirmationId {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        if raw.len() == 32 && raw.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')) {
+        if is_valid_id(&raw) {
             Ok(Self(raw))
         } else {
             Err(serde::de::Error::custom("invalid confirmation id"))
@@ -69,16 +105,29 @@ impl<'de> Deserialize<'de> for ConfirmationId {
     }
 }
 
+fn is_valid_id(raw: &str) -> bool {
+    raw.len() == CONFIRMATION_ID_BYTES * 2
+        && raw.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f'))
+}
+
+fn to_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from(HEX[usize::from(byte >> 4)]));
+        out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    out
+}
+
 impl ConfirmationId {
-    fn random() -> Self {
-        // RandomState is seeded from the OS; two hashers give 128 bits.
-        let mut out = String::with_capacity(32);
-        for salt in [0x05e2_54a1_u64, 0x00c0_f1e5_u64] {
-            let mut h = RandomState::new().build_hasher();
-            h.write_u64(salt);
-            out.push_str(&format!("{:016x}", h.finish()));
-        }
-        Self(out)
+    /// Draws a new id from the operating system's CSPRNG (`getrandom`:
+    /// `ProcessPrng` on Windows, `getrandom(2)` on Linux). Fails closed: if
+    /// the OS cannot provide randomness, no confirmation is created.
+    pub fn generate() -> Result<Self, ConfirmationError> {
+        let mut bytes = [0_u8; CONFIRMATION_ID_BYTES];
+        getrandom::fill(&mut bytes).map_err(|_| ConfirmationError::RandomnessUnavailable)?;
+        Ok(Self(to_hex(&bytes)))
     }
 
     pub fn as_str(&self) -> &str {
@@ -86,16 +135,19 @@ impl ConfirmationId {
     }
 }
 
-/// What the UI shows. Contains no free text from tools, models or input.
+/// What the trusted confirmation surface shows. Contains no free text from
+/// tools, models or the user's request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ConfirmationRequest {
     pub id: ConfirmationId,
+    /// For display only (e.g. "Allow Memory usage?"); decisions never carry it.
     pub tool_id: ToolId,
     pub action: ConfirmationAction,
     pub subject: Option<ConfirmationSubject>,
     pub risk: RiskLevel,
+    pub level: ConfirmationLevel,
     pub reason: ConfirmationReason,
     /// Whether "remember this decision" may be offered. Always false until
     /// persistent grants exist (v0.1 settings store); never true for high risk.
@@ -127,80 +179,147 @@ pub enum ConfirmationError {
     Unknown,
     #[error("confirmation expired")]
     Expired,
-    #[error("confirmation belongs to a different tool")]
-    ToolMismatch,
+    #[error("the operating system could not provide secure randomness")]
+    RandomnessUnavailable,
 }
 
+/// The single pending confirmation, if any.
 #[derive(Debug, Default, Clone)]
 pub struct ConfirmationStore {
-    pending: Vec<PendingConfirmation>,
+    pending: Option<PendingConfirmation>,
 }
 
 impl ConfirmationStore {
-    pub fn create(&mut self, draft: ConfirmationDraft, now_ms: u64) -> ConfirmationRequest {
-        if self.pending.len() >= MAX_PENDING {
-            self.pending.remove(0);
-        }
+    /// Stores a draft under a fresh id. Returns the confirmation it replaced,
+    /// if any (callers cancel pending confirmations first and audit them).
+    pub fn create(
+        &mut self,
+        draft: ConfirmationDraft,
+        now_ms: u64,
+    ) -> Result<(ConfirmationRequest, Option<PendingConfirmation>), ConfirmationError> {
+        let id = ConfirmationId::generate()?;
         let request = ConfirmationRequest {
-            id: ConfirmationId::random(),
+            id,
             tool_id: draft.call.tool_id.clone(),
             action: draft.action,
             subject: draft.subject,
             risk: draft.risk,
+            level: ConfirmationLevel::for_risk(draft.risk),
             reason: draft.reason,
             can_remember: false,
             expires_at_ms: now_ms.saturating_add(CONFIRMATION_TTL_MS),
         };
-        self.pending.push(PendingConfirmation {
+        let replaced = self.pending.replace(PendingConfirmation {
             request: request.clone(),
             call: draft.call,
         });
-        request
+        Ok((request, replaced))
     }
 
-    /// Removes and returns a pending confirmation. One-time: whatever the
-    /// result, the id cannot be used again.
+    /// Removes and returns the pending confirmation with this id. One-time:
+    /// once taken — approved, cancelled or found expired — the id can never
+    /// be used again. An id that doesn't match (a stale surface, a forged
+    /// value) is rejected and leaves the current confirmation untouched.
     pub fn take(
         &mut self,
         id: &ConfirmationId,
-        tool_id: &ToolId,
         now_ms: u64,
     ) -> Result<PendingConfirmation, ConfirmationError> {
-        let index = self
-            .pending
-            .iter()
-            .position(|p| &p.request.id == id)
-            .ok_or(ConfirmationError::Unknown)?;
-        let pending = self.pending.remove(index);
-        if &pending.request.tool_id != tool_id {
-            return Err(ConfirmationError::ToolMismatch);
+        if self.pending.as_ref().map(|p| &p.request.id) != Some(id) {
+            return Err(ConfirmationError::Unknown);
         }
+        let pending = self.pending.take().ok_or(ConfirmationError::Unknown)?;
         if now_ms >= pending.request.expires_at_ms {
             return Err(ConfirmationError::Expired);
         }
         Ok(pending)
     }
 
-    /// Removes and returns every expired confirmation.
-    pub fn expire(&mut self, now_ms: u64) -> Vec<PendingConfirmation> {
-        let (expired, live) = std::mem::take(&mut self.pending)
-            .into_iter()
-            .partition(|p| now_ms >= p.request.expires_at_ms);
-        self.pending = live;
-        expired
+    /// Removes and returns the pending confirmation if it has expired.
+    pub fn expire(&mut self, now_ms: u64) -> Option<PendingConfirmation> {
+        if self
+            .pending
+            .as_ref()
+            .is_some_and(|p| now_ms >= p.request.expires_at_ms)
+        {
+            self.pending.take()
+        } else {
+            None
+        }
     }
 
-    /// Removes every pending confirmation (e.g. a new request replaced them).
-    pub fn cancel_all(&mut self) -> Vec<PendingConfirmation> {
-        std::mem::take(&mut self.pending)
+    /// Removes the pending confirmation (a new request, dismissal or quit).
+    pub fn cancel_all(&mut self) -> Option<PendingConfirmation> {
+        self.pending.take()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.pending.is_empty()
+        self.pending.is_none()
     }
 
     pub fn current(&self) -> Option<&ConfirmationRequest> {
-        self.pending.last().map(|p| &p.request)
+        self.pending.as_ref().map(|p| &p.request)
+    }
+}
+
+/// What the desktop shell must do with the trusted confirmation surface.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SurfaceAction {
+    /// Nothing to change.
+    Keep,
+    /// Create the surface for this confirmation.
+    Open(ConfirmationId),
+    /// The surface shows a confirmation that no longer exists; show this one
+    /// instead (reload, so its input guard re-arms).
+    Replace(ConfirmationId),
+    /// No confirmation is pending: destroy the surface.
+    Close,
+}
+
+/// Which confirmation the trusted surface is assigned to. Kept by the shell
+/// so that exactly one surface exists per pending confirmation, a surface
+/// can only decide the confirmation it was opened for, and closing it
+/// cancels that confirmation — never a newer one.
+#[derive(Debug, Default, Clone)]
+pub struct SurfaceAssignment {
+    assigned: Option<ConfirmationId>,
+}
+
+impl SurfaceAssignment {
+    /// Aligns the surface with the core's pending confirmation.
+    pub fn reconcile(&mut self, pending: Option<&ConfirmationId>) -> SurfaceAction {
+        match (self.assigned.as_ref(), pending) {
+            (None, None) => SurfaceAction::Keep,
+            (Some(current), Some(next)) if current == next => SurfaceAction::Keep,
+            (None, Some(next)) => {
+                self.assigned = Some(next.clone());
+                SurfaceAction::Open(next.clone())
+            }
+            (Some(_), Some(next)) => {
+                self.assigned = Some(next.clone());
+                SurfaceAction::Replace(next.clone())
+            }
+            (Some(_), None) => {
+                self.assigned = None;
+                SurfaceAction::Close
+            }
+        }
+    }
+
+    /// The confirmation the surface currently shows.
+    pub fn assigned(&self) -> Option<&ConfirmationId> {
+        self.assigned.as_ref()
+    }
+
+    /// Whether a decision naming `id` comes from the surface's current
+    /// confirmation (a stale surface cannot decide a replacement).
+    pub fn authorizes(&self, id: &ConfirmationId) -> bool {
+        self.assigned.as_ref() == Some(id)
+    }
+
+    /// The user closed the surface: returns the confirmation to cancel.
+    pub fn release(&mut self) -> Option<ConfirmationId> {
+        self.assigned.take()
     }
 }
 
@@ -211,11 +330,11 @@ mod tests {
     use super::*;
     use crate::tool::CallOrigin;
 
-    fn draft(tool: &str) -> ConfirmationDraft {
+    fn draft(application: &str) -> ConfirmationDraft {
         ConfirmationDraft {
             call: ToolCall::new(
-                ToolId::new(tool).unwrap(),
-                json!({"application": "Spotify"}),
+                ToolId::new("system.close_application").unwrap(),
+                json!({ "application": application }),
                 CallOrigin::User,
             ),
             action: ConfirmationAction::CloseApplication,
@@ -225,62 +344,77 @@ mod tests {
         }
     }
 
-    fn tool(id: &str) -> ToolId {
-        ToolId::new(id).unwrap()
+    fn create(store: &mut ConfirmationStore, application: &str, now: u64) -> ConfirmationRequest {
+        store.create(draft(application), now).unwrap().0
     }
 
     #[test]
-    fn ids_are_random_and_unguessable_length() {
-        let a = ConfirmationId::random();
-        let b = ConfirmationId::random();
+    fn confirmation_ids_are_128_bit_random_values() {
+        let a = ConfirmationId::generate().unwrap();
+        let b = ConfirmationId::generate().unwrap();
+        // 16 bytes → 32 lowercase hex characters, accepted by the boundary.
+        assert_eq!(a.as_str().len(), 2 * CONFIRMATION_ID_BYTES);
+        assert_eq!(CONFIRMATION_ID_BYTES * 8, 128);
+        assert!(is_valid_id(a.as_str()));
+        let round_trip: ConfirmationId =
+            serde_json::from_value(serde_json::to_value(&a).unwrap()).unwrap();
+        assert_eq!(round_trip, a);
+        // Successive ids differ (no statistical claims; the OS CSPRNG is
+        // relied on for unpredictability).
         assert_ne!(a, b);
-        assert_eq!(a.as_str().len(), 32);
+    }
+
+    #[test]
+    fn hex_encoding_is_lowercase_and_complete() {
+        assert_eq!(to_hex(&[0x00, 0x0f, 0xa5, 0xff]), "000fa5ff");
     }
 
     #[test]
     fn a_confirmation_can_be_used_exactly_once() {
         let mut store = ConfirmationStore::default();
-        let request = store.create(draft("system.close_application"), 0);
-        let taken = store.take(&request.id, &tool("system.close_application"), 1);
+        let request = create(&mut store, "Spotify", 0);
+        let taken = store.take(&request.id, 1);
         assert_eq!(
             taken.map(|p| p.call.input),
             Ok(json!({"application": "Spotify"}))
         );
-        assert_eq!(
-            store.take(&request.id, &tool("system.close_application"), 2),
-            Err(ConfirmationError::Unknown)
-        );
+        assert_eq!(store.take(&request.id, 2), Err(ConfirmationError::Unknown));
     }
 
     #[test]
     fn expired_confirmations_never_run_and_are_consumed() {
         let mut store = ConfirmationStore::default();
-        let request = store.create(draft("system.close_application"), 1_000);
+        let request = create(&mut store, "Spotify", 1_000);
         assert_eq!(request.expires_at_ms, 1_000 + CONFIRMATION_TTL_MS);
         let late = request.expires_at_ms;
         assert_eq!(
-            store.take(&request.id, &tool("system.close_application"), late),
+            store.take(&request.id, late),
             Err(ConfirmationError::Expired)
         );
-        assert_eq!(
-            store.take(&request.id, &tool("system.close_application"), 0),
-            Err(ConfirmationError::Unknown)
-        );
+        assert_eq!(store.take(&request.id, 0), Err(ConfirmationError::Unknown));
     }
 
     #[test]
-    fn a_decision_must_name_the_pending_tool() {
+    fn only_one_confirmation_is_pending_at_a_time() {
         let mut store = ConfirmationStore::default();
-        let request = store.create(draft("system.close_application"), 0);
-        assert_eq!(
-            store.take(&request.id, &tool("files.delete"), 1),
-            Err(ConfirmationError::ToolMismatch)
-        );
-        // The mismatch consumed it: it cannot be retried with the right tool.
-        assert_eq!(
-            store.take(&request.id, &tool("system.close_application"), 1),
-            Err(ConfirmationError::Unknown)
-        );
+        let first = create(&mut store, "Spotify", 0);
+        let (second, replaced) = store.create(draft("Notepad"), 1).unwrap();
+        assert_eq!(replaced.map(|p| p.request.id), Some(first.id.clone()));
+        assert_eq!(store.current().map(|r| &r.id), Some(&second.id));
+        // The replaced id is dead.
+        assert_eq!(store.take(&first.id, 2), Err(ConfirmationError::Unknown));
+    }
+
+    #[test]
+    fn a_stale_id_cannot_decide_the_replacement() {
+        let mut store = ConfirmationStore::default();
+        let stale = create(&mut store, "Spotify", 0);
+        store.cancel_all();
+        let fresh = create(&mut store, "Notepad", 1);
+        assert_eq!(store.take(&stale.id, 2), Err(ConfirmationError::Unknown));
+        // The rejected attempt leaves the current confirmation intact.
+        assert_eq!(store.current().map(|r| &r.id), Some(&fresh.id));
+        assert!(store.take(&fresh.id, 3).is_ok());
     }
 
     #[test]
@@ -290,7 +424,10 @@ mod tests {
             "\"abc\"",
             "\"<script>\"",
             "42",
+            "null",
             &format!("\"{}\"", "G".repeat(32)),
+            &format!("\"{}\"", "A".repeat(32)),
+            &format!("\"{}\"", "a".repeat(33)),
         ] {
             assert!(
                 serde_json::from_str::<ConfirmationId>(bad).is_err(),
@@ -304,31 +441,77 @@ mod tests {
     #[test]
     fn forged_ids_are_unknown() {
         let mut store = ConfirmationStore::default();
-        store.create(draft("system.close_application"), 0);
+        create(&mut store, "Spotify", 0);
         let forged = ConfirmationId("0".repeat(32));
-        assert_eq!(
-            store.take(&forged, &tool("system.close_application"), 1),
-            Err(ConfirmationError::Unknown)
-        );
+        assert_eq!(store.take(&forged, 1), Err(ConfirmationError::Unknown));
+        assert!(!store.is_empty());
     }
 
     #[test]
-    fn expiry_sweeps_only_expired_requests() {
+    fn expiry_removes_only_an_expired_confirmation() {
         let mut store = ConfirmationStore::default();
-        store.create(draft("system.close_application"), 0);
-        let fresh = store.create(draft("system.close_application"), 50_000);
-        let expired = store.expire(CONFIRMATION_TTL_MS);
-        assert_eq!(expired.len(), 1);
-        assert_eq!(store.current().map(|r| &r.id), Some(&fresh.id));
+        let request = create(&mut store, "Spotify", 0);
+        assert_eq!(store.expire(CONFIRMATION_TTL_MS - 1), None);
+        assert_eq!(
+            store.expire(CONFIRMATION_TTL_MS).map(|p| p.request.id),
+            Some(request.id)
+        );
+        assert!(store.is_empty());
     }
 
     #[test]
     fn remembering_is_never_offered_yet() {
         let mut store = ConfirmationStore::default();
-        assert!(
-            !store
-                .create(draft("system.close_application"), 0)
-                .can_remember
+        assert!(!create(&mut store, "Spotify", 0).can_remember);
+    }
+
+    #[test]
+    fn the_level_follows_the_registered_risk() {
+        assert_eq!(
+            ConfirmationLevel::for_risk(RiskLevel::Sensitive),
+            ConfirmationLevel::Standard
         );
+        assert_eq!(
+            ConfirmationLevel::for_risk(RiskLevel::HighRisk),
+            ConfirmationLevel::HighRisk
+        );
+    }
+
+    fn id(n: u8) -> ConfirmationId {
+        ConfirmationId(to_hex(&[n; CONFIRMATION_ID_BYTES]))
+    }
+
+    #[test]
+    fn exactly_one_surface_follows_the_pending_confirmation() {
+        let mut surface = SurfaceAssignment::default();
+        assert_eq!(surface.reconcile(None), SurfaceAction::Keep);
+        assert_eq!(surface.reconcile(Some(&id(1))), SurfaceAction::Open(id(1)));
+        // Re-reconciling the same confirmation never opens a second surface.
+        assert_eq!(surface.reconcile(Some(&id(1))), SurfaceAction::Keep);
+        assert_eq!(
+            surface.reconcile(Some(&id(2))),
+            SurfaceAction::Replace(id(2))
+        );
+        assert_eq!(surface.reconcile(None), SurfaceAction::Close);
+        assert_eq!(surface.assigned(), None);
+    }
+
+    #[test]
+    fn a_stale_surface_cannot_decide_a_replacement() {
+        let mut surface = SurfaceAssignment::default();
+        surface.reconcile(Some(&id(1)));
+        surface.reconcile(Some(&id(2)));
+        assert!(!surface.authorizes(&id(1)));
+        assert!(surface.authorizes(&id(2)));
+    }
+
+    #[test]
+    fn closing_the_surface_releases_only_its_own_confirmation() {
+        let mut surface = SurfaceAssignment::default();
+        surface.reconcile(Some(&id(1)));
+        assert_eq!(surface.release(), Some(id(1)));
+        // Already released (e.g. the shell closed it after a decision).
+        assert_eq!(surface.release(), None);
+        assert!(!surface.authorizes(&id(1)));
     }
 }

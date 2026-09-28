@@ -8,6 +8,11 @@
 //!            decide(approve) → Executing → …   decide(cancel) / expiry → Idle
 //! ```
 //!
+//! Invariant: the service never approves on its own. Approval enters only
+//! through [`AssistantService::decide`], which the desktop shell accepts only
+//! from the trusted confirmation surface; intent resolution, tools and model
+//! output have no path to it.
+//!
 //! The service is synchronous and owns no threads or timers; the desktop shell
 //! wraps it in a mutex and schedules settle and expiry timers.
 
@@ -17,8 +22,8 @@ mod types;
 mod tests;
 
 pub use types::{
-    Clock, CommandOutcome, CommandRequest, CommandStatus, ConfirmationDecision, MAX_COMMAND_CHARS,
-    OutcomeDetail, RejectionReason, ServiceEvent,
+    Clock, CommandOutcome, CommandRequest, CommandStatus, ConfirmationChoice, ConfirmationDecision,
+    MAX_COMMAND_CHARS, OutcomeDetail, RejectionReason, ServiceEvent,
 };
 
 use crate::activity::{ActivityEntry, ActivityKind, ActivityLog, NewActivity};
@@ -79,7 +84,8 @@ impl AssistantService {
         self.executor.registry().definitions().cloned().collect()
     }
 
-    /// The confirmation currently awaiting a decision, if any.
+    /// The confirmation currently awaiting a decision, if any. For the
+    /// desktop shell's trusted surface only; never sent to the Command Center.
     pub fn pending_confirmation(&self) -> Option<ConfirmationRequest> {
         self.confirmations.current().cloned()
     }
@@ -172,8 +178,9 @@ impl AssistantService {
         outcome
     }
 
-    /// Applies the user's decision on a pending confirmation. Only the stored
-    /// call can run, only once, only before expiry, only for the same tool.
+    /// Applies the user's decision on the pending confirmation. Only the
+    /// stored call can run, only once and only before expiry; the decision
+    /// carries nothing but the id and the choice.
     pub fn decide(
         &mut self,
         decision: &ConfirmationDecision,
@@ -181,62 +188,54 @@ impl AssistantService {
     ) -> CommandOutcome {
         let now = (self.clock)();
         let watermark = self.watermark();
-        let outcome =
-            match self
-                .confirmations
-                .take(&decision.confirmation_id, &decision.tool_id, now)
-            {
-                Err(ConfirmationError::Unknown | ConfirmationError::ToolMismatch) => {
-                    CommandOutcome::rejected(
-                        RejectionReason::UnknownConfirmation,
-                        "That request is no longer waiting for approval.",
-                    )
-                }
-                Err(ConfirmationError::Expired) => {
-                    self.record_confirmation(
-                        ActivityKind::ConfirmationExpired,
-                        None,
-                        &decision.tool_id,
-                    );
-                    self.settle_if_no_pending(notify);
-                    expired_outcome(&decision.tool_id)
-                }
-                Ok(pending) if !decision.approved => {
+        // An overdue confirmation expires before any decision is considered.
+        if let Some(expired) = self.confirmations.expire(now) {
+            self.record_pending(ActivityKind::ConfirmationExpired, &expired);
+            self.settle_if_no_pending(notify);
+            if expired.request.id == decision.confirmation_id {
+                self.flush_activity(watermark, notify);
+                return expired_outcome(Some(&expired.request.tool_id));
+            }
+        }
+        let outcome = match self.confirmations.take(&decision.confirmation_id, now) {
+            Err(ConfirmationError::Expired) => {
+                self.settle_if_no_pending(notify);
+                expired_outcome(None)
+            }
+            Err(_) => CommandOutcome::rejected(
+                RejectionReason::UnknownConfirmation,
+                "That request is no longer waiting for approval.",
+            ),
+            Ok(pending) => match decision.decision {
+                ConfirmationChoice::Cancel => {
                     self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
                     self.settle_if_no_pending(notify);
-                    CommandOutcome {
-                        tool_id: Some(pending.request.tool_id),
-                        ..CommandOutcome::new(
-                            CommandStatus::Cancelled,
-                            "Cancelled. Nothing was changed.",
-                        )
-                    }
+                    cancelled_outcome(&pending)
                 }
-                Ok(pending) => self.run_approved(pending, notify),
-            };
+                ConfirmationChoice::Approve => self.run_approved(pending, notify),
+            },
+        };
         self.flush_activity(watermark, notify);
         outcome
     }
 
-    /// Expires overdue confirmations. Returns true if anything changed.
-    pub fn expire_confirmations(&mut self, notify: Notify<'_>) -> bool {
+    /// Expires the pending confirmation if it is overdue, returning the
+    /// outcome to show.
+    pub fn expire_confirmations(&mut self, notify: Notify<'_>) -> Option<CommandOutcome> {
         let watermark = self.watermark();
-        let expired = self.confirmations.expire((self.clock)());
-        for pending in &expired {
-            self.record_pending(ActivityKind::ConfirmationExpired, pending);
-        }
-        if !expired.is_empty() {
-            self.settle_if_no_pending(notify);
-        }
+        let expired = self.confirmations.expire((self.clock)())?;
+        self.record_pending(ActivityKind::ConfirmationExpired, &expired);
+        self.settle_if_no_pending(notify);
         self.flush_activity(watermark, notify);
-        !expired.is_empty()
+        Some(expired_outcome(Some(&expired.request.tool_id)))
     }
 
-    /// Returns an attending or waiting assistant to idle (e.g. Escape, or the
-    /// Command Center was hidden). Pending approvals are cancelled.
-    pub fn dismiss(&mut self, notify: Notify<'_>) {
+    /// Returns an attending or waiting assistant to idle (e.g. Escape, the
+    /// Command Center was hidden, SERSHI is quitting). A pending approval is
+    /// cancelled; its outcome is returned so it can be reported.
+    pub fn dismiss(&mut self, notify: Notify<'_>) -> Option<CommandOutcome> {
         let watermark = self.watermark();
-        self.cancel_confirmations();
+        let cancelled = self.cancel_confirmations();
         if matches!(
             self.machine.state(),
             AssistantState::Awake | AssistantState::AwaitingConfirmation
@@ -244,6 +243,7 @@ impl AssistantService {
             self.transition(AssistantEvent::Dismiss, notify);
         }
         self.flush_activity(watermark, notify);
+        cancelled.as_ref().map(cancelled_outcome)
     }
 
     fn run_tool(&mut self, call: &ToolCall, notify: Notify<'_>) -> CommandOutcome {
@@ -300,16 +300,43 @@ impl AssistantService {
                 }
             }
             ExecutionOutcome::ConfirmationRequired(draft) => {
-                let tool_name = self.tool_name(&draft.call.tool_id);
-                let request = self.confirmations.create(draft, (self.clock)());
-                self.transition(AssistantEvent::ConfirmationRequested, notify);
-                CommandOutcome {
-                    tool_id: Some(request.tool_id.clone()),
-                    confirmation: Some(request),
-                    ..CommandOutcome::new(
-                        CommandStatus::NeedsConfirmation,
-                        format!("{tool_name} needs your approval before it can run."),
-                    )
+                let tool_id = draft.call.tool_id.clone();
+                let tool_name = self.tool_name(&tool_id);
+                // One pending confirmation at a time.
+                self.cancel_confirmations();
+                match self.confirmations.create(draft, (self.clock)()) {
+                    Ok(_) => {
+                        self.transition(AssistantEvent::ConfirmationRequested, notify);
+                        // The Command Center learns only that approval is
+                        // pending; the id goes to the trusted surface alone.
+                        CommandOutcome {
+                            tool_id: Some(tool_id),
+                            ..CommandOutcome::new(
+                                CommandStatus::NeedsConfirmation,
+                                format!(
+                                    "{tool_name} is waiting for your approval in the confirmation window."
+                                ),
+                            )
+                        }
+                    }
+                    Err(_) => {
+                        // Fail closed: no secure id, no confirmation, no action.
+                        self.record(
+                            NewActivity::new(ActivityKind::ToolFailed, "Tool failed")
+                                .tool(&tool_id),
+                        );
+                        self.transition(AssistantEvent::Failed, notify);
+                        CommandOutcome {
+                            tool_id: Some(tool_id),
+                            ..CommandOutcome::new(
+                                CommandStatus::Failed,
+                                format!(
+                                    "I couldn't complete {tool_name}. The system didn't return \
+                                     the information — try again in a moment."
+                                ),
+                            )
+                        }
+                    }
                 }
             }
             ExecutionOutcome::Denied { tool_id, reason } => {
@@ -366,7 +393,7 @@ impl AssistantService {
             }
             ExecutionOutcome::SubjectChanged { tool_id } => {
                 self.transition(AssistantEvent::AttentionNeeded, notify);
-                expired_outcome(&tool_id)
+                expired_outcome(Some(&tool_id))
             }
         }
     }
@@ -379,30 +406,35 @@ impl AssistantService {
             .unwrap_or_else(|| tool_id.to_string())
     }
 
-    fn cancel_confirmations(&mut self) {
-        for pending in self.confirmations.cancel_all() {
-            self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
-        }
+    fn cancel_confirmations(&mut self) -> Option<PendingConfirmation> {
+        let pending = self.confirmations.cancel_all()?;
+        self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
+        Some(pending)
     }
 
     fn record_pending(&mut self, kind: ActivityKind, pending: &PendingConfirmation) {
         let subject = pending.request.subject.as_ref().map(|s| match s {
             ConfirmationSubject::Application { application } => application.display_name.clone(),
         });
-        self.record_confirmation(kind, subject, &pending.request.tool_id);
+        self.record_confirmation(kind, subject, Some(&pending.request.tool_id));
     }
 
-    fn record_confirmation(&mut self, kind: ActivityKind, subject: Option<String>, tool: &ToolId) {
+    fn record_confirmation(
+        &mut self,
+        kind: ActivityKind,
+        subject: Option<String>,
+        tool: Option<&ToolId>,
+    ) {
         let summary = match kind {
             ActivityKind::ConfirmationApproved => "Approved a pending action",
             ActivityKind::ConfirmationExpired => "A pending approval expired",
             _ => "Cancelled a pending action",
         };
-        self.record(
-            NewActivity::new(kind, summary)
-                .tool(tool)
-                .subject_opt(subject),
-        );
+        let mut activity = NewActivity::new(kind, summary).subject_opt(subject);
+        if let Some(tool) = tool {
+            activity = activity.tool(tool);
+        }
+        self.record(activity);
     }
 
     fn settle_if_no_pending(&mut self, notify: Notify<'_>) {
@@ -437,9 +469,16 @@ impl AssistantService {
     }
 }
 
-fn expired_outcome(tool_id: &ToolId) -> CommandOutcome {
+fn cancelled_outcome(pending: &PendingConfirmation) -> CommandOutcome {
     CommandOutcome {
-        tool_id: Some(tool_id.clone()),
+        tool_id: Some(pending.request.tool_id.clone()),
+        ..CommandOutcome::new(CommandStatus::Cancelled, "Cancelled. Nothing was changed.")
+    }
+}
+
+fn expired_outcome(tool_id: Option<&ToolId>) -> CommandOutcome {
+    CommandOutcome {
+        tool_id: tool_id.cloned(),
         ..CommandOutcome::new(
             CommandStatus::Expired,
             "This request expired. Ask SERSHI again if you still want to do it.",
