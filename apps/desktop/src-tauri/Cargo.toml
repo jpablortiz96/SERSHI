@@ -19,7 +19,9 @@ tauri-build = { version = "2.7", features = [] }
 sershi-core.workspace = true
 sershi-platform.workspace = true
 serde.workspace = true
-tauri = { version = "2.12", features = [] }
+tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2.4"
+tauri-plugin-single-instance = "2.5"
 
 [lints]
 workspace = true

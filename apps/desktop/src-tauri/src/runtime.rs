@@ -5,8 +5,10 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sershi_core::activity::{ActivityKind, NewActivity};
+use sershi_core::apps::{ApplicationManager, CatalogState, tools as app_tools};
 use sershi_core::assistant::{AssistantEvent, AssistantSnapshot, AssistantState};
 use sershi_core::builtin::{self, BuiltinError};
+use sershi_core::confirmation::CONFIRMATION_TTL_MS;
 use sershi_core::executor::ToolExecutor;
 use sershi_core::intent::KeywordIntentResolver;
 use sershi_core::ipc::{IpcError, IpcErrorCode};
@@ -34,13 +36,19 @@ fn now_ms() -> u64 {
 pub struct Runtime {
     service: Mutex<AssistantService>,
     pub system: Arc<SysinfoSystemInfo>,
+    pub apps: Arc<ApplicationManager>,
 }
 
 impl Runtime {
     pub fn new() -> Result<Self, BuiltinError> {
         let system = Arc::new(SysinfoSystemInfo::new());
+        let apps = Arc::new(ApplicationManager::new(
+            sershi_platform::application_platform(),
+            now_ms,
+        ));
         let mut registry = ToolRegistry::default();
         builtin::register_all(&mut registry, system.clone())?;
+        app_tools::register(&mut registry, apps.clone())?;
         let service = AssistantService::new(
             ToolExecutor::new(registry, PolicyEngine::new(Platform::current())),
             Box::new(KeywordIntentResolver),
@@ -51,6 +59,7 @@ impl Runtime {
         Ok(Self {
             service: Mutex::new(service),
             system,
+            apps,
         })
     }
 
@@ -77,11 +86,16 @@ pub fn broadcast(app: &AppHandle, event: ServiceEvent) {
 }
 
 /// Returns an assistant to idle after an outcome state has been visible long
-/// enough to read. Stale timers are ignored via the snapshot revision.
+/// enough to read, or expires a pending confirmation. Stale timers are
+/// ignored via the snapshot revision (settle) or are idempotent (expiry).
 pub fn schedule_settle(app: &AppHandle, snapshot: &AssistantSnapshot) {
     let hold = match snapshot.state {
         AssistantState::Success => Duration::from_millis(2_400),
         AssistantState::Warning | AssistantState::Error => Duration::from_millis(4_000),
+        AssistantState::AwaitingConfirmation => {
+            schedule_expiry(app);
+            return;
+        }
         _ => return,
     };
     let app = app.clone();
@@ -107,4 +121,29 @@ pub fn announce_ready(app: &AppHandle) {
     }) {
         broadcast(app, ServiceEvent::Activity(entry));
     }
+}
+
+fn schedule_expiry(app: &AppHandle) {
+    let app = app.clone();
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(CONFIRMATION_TTL_MS + 250));
+        let runtime = app.state::<Runtime>();
+        let _ = runtime.with_service(|s| s.expire_confirmations(&mut |e| broadcast(&app, e)));
+    });
+}
+
+/// Scans installed applications a few seconds after start-up, off the
+/// critical path, so the first "open" is fast without slowing launch. Only
+/// on platforms with application control.
+pub fn warm_up_catalog(app: &AppHandle) {
+    let apps = app.state::<Runtime>().apps.clone();
+    if apps.status().state != CatalogState::NotScanned {
+        return;
+    }
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(5));
+        if apps.status().state == CatalogState::NotScanned {
+            let _ = apps.refresh();
+        }
+    });
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-refresh-application-catalog"
+description = "Enables the refresh_application_catalog command without any pre-configured scope."
+commands.allow = ["refresh_application_catalog"]
+
+[[permission]]
+identifier = "deny-refresh-application-catalog"
+description = "Denies the refresh_application_catalog command without any pre-configured scope."
+commands.deny = ["refresh_application_catalog"]

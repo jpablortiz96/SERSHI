@@ -25,7 +25,7 @@ pub fn capabilities() -> Vec<PlatformCapability> {
 }
 
 pub fn capabilities_for(platform: Platform) -> Vec<PlatformCapability> {
-    use CapabilityStatus::{Available, Planned, RequiresWindowsValidation};
+    use CapabilityStatus::{Available, Planned, RequiresWindowsValidation, Unsupported};
 
     // Linux is the cloud development platform: telemetry is exercised by
     // integration tests there. Windows is the product platform and has not
@@ -33,6 +33,13 @@ pub fn capabilities_for(platform: Platform) -> Vec<PlatformCapability> {
     let validated_here = match platform {
         Platform::Windows => RequiresWindowsValidation,
         _ => Available,
+    };
+
+    // Application control and shell integration are implemented natively
+    // for Windows only.
+    let windows_feature = match platform {
+        Platform::Windows => RequiresWindowsValidation,
+        _ => Unsupported,
     };
 
     vec![
@@ -46,16 +53,16 @@ pub fn capabilities_for(platform: Platform) -> Vec<PlatformCapability> {
         capability(
             "apps.launch",
             "Open and close applications",
-            Planned,
-            Some("v0.1"),
+            windows_feature,
+            None,
         ),
-        capability("system.battery", "Battery status", Planned, Some("v0.1")),
         capability(
             "shell.shortcut",
             "Global shortcut & tray",
-            Planned,
-            Some("v0.1"),
+            windows_feature,
+            None,
         ),
+        capability("system.battery", "Battery status", Planned, Some("v0.1")),
         capability("ai.provider", "AI provider", Planned, Some("v0.1")),
         capability(
             "context.files",

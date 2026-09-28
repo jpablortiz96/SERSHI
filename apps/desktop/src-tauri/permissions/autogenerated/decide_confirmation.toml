@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-decide-confirmation"
+description = "Enables the decide_confirmation command without any pre-configured scope."
+commands.allow = ["decide_confirmation"]
+
+[[permission]]
+identifier = "deny-decide-confirmation"
+description = "Denies the decide_confirmation command without any pre-configured scope."
+commands.deny = ["decide_confirmation"]

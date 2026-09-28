@@ -15,5 +15,21 @@ pub mod system_info;
 #[cfg(windows)]
 mod windows;
 
+use std::sync::Arc;
+
+use sershi_core::ports::ApplicationPlatform;
+
 pub use capabilities::capabilities;
 pub use system_info::SysinfoSystemInfo;
+
+/// The application-control adapter for this platform.
+pub fn application_platform() -> Arc<dyn ApplicationPlatform> {
+    #[cfg(windows)]
+    {
+        Arc::new(windows::WindowsApplications)
+    }
+    #[cfg(not(windows))]
+    {
+        Arc::new(sershi_core::ports::UnsupportedApplications)
+    }
+}

@@ -1,15 +1,24 @@
 //! Window behaviour for the two SERSHI surfaces.
 //!
 //! REQUIRES_WINDOWS_VALIDATION: companion placement over the taskbar work
-//! area, transparency, always-on-top and hide-on-close have only been
-//! exercised on Linux (X11 under Xvfb).
+//! area, transparency, always-on-top, hide-on-close and foreground activation
+//! (summon) have only been exercised on Linux (X11 under Xvfb).
+
+use std::thread;
+use std::time::Duration;
 
 use sershi_core::assistant::{AssistantEvent, AssistantState};
 use sershi_core::ipc::IpcError;
 use sershi_core::service::ServiceEvent;
-use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition, Window, WindowEvent};
+use tauri::{
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, UserAttentionType, Window,
+    WindowEvent,
+};
 
-use crate::runtime::{Runtime, broadcast};
+use crate::runtime::{Runtime, broadcast, schedule_settle};
+
+/// Asks the Command Center to focus its command input.
+pub const FOCUS_COMMAND_EVENT: &str = "sershi://focus-command";
 
 pub const MAIN: &str = "main";
 pub const COMPANION: &str = "companion";
@@ -44,36 +53,89 @@ pub fn place_companion(app: &AppHandle) {
     ));
 }
 
+/// Brings the Command Center forward from any state: hidden, minimized,
+/// behind other windows or already visible. If Windows refuses to move focus
+/// (foreground lock), the taskbar button flashes instead of fighting it.
 pub fn show_command_center(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(MAIN) {
+    let Some(window) = app.get_webview_window(MAIN) else {
+        return;
+    };
+    let _ = window.show();
+    if window.is_minimized().unwrap_or(false) {
         let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+    }
+    let _ = window.set_focus();
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(250));
+        if !window.is_focused().unwrap_or(true) {
+            let _ = window.request_user_attention(Some(UserAttentionType::Informational));
+        }
+    });
+}
+
+/// Summon: show the Command Center, focus the command input, and mark the
+/// assistant as attending. Used by the companion, tray, shortcut and a
+/// second launch of SERSHI.
+pub fn summon(app: &AppHandle) {
+    show_command_center(app);
+    let _ = app.emit_to(MAIN, FOCUS_COMMAND_EVENT, ());
+    let runtime = app.state::<Runtime>();
+    if let Ok(Some(snapshot)) = runtime.with_service(|s| {
+        matches!(
+            s.snapshot().state,
+            AssistantState::Idle | AssistantState::Sleeping
+        )
+        .then(|| s.apply(AssistantEvent::Activate).ok())
+        .flatten()
+    }) {
+        broadcast(app, ServiceEvent::State(snapshot));
     }
 }
 
-pub fn dismiss(app: &AppHandle, runtime: &Runtime) -> Result<(), IpcError> {
-    let dismissed = runtime.with_service(|s| {
-        (s.snapshot().state == AssistantState::Awake)
-            .then(|| s.apply(AssistantEvent::Dismiss).ok())
-            .flatten()
-    })?;
-    if let Some(snapshot) = dismissed {
-        broadcast(app, ServiceEvent::State(snapshot));
+/// Tray "Open SERSHI": both surfaces visible, Command Center focused.
+pub fn show_all(app: &AppHandle) {
+    if let Some(companion) = app.get_webview_window(COMPANION) {
+        let _ = companion.show();
     }
+    summon(app);
+}
+
+/// Tray "Hide SERSHI": SERSHI keeps running in the tray only.
+pub fn hide_all(app: &AppHandle) {
+    hide_command_center(app);
+    if let Some(companion) = app.get_webview_window(COMPANION) {
+        let _ = companion.hide();
+    }
+}
+
+/// Hides the Command Center (the × button). SERSHI stays alive in the
+/// companion, tray and shortcut; pending approvals are cancelled.
+pub fn hide_command_center(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN) {
+        let _ = window.hide();
+    }
+    let _ = dismiss(app, &app.state::<Runtime>());
+}
+
+/// Returns an attending or waiting assistant to idle, cancelling any pending
+/// approval.
+pub fn dismiss(app: &AppHandle, runtime: &Runtime) -> Result<(), IpcError> {
+    let snapshot = runtime.with_service(|s| {
+        s.dismiss(&mut |event| broadcast(app, event));
+        s.snapshot()
+    })?;
+    schedule_settle(app, &snapshot);
     Ok(())
 }
 
-/// Closing the Command Center hides it; SERSHI keeps living in the companion.
-/// Quitting is an explicit action in the Command Center.
+/// Closing the Command Center hides it; SERSHI keeps living in the companion
+/// and tray. Quitting is explicit (Settings or tray).
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
     if window.label() != MAIN {
         return;
     }
     if let WindowEvent::CloseRequested { api, .. } = event {
         api.prevent_close();
-        let _ = window.hide();
-        let app = window.app_handle();
-        let _ = dismiss(app, &app.state::<Runtime>());
+        hide_command_center(window.app_handle());
     }
 }

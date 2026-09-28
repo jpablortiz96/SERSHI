@@ -3,14 +3,18 @@
 //! `capabilities/*.json`.
 
 use sershi_core::activity::ActivityEntry;
-use sershi_core::assistant::{AssistantEvent, AssistantSnapshot, AssistantState};
-use sershi_core::ipc::{IpcError, IpcErrorCode, RuntimeInfo};
+use sershi_core::assistant::{AssistantSnapshot, AssistantState};
+use sershi_core::confirmation::ConfirmationRequest;
+use sershi_core::ipc::{
+    ApplicationCatalogInfo, IntegrationStatus, IpcError, IpcErrorCode, RuntimeInfo, TrayLabels,
+};
 use sershi_core::platform::Platform;
 use sershi_core::ports::SystemInfoProvider;
-use sershi_core::service::{CommandOutcome, CommandRequest, ServiceEvent};
+use sershi_core::service::{CommandOutcome, CommandRequest, ConfirmationDecision, ServiceEvent};
 use sershi_core::system::SystemSnapshot;
 use tauri::{AppHandle, State};
 
+use crate::integration;
 use crate::runtime::{Runtime, broadcast, schedule_settle};
 use crate::surfaces;
 
@@ -55,44 +59,112 @@ pub fn list_activity(
     runtime.with_service(|s| s.recent_activity(limit))
 }
 
+/// Runs a command. Runs off the main thread (application discovery and
+/// launching can take a moment) and broadcasts each state change as it
+/// happens, so every surface shows Thinking → Planning → Executing live.
 #[tauri::command(async)]
 pub fn submit_command(
     app: AppHandle,
     runtime: State<'_, Runtime>,
     request: CommandRequest,
 ) -> Result<CommandOutcome, IpcError> {
-    let mut events = Vec::new();
     let (outcome, snapshot) = runtime.with_service(|s| {
-        let outcome = s.submit(&request, &mut |e| events.push(e));
+        let outcome = s.submit(&request, &mut |event| broadcast(&app, event));
         (outcome, s.snapshot())
     })?;
-    // Broadcast outside the lock so listeners can call back into the core.
-    for event in events {
-        broadcast(&app, event);
-    }
     schedule_settle(&app, &snapshot);
     Ok(outcome)
 }
 
-/// Shows the Command Center and marks the assistant as attending.
-#[tauri::command]
-pub fn summon_command_center(app: AppHandle, runtime: State<'_, Runtime>) -> Result<(), IpcError> {
-    surfaces::show_command_center(&app);
-    let activated = runtime.with_service(|s| {
-        matches!(
-            s.snapshot().state,
-            AssistantState::Idle | AssistantState::Sleeping
-        )
-        .then(|| s.apply(AssistantEvent::Activate).ok())
-        .flatten()
+/// The user's decision on a pending confirmation. The UI can only name the
+/// confirmation and answer yes/no; the stored call is what runs.
+#[tauri::command(async)]
+pub fn decide_confirmation(
+    app: AppHandle,
+    runtime: State<'_, Runtime>,
+    decision: ConfirmationDecision,
+) -> Result<CommandOutcome, IpcError> {
+    let (outcome, snapshot) = runtime.with_service(|s| {
+        let outcome = s.decide(&decision, &mut |event| broadcast(&app, event));
+        (outcome, s.snapshot())
     })?;
-    if let Some(snapshot) = activated {
-        broadcast(&app, ServiceEvent::State(snapshot));
+    schedule_settle(&app, &snapshot);
+    Ok(outcome)
+}
+
+/// Lets a reloaded Command Center restore a confirmation still pending.
+#[tauri::command]
+pub fn get_pending_confirmation(
+    runtime: State<'_, Runtime>,
+) -> Result<Option<ConfirmationRequest>, IpcError> {
+    runtime.with_service(|s| s.pending_confirmation())
+}
+
+fn catalog_info(runtime: &Runtime) -> ApplicationCatalogInfo {
+    ApplicationCatalogInfo {
+        status: runtime.apps.status(),
+        // Names and sources only, and only for Developer Mode.
+        applications: if cfg!(debug_assertions) {
+            runtime.apps.applications()
+        } else {
+            Vec::new()
+        },
+    }
+}
+
+#[tauri::command]
+pub fn get_application_catalog(runtime: State<'_, Runtime>) -> ApplicationCatalogInfo {
+    catalog_info(&runtime)
+}
+
+#[tauri::command(async)]
+pub fn refresh_application_catalog(
+    runtime: State<'_, Runtime>,
+) -> Result<ApplicationCatalogInfo, IpcError> {
+    runtime.apps.refresh().map_err(|_| {
+        IpcError::new(
+            IpcErrorCode::Unavailable,
+            "The list of installed applications couldn't be read.",
+        )
+    })?;
+    Ok(catalog_info(&runtime))
+}
+
+#[tauri::command]
+pub fn get_integration_status(app: AppHandle) -> Result<IntegrationStatus, IpcError> {
+    integration::state(&app)
+        .map(|i| i.status())
+        .ok_or_else(|| IpcError::new(IpcErrorCode::Unavailable, "Not ready yet."))
+}
+
+/// Localized tray labels. Presentation only: each item's action is fixed.
+#[tauri::command]
+pub fn set_tray_labels(app: AppHandle, labels: TrayLabels) -> Result<(), IpcError> {
+    if !labels.is_valid() {
+        return Err(IpcError::new(
+            IpcErrorCode::NotAllowed,
+            "Invalid tray labels.",
+        ));
+    }
+    if let Some(integration) = integration::state(&app) {
+        integration.set_tray_labels(&labels);
     }
     Ok(())
 }
 
-/// Returns an attending assistant to idle (e.g. Escape, or hiding the window).
+/// Shows the Command Center and focuses its command input.
+#[tauri::command]
+pub fn summon_command_center(app: AppHandle) {
+    surfaces::summon(&app);
+}
+
+/// The Command Center's × button: hide, keep SERSHI running.
+#[tauri::command]
+pub fn hide_command_center(app: AppHandle) {
+    surfaces::hide_command_center(&app);
+}
+
+/// Returns an attending or waiting assistant to idle (e.g. Escape).
 #[tauri::command]
 pub fn dismiss_assistant(app: AppHandle, runtime: State<'_, Runtime>) -> Result<(), IpcError> {
     surfaces::dismiss(&app, &runtime)

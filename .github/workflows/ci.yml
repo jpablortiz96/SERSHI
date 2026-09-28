@@ -96,3 +96,8 @@ jobs:
         run: |
           cargo clippy --workspace --all-targets --locked -- -D warnings
           cargo test --workspace --locked
+
+      # Read-only discovery against the runner's real Windows APIs (nothing is
+      # launched or closed); prints the scan time for the validation record.
+      - name: Windows application discovery (read-only)
+        run: cargo test -p sershi-platform --test windows_applications --locked -- --nocapture
