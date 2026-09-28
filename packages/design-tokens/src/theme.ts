@@ -7,7 +7,9 @@ type DeepPartial<T> = { [K in keyof T]?: T[K] extends string ? string : DeepPart
 export type ThemeOverrides = DeepPartial<Tokens>;
 
 function merge(base: unknown, override: unknown): unknown {
-  if (typeof override === "string") return override;
+  // Leaves are replaced only by leaves, so malformed theme files (e.g. JSON
+  // from a theme package) can never change the token tree's shape.
+  if (typeof base === "string") return typeof override === "string" ? override : base;
   if (typeof base !== "object" || base === null || typeof override !== "object" || !override) {
     return base;
   }
@@ -20,6 +22,8 @@ function merge(base: unknown, override: unknown): unknown {
 }
 
 export function createTheme(overrides: ThemeOverrides = {}): Tokens {
+  // `merge` only replaces existing string leaves, so the result keeps the
+  // exact shape of the base tokens.
   return merge(baseTokens, overrides) as Tokens;
 }
 

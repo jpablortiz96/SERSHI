@@ -61,6 +61,8 @@ export async function call<C extends CommandName>(
   if (guard && !guard(result)) {
     throw new IpcFailure("invalidResponse", `Unexpected response from ${command}.`);
   }
+  // Commands without a guard return `null` or static data whose shape is fixed
+  // by the Rust signature and the generated contract types.
   return result as CommandMap[C]["result"];
 }
 

@@ -64,6 +64,13 @@ describe("themes", () => {
     expect("state2" in theme).toBe(false);
   });
 
+  it("ignore overrides that would change the token tree's shape", () => {
+    const malformed = JSON.parse('{"type": "12px", "state": {"idle": {"x": 1}}}') as object;
+    const theme = createTheme(malformed);
+    expect(theme.type.hero.size).toBe(tokens.type.hero.size);
+    expect(theme.state.idle).toBe(tokens.state.idle);
+  });
+
   it("apply through the CSSOM", () => {
     const root = document.createElement("div");
     applyTheme(root, createTheme({ surface: { base: "#000000" } }));
