@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+target/
+dist/
+dist-ssr/
+*.tsbuildinfo
+apps/desktop/src-tauri/gen/schemas/
+
+# Secrets — never commit. Use the OS credential store (see docs/SECURITY.md).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+
+# Logs and local state
+*.log
+logs/
+coverage/
+*.sqlite
+*.sqlite3
+*.db
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
