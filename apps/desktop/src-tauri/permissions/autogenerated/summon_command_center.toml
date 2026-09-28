@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-summon-command-center"
+description = "Enables the summon_command_center command without any pre-configured scope."
+commands.allow = ["summon_command_center"]
+
+[[permission]]
+identifier = "deny-summon-command-center"
+description = "Denies the summon_command_center command without any pre-configured scope."
+commands.deny = ["summon_command_center"]

@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "command-center",
+  "description": "The Command Center window: full read access, command submission and its own window chrome.",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-hide",
+    "allow-get-assistant-snapshot",
+    "allow-get-system-snapshot",
+    "allow-get-runtime-info",
+    "allow-list-activity",
+    "allow-submit-command",
+    "allow-dismiss-assistant",
+    "allow-preview-assistant-state",
+    "allow-quit-app"
+  ]
+}
