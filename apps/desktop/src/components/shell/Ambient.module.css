@@ -1,0 +1,95 @@
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-base);
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--surface-base);
+}
+
+.ambient > * {
+  position: absolute;
+}
+
+/* Light cast by the core, centred on the stage. */
+.light {
+  inset: 0;
+  background: radial-gradient(
+    ellipse 46% 42% at 50% 30%,
+    color-mix(in oklab, var(--state-color) 13%, transparent),
+    transparent 70%
+  );
+}
+
+/* A large, soft, off-centre glow that wanders very slowly. */
+.drift {
+  width: 70vw;
+  height: 70vw;
+  left: 15vw;
+  top: -30vw;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--color-aura) 7%, transparent),
+    transparent 62%
+  );
+  animation: drift var(--duration-drift) var(--ease-breathe) infinite alternate;
+  will-change: transform;
+}
+
+/* Orbital guides: fixed concentric rings around the core position. */
+.guides {
+  left: 50%;
+  top: calc(var(--layout-titlebar) + 190px);
+}
+
+.guides i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  border: 1px solid rgb(255 255 255 / 0.035);
+  translate: -50% -50%;
+}
+
+.guides i:nth-child(1) {
+  width: 420px;
+  height: 420px;
+}
+.guides i:nth-child(2) {
+  width: 720px;
+  height: 720px;
+  border-color: rgb(255 255 255 / 0.025);
+}
+.guides i:nth-child(3) {
+  width: 1100px;
+  height: 1100px;
+  border-color: rgb(255 255 255 / 0.018);
+}
+
+.grain {
+  inset: 0;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+.vignette {
+  inset: 0;
+  background: radial-gradient(ellipse 80% 70% at 50% 45%, transparent 55%, rgb(0 0 0 / 0.55));
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(-8vw, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(10vw, 6vh, 0) scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drift {
+    animation: none;
+  }
+}

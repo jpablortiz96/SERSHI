@@ -1,0 +1,26 @@
+/* Side rails: columns of supporting information, separated by space and
+   typography rather than boxes. */
+.rail {
+  position: relative;
+  z-index: var(--z-raised);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-height: 0;
+  padding: var(--space-8) var(--space-6);
+  overflow: hidden;
+}
+
+.rail h2 {
+  margin: 0;
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--type-small-size);
+  color: var(--text-tertiary);
+}
+
+.footer {
+  margin-top: auto;
+}

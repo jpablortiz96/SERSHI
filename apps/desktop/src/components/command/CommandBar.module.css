@@ -1,0 +1,159 @@
+.form {
+  width: 100%;
+  max-width: var(--layout-stage-max);
+}
+
+.bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 56px;
+  padding: 0 var(--space-2) 0 var(--space-5);
+  border-radius: var(--radius-pill);
+  background: var(--surface-glass);
+  backdrop-filter: blur(var(--blur-md));
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-e2);
+  transition: box-shadow var(--duration-default) var(--ease-standard);
+}
+
+/* Focus bloom: the bar takes on SERSHI's current state color. */
+.bar:focus-within {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--state-color) 55%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--state-color) 9%, transparent),
+    0 18px 50px -18px color-mix(in oklab, var(--state-color) 45%, transparent);
+}
+
+.signal {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--state-color);
+  box-shadow: 0 0 10px var(--state-color);
+}
+
+.bar[data-pending] .signal {
+  animation: pending 1s var(--ease-breathe) infinite;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  color: var(--text-primary);
+  user-select: text;
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.icon,
+.send {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-default) var(--ease-spring);
+}
+
+.icon:disabled {
+  color: var(--text-disabled);
+}
+
+.send {
+  background: var(--color-frost);
+  color: var(--text-inverse);
+}
+
+.send:not(:disabled):hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 18px -2px color-mix(in oklab, var(--state-color) 70%, transparent);
+}
+
+.send:not(:disabled):active {
+  transform: scale(0.94);
+  transition-duration: var(--duration-instant);
+}
+
+.send:disabled {
+  background: var(--surface-active);
+  color: var(--text-disabled);
+}
+
+/* Contextual tooltip (CSS only). */
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-e2);
+  font-size: var(--type-caption-size);
+  white-space: nowrap;
+  color: var(--text-secondary);
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-default) var(--ease-enter);
+  pointer-events: none;
+}
+
+[data-tip]:hover::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.hints {
+  margin: var(--space-3) 0 0;
+  text-align: center;
+  font-size: var(--type-caption-size);
+  color: var(--text-disabled);
+}
+
+.hints kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.hints span {
+  margin: 0 var(--space-1);
+}
+
+@keyframes pending {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar[data-pending] .signal {
+    animation: none;
+    opacity: 0.5;
+  }
+}

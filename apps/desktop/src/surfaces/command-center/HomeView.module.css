@@ -1,0 +1,146 @@
+.home {
+  display: grid;
+  grid-template-columns: var(--layout-rail) minmax(0, 1fr) var(--layout-rail);
+  height: 100%;
+  min-height: 0;
+}
+
+.stage {
+  position: relative;
+  z-index: var(--z-raised);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  justify-items: center;
+  min-height: 0;
+  padding: var(--space-6) var(--space-6) var(--space-6);
+}
+
+/* ─── Presence: the core and its status line ────────────────────────── */
+
+.presence {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+}
+
+.coreSlot {
+  display: grid;
+  place-items: center;
+  height: 300px;
+  transition: height var(--duration-cinematic) var(--ease-enter);
+}
+
+.core {
+  transition:
+    transform var(--duration-cinematic) var(--ease-enter),
+    opacity var(--duration-slow) var(--ease-standard);
+}
+
+.stage[data-conversing] .coreSlot {
+  height: 168px;
+}
+
+.stage[data-conversing] .core {
+  transform: scale(0.6);
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  text-align: center;
+}
+
+.statusLabel {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--state-color) 80%, var(--text-primary));
+}
+
+.statusLine {
+  font-size: var(--type-small-size);
+  color: var(--text-tertiary);
+}
+
+/* ─── Dialogue ──────────────────────────────────────────────────────── */
+
+.dialogue {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+}
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding-bottom: var(--space-6);
+  animation: rise var(--duration-cinematic) var(--ease-enter) both;
+}
+
+.greeting {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-hero-size);
+  line-height: var(--type-hero-line);
+  font-weight: var(--type-hero-weight);
+  letter-spacing: var(--type-hero-tracking);
+  background: linear-gradient(180deg, var(--text-primary) 30%, var(--text-secondary));
+  background-clip: text;
+  color: transparent;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestions button {
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.02);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  font-size: var(--type-small-size);
+  color: var(--text-secondary);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-default) var(--ease-standard),
+    background-color var(--duration-default) var(--ease-standard);
+}
+
+.suggestions button:hover {
+  color: var(--text-primary);
+  background: color-mix(in oklab, var(--state-color) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-color) 35%, transparent);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome {
+    animation: none;
+  }
+  .coreSlot,
+  .core {
+    transition-duration: var(--duration-instant);
+  }
+}

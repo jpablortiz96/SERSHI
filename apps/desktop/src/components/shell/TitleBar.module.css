@@ -1,0 +1,137 @@
+.bar {
+  position: relative;
+  z-index: var(--z-sticky);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: var(--layout-titlebar);
+  padding: 0 var(--space-2) 0 var(--space-5);
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mark {
+  display: grid;
+  color: var(--state-color);
+  filter: drop-shadow(0 0 6px color-mix(in oklab, var(--state-color) 45%, transparent));
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 560;
+  letter-spacing: 0.32em;
+  color: var(--text-primary);
+}
+
+.phase {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+/* ─── Navigation ────────────────────────────────────────────────────── */
+
+.nav {
+  display: flex;
+  gap: var(--space-1);
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.025);
+  box-shadow: inset 0 0 0 1px var(--border-faint);
+}
+
+.tab {
+  position: relative;
+  padding: 5px var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: var(--type-small-size);
+  font-weight: 480;
+  color: var(--text-tertiary);
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-default) var(--ease-standard);
+}
+
+.tab:hover {
+  color: var(--text-secondary);
+}
+
+.tab[aria-current="page"] {
+  color: var(--text-primary);
+  background: var(--surface-active);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+/* ─── End cluster ───────────────────────────────────────────────────── */
+
+.end {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.connection {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-caption-size);
+  color: var(--text-tertiary);
+}
+
+.connection i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--state-offline);
+}
+
+.connection[data-connection="live"] i {
+  background: var(--state-success);
+  box-shadow: 0 0 6px var(--state-success);
+}
+.connection[data-connection="browserPreview"] i {
+  background: var(--state-warning);
+}
+.connection[data-connection="failed"] i {
+  background: var(--state-error);
+}
+
+.controls {
+  display: flex;
+}
+
+.controls button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.controls button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.controls button[data-variant="close"]:hover {
+  background: color-mix(in oklab, var(--state-error) 22%, transparent);
+}

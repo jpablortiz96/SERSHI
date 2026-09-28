@@ -1,0 +1,45 @@
+.stage {
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  height: 100vh;
+}
+
+:global(html[data-runtime="browser"]) .stage {
+  /* Browser preview only: a backdrop so the transparent companion is visible. */
+  background: radial-gradient(circle, var(--surface-raised), var(--surface-base));
+}
+
+.companion {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: transform var(--duration-default) var(--ease-spring);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.companion:hover {
+  transform: scale(1.04);
+}
+
+.companion:active {
+  transform: scale(0.97);
+  transition-duration: var(--duration-instant);
+}
+
+.companion:focus-visible {
+  outline: 1px solid color-mix(in oklab, var(--state-color) 70%, transparent);
+  outline-offset: -6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .companion,
+  .companion:hover,
+  .companion:active {
+    transform: none;
+  }
+}

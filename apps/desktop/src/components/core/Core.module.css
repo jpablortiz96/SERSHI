@@ -1,0 +1,350 @@
+/*
+ * The Intelligent Core. Layer stack, back to front:
+ *   halo       soft light the core casts        (breath: scale + opacity)
+ *   field      thin partial ring                (slow drift rotation)
+ *   orbits a/b tilted 3D orbital paths          (constant rotation)
+ *   cognition  segmented ring                   (thinking / planning)
+ *   drive      bright travelling arc            (executing)
+ *   pulses     three concentric rings           (listening: inward, speaking: outward)
+ *   body       luminous sphere + nucleus        (breath)
+ *   flash      one-shot outcome ring            (success / warning / error)
+ *
+ * Rules: animate only transform and opacity; state-specific layers fade in
+ * from opacity 0 so switching loops never shows a jump; ambient loops keep a
+ * constant duration and are *paused*, never re-timed.
+ */
+
+.core {
+  --s: var(--core-size, 200px);
+  --tint: var(--state-color);
+  position: relative;
+  width: var(--s);
+  height: var(--s);
+  flex: none;
+  perspective: calc(var(--s) * 3);
+  transition: opacity var(--duration-slow) var(--ease-standard);
+  isolation: isolate;
+}
+
+.core > * {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ─── Halo ───────────────────────────────────────────────────────────── */
+
+.halo {
+  inset: -34%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--tint) 34%, transparent) 0%,
+    color-mix(in oklab, var(--tint) 12%, transparent) 34%,
+    transparent 66%
+  );
+  opacity: 0.8;
+  animation: breathe var(--duration-breath) var(--ease-breathe) infinite;
+  will-change: transform, opacity;
+}
+
+/* ─── Field ring ─────────────────────────────────────────────────────── */
+
+.field {
+  inset: 5%;
+  border: 1px solid color-mix(in oklab, var(--tint) 42%, transparent);
+  mask: conic-gradient(from 20deg, transparent 0deg, #000 70deg, #000 230deg, transparent 300deg);
+  opacity: 0.7;
+  animation: spin var(--duration-drift) linear infinite;
+  will-change: transform;
+}
+
+/* ─── Orbits ─────────────────────────────────────────────────────────── */
+
+.orbitPlane {
+  inset: 13%;
+  transform-style: preserve-3d;
+}
+
+.orbitPlane[data-orbit="a"] {
+  transform: rotateX(72deg) rotateY(-16deg);
+}
+
+.orbitPlane[data-orbit="b"] {
+  inset: 19%;
+  transform: rotateX(66deg) rotateY(42deg);
+}
+
+.orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.2px solid color-mix(in oklab, var(--tint) 58%, transparent);
+  animation: spin 16s linear infinite;
+  will-change: transform;
+}
+
+[data-orbit="b"] .orbit {
+  border-color: color-mix(in oklab, var(--color-aura) 40%, transparent);
+  border-width: 1px;
+  animation-duration: 23s;
+  animation-direction: reverse;
+  opacity: 0.8;
+}
+
+.satellite {
+  position: absolute;
+  top: -3px;
+  left: calc(50% - 3px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-frost);
+  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--tint) 80%, transparent);
+}
+
+/* ─── Cognition (thinking / planning) ────────────────────────────────── */
+
+.cognition {
+  inset: 1%;
+  border: 1.5px solid color-mix(in oklab, var(--tint) 70%, transparent);
+  mask:
+    repeating-conic-gradient(#000 0deg 5deg, transparent 5deg 12deg),
+    conic-gradient(transparent 0deg, #000 150deg, transparent 300deg);
+  mask-composite: intersect;
+  opacity: 0;
+  animation: spin 3.6s linear infinite;
+  transition: opacity var(--duration-slow) var(--ease-standard);
+  will-change: transform, opacity;
+}
+
+/* ─── Drive (executing) ──────────────────────────────────────────────── */
+
+.drive {
+  inset: 9%;
+  border: 2px solid var(--tint);
+  mask: conic-gradient(transparent 0deg, transparent 250deg, #000 350deg, transparent 360deg);
+  opacity: 0;
+  animation: spin 1.15s linear infinite;
+  transition: opacity var(--duration-default) var(--ease-standard);
+  will-change: transform, opacity;
+}
+
+/* ─── Pulses (listening / speaking) ──────────────────────────────────── */
+
+.pulses {
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-standard);
+}
+
+.pulses i {
+  position: absolute;
+  inset: 28%;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, var(--tint) 75%, transparent);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* ─── Body ───────────────────────────────────────────────────────────── */
+
+.body {
+  inset: 31%;
+  background: radial-gradient(
+    circle at 50% 42%,
+    var(--color-frost) 0%,
+    color-mix(in oklab, var(--tint) 70%, var(--color-frost)) 16%,
+    var(--tint) 38%,
+    color-mix(in oklab, var(--tint) 38%, transparent) 60%,
+    transparent 71%
+  );
+  animation: breathe-body var(--duration-breath) var(--ease-breathe) infinite;
+  will-change: transform;
+}
+
+.nucleus {
+  position: absolute;
+  inset: 36%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, #fff 34%, transparent 72%);
+  opacity: 0.95;
+}
+
+/* ─── Flash (one-shot outcomes) ──────────────────────────────────────── */
+
+.flash {
+  inset: 24%;
+  border: 2px solid var(--tint);
+  opacity: 0;
+}
+
+/* ═══ States ═══════════════════════════════════════════════════════════ */
+
+.core[data-state="sleeping"] {
+  opacity: 0.42;
+}
+.core[data-state="sleeping"] > *,
+.core[data-state="sleeping"] .orbit {
+  animation-play-state: paused;
+}
+
+.core[data-state="awake"] .halo {
+  opacity: 1;
+}
+
+.core[data-state="listening"] .pulses,
+.core[data-state="speaking"] .pulses {
+  opacity: 1;
+}
+.core[data-state="listening"] .pulses i {
+  animation: gather 2.4s var(--ease-standard) calc(var(--i, 0) * -0.8s) infinite;
+}
+.core[data-state="speaking"] .pulses i {
+  animation: radiate 1.6s var(--ease-enter) calc(var(--i, 0) * -0.533s) infinite;
+}
+.pulses i:nth-child(2) {
+  --i: 1;
+}
+.pulses i:nth-child(3) {
+  --i: 2;
+}
+
+.core[data-state="thinking"] .cognition,
+.core[data-state="planning"] .cognition {
+  opacity: 1;
+}
+.core[data-state="planning"] .cognition {
+  animation-direction: reverse;
+}
+
+.core[data-state="executing"] .drive {
+  opacity: 1;
+}
+.core[data-state="executing"] .halo {
+  opacity: 1;
+}
+
+.core[data-state="success"] .flash {
+  animation: ripple var(--duration-cinematic) var(--ease-enter) 1 both;
+}
+.core[data-state="warning"] .halo {
+  animation: attention 2.4s var(--ease-breathe) infinite;
+}
+.core[data-state="warning"] .flash {
+  animation: ripple var(--duration-cinematic) var(--ease-enter) 1 both;
+}
+.core[data-state="error"] .body {
+  animation: contract var(--duration-slow) var(--ease-spring) 1 both;
+}
+.core[data-state="error"] .flash {
+  animation: ripple var(--duration-slow) var(--ease-enter) 1 both;
+}
+.core[data-state="error"] .orbit {
+  animation-play-state: paused;
+}
+
+/* ═══ Keyframes ════════════════════════════════════════════════════════ */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(0.94);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.92;
+  }
+}
+
+@keyframes breathe-body {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+@keyframes attention {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes gather {
+  0% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes radiate {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.95);
+    opacity: 0;
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.3);
+    opacity: 0;
+  }
+}
+
+@keyframes contract {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.86);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ═══ Reduced motion ═══════════════════════════════════════════════════
+   No loops, no ripples. States remain distinct through color, the static
+   cognition/drive/pulse geometry and the text label next to the core. */
+@media (prefers-reduced-motion: reduce) {
+  .core > *,
+  .core .orbit,
+  .core .pulses i {
+    animation: none !important;
+  }
+  .core[data-state="listening"] .pulses i:first-child,
+  .core[data-state="speaking"] .pulses i:first-child {
+    opacity: 0.6;
+    transform: scale(1.35);
+  }
+}

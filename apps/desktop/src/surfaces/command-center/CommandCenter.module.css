@@ -1,0 +1,25 @@
+.app {
+  position: relative;
+  display: grid;
+  grid-template-rows: var(--layout-titlebar) minmax(0, 1fr);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.view {
+  min-height: 0;
+  animation: view-in var(--duration-slow) var(--ease-enter) both;
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view {
+    animation-duration: var(--duration-instant);
+  }
+}

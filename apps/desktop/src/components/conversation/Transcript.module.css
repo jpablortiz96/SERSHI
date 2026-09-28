@@ -1,0 +1,101 @@
+.scroller {
+  width: 100%;
+  max-width: var(--layout-stage-max);
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to bottom, transparent, #000 48px);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--space-5);
+  min-height: 100%;
+  margin: 0;
+  padding: var(--space-12) var(--space-2) var(--space-6);
+  list-style: none;
+}
+
+.message {
+  animation: arrive var(--duration-slow) var(--ease-enter) both;
+}
+
+.message[data-role="user"] {
+  align-self: flex-end;
+  max-width: 78%;
+}
+
+.user {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg);
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 1px var(--border-faint);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  color: var(--text-secondary);
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+.message[data-role="sershi"] {
+  --rule: var(--state-idle);
+  max-width: 92%;
+  padding-left: var(--space-4);
+  border-left: 2px solid color-mix(in oklab, var(--rule) 70%, transparent);
+}
+
+.message[data-status="completed"] {
+  --rule: var(--state-success);
+}
+.message[data-status="unavailable"],
+.message[data-status="needsConfirmation"],
+.message[data-status="offline"] {
+  --rule: var(--state-warning);
+}
+.message[data-status="failed"],
+.message[data-status="denied"] {
+  --rule: var(--state-error);
+}
+.message[data-status="notUnderstood"],
+.message[data-status="rejected"] {
+  --rule: var(--state-offline);
+}
+
+.reply {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 24px;
+  letter-spacing: -0.006em;
+  color: var(--text-primary);
+  user-select: text;
+  max-width: var(--layout-readable);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-caption-size);
+  color: var(--text-tertiary);
+}
+
+.meta:empty {
+  display: none;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message {
+    animation-duration: var(--duration-instant);
+  }
+}

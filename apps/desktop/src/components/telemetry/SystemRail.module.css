@@ -1,0 +1,65 @@
+.os {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.os p {
+  margin: 0;
+}
+
+.osName {
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.metric {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.metric p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metricHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.value {
+  font-size: var(--type-metric-size);
+  line-height: var(--type-metric-line);
+  font-weight: var(--type-metric-weight);
+  letter-spacing: var(--type-metric-tracking);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.value small {
+  font-size: var(--type-caption-size);
+  letter-spacing: 0;
+  color: var(--text-tertiary);
+}
+
+.meter {
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-active);
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-signal-deep), var(--color-signal));
+  transform: scaleX(var(--ratio));
+  transform-origin: left;
+  transition: transform var(--duration-cinematic) var(--ease-standard);
+}

@@ -1,0 +1,162 @@
+/*
+ * Global foundation. Every value comes from design tokens (applied at runtime
+ * as custom properties by @sershi/design-tokens). See docs/DESIGN_SYSTEM.md.
+ */
+
+/* A registered <color> property can be *transitioned*, so one attribute
+   change on a surface smoothly re-tints everything derived from it. */
+@property --state-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #9fdfff;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  font-weight: var(--type-body-weight);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  /* Desktop app: text is selectable only where it is content. */
+  user-select: none;
+  cursor: default;
+}
+
+html.companion,
+html.companion body {
+  background: transparent;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-signal) 32%, transparent);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* ─── State tint ─────────────────────────────────────────────────────── */
+
+[data-state] {
+  --state-color: var(--state-idle);
+  transition: --state-color var(--duration-cinematic) var(--ease-standard);
+}
+[data-state="sleeping"] {
+  --state-color: var(--state-sleeping);
+}
+[data-state="idle"] {
+  --state-color: var(--state-idle);
+}
+[data-state="awake"] {
+  --state-color: var(--state-awake);
+}
+[data-state="listening"] {
+  --state-color: var(--state-listening);
+}
+[data-state="thinking"] {
+  --state-color: var(--state-thinking);
+}
+[data-state="planning"] {
+  --state-color: var(--state-planning);
+}
+[data-state="executing"] {
+  --state-color: var(--state-executing);
+}
+[data-state="speaking"] {
+  --state-color: var(--state-speaking);
+}
+[data-state="success"] {
+  --state-color: var(--state-success);
+}
+[data-state="warning"] {
+  --state-color: var(--state-warning);
+}
+[data-state="error"] {
+  --state-color: var(--state-error);
+}
+
+/* ─── Type roles ─────────────────────────────────────────────────────── */
+
+.t-label {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.t-caption {
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  font-weight: var(--type-caption-weight);
+  letter-spacing: var(--type-caption-tracking);
+  color: var(--text-tertiary);
+}
+
+.t-mono {
+  font-family: var(--font-mono);
+  font-size: var(--type-mono-size);
+  line-height: var(--type-mono-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Motion is never required to understand SERSHI; with reduced motion every
+   state is still distinguishable by color, shape and text. */
+@media (prefers-reduced-motion: reduce) {
+  [data-state] {
+    transition-duration: var(--duration-fast);
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

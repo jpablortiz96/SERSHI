@@ -1,0 +1,223 @@
+/* Secondary views: one readable column, sections separated by hairlines. */
+.page {
+  position: relative;
+  z-index: var(--z-raised);
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-12) max(var(--space-8), calc((100% - 760px) / 2)) var(--space-16);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.header {
+  margin-bottom: var(--space-10);
+}
+
+.title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
+}
+
+.lede {
+  max-width: var(--layout-readable);
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.empty,
+.footnote {
+  margin: var(--space-4) 0 0;
+  font-size: var(--type-small-size);
+  color: var(--text-tertiary);
+  max-width: var(--layout-readable);
+}
+
+/* ─── Sections and rows ─────────────────────────────────────────────── */
+
+.section {
+  padding: var(--space-8) 0;
+  border-top: 1px solid var(--border-faint);
+}
+
+.section h2 {
+  margin: 0 0 var(--space-4);
+}
+
+.rows {
+  display: grid;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-3) 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--border-faint);
+}
+
+.row p {
+  margin: 0;
+}
+
+.rowLabel {
+  color: var(--text-primary);
+}
+
+.rowDetail {
+  margin-top: 2px !important;
+  color: var(--text-tertiary);
+}
+
+.rowValue {
+  font-size: var(--type-small-size);
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.pills {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-tertiary);
+}
+
+.pill {
+  --tone: var(--text-tertiary);
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 40%, transparent);
+  background: color-mix(in oklab, var(--tone) 8%, transparent);
+  font-size: var(--type-caption-size);
+  color: color-mix(in oklab, var(--tone) 85%, var(--text-primary));
+  white-space: nowrap;
+}
+
+.pill[data-tone="success"] {
+  --tone: var(--state-success);
+}
+.pill[data-tone="warning"] {
+  --tone: var(--state-warning);
+}
+
+.actions {
+  padding-top: var(--space-5);
+}
+
+.danger {
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-error) 45%, transparent);
+  color: var(--state-error);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.danger:hover {
+  background: color-mix(in oklab, var(--state-error) 12%, transparent);
+}
+
+/* ─── Developer state preview ───────────────────────────────────────── */
+
+.stateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.stateGrid button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 0.02);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  font-size: var(--type-small-size);
+  color: var(--text-secondary);
+  text-align: left;
+  transition: box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.stateGrid button i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--state-color);
+}
+
+.stateGrid button[aria-pressed="true"] {
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--state-color, var(--border-strong)) 70%, transparent);
+}
+
+/* ─── Activity table ────────────────────────────────────────────────── */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-small-size);
+}
+
+.table th {
+  padding: 0 0 var(--space-3);
+  text-align: left;
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4) var(--space-3) 0;
+  border-top: 1px solid var(--border-faint);
+  color: var(--text-secondary);
+  vertical-align: baseline;
+}
+
+.table td:first-child {
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.num {
+  text-align: right !important;
+  padding-right: 0 !important;
+}
+
+.tone {
+  --tone: var(--text-tertiary);
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--space-3);
+  border-radius: 50%;
+  background: var(--tone);
+  vertical-align: middle;
+}
+
+tr[data-tone="success"] .tone {
+  --tone: var(--state-success);
+}
+tr[data-tone="warning"] .tone {
+  --tone: var(--state-warning);
+}
+tr[data-tone="error"] .tone {
+  --tone: var(--state-error);
+}
+tr[data-tone="signal"] .tone {
+  --tone: var(--color-signal);
+}
