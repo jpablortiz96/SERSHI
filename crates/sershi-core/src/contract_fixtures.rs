@@ -4,6 +4,10 @@
 //! regenerates `packages/contracts/src/generated`. CI fails if either output
 //! differs from what is committed, so Rust and TypeScript cannot drift.
 
+// Test-only module (compiled under `cfg(all(test, feature = "ts"))`, which
+// clippy does not recognise as test code): failing loudly is the point.
+#![allow(clippy::unwrap_used)]
+
 use std::path::PathBuf;
 use std::sync::Arc;
 

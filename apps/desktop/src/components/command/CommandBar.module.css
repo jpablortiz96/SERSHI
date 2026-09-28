@@ -131,13 +131,13 @@
   margin: var(--space-3) 0 0;
   text-align: center;
   font-size: var(--type-caption-size);
-  color: var(--text-disabled);
+  color: var(--text-tertiary);
 }
 
 .hints kbd {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 
 .hints span {
