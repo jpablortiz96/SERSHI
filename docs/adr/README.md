@@ -15,6 +15,7 @@ such.
 | [0007](0007-frontend-state-management.md)       | Rust owns state; Zustand mirrors it                | Accepted |
 | [0008](0008-license.md)                         | Apache-2.0                                         | Proposed |
 | [0009](0009-windows-application-discovery.md)   | Discovered apps, native launch, graceful close     | Accepted |
-| [0010](0010-trusted-confirmation-lifecycle.md)  | Rust-owned, one-time, expiring confirmations       | Accepted |
+| [0010](0010-trusted-confirmation-lifecycle.md)  | Rust-owned, one-time, expiring confirmations       | Accepted (amended by 0011) |
+| [0011](0011-dedicated-confirmation-surface.md)  | Dedicated minimal-authority confirmation window, CSPRNG ids | Accepted |
 
 Template: `Status · Context · Decision · Alternatives · Consequences`.

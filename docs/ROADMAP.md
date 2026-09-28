@@ -25,6 +25,9 @@ validation.
   graceful `WM_CLOSE`, always confirmed)
 - ✅ Trusted confirmation lifecycle owned by Rust: one-time, expiring,
   tool-matched; `AwaitingConfirmation` state and dialog
+- ✅ Gate 1A — confirmation hardening: dedicated minimal-authority confirmation
+  window, CSPRNG ids, `{ confirmationId, decision }` contract, single pending
+  confirmation, 60 s expiry ([ADR 0011](adr/0011-dedicated-confirmation-surface.md))
 - ✅ Tray (Open / Hide / Quit), global shortcut `Ctrl+Alt+Space`, single
   instance, × hides instead of quitting
 - ✅ Settings → Windows integration; Developer Mode catalog inspector

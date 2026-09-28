@@ -121,7 +121,8 @@ dropped.
 ## Closing
 
 - `system.close_application` — risk **sensitive**, permission
-  `system.apps.close` (ask by default) ⇒ **always confirmed** today.
+  `system.apps.close` (ask by default) ⇒ **always confirmed** today, in the
+  dedicated confirmation window ([SECURITY.md](SECURITY.md#trusted-confirmations-implemented)).
 - `prepare` resolves the application and checks it is running with a window
   SERSHI can close; otherwise it answers "isn't running" / "can't be closed
   safely yet" **without** asking for confirmation.

@@ -26,9 +26,10 @@ User → Request → Intent/Plan → ToolCall → Policy → Permission → Risk
 | `RiskLevel`           | `tool`                                 | `safe` · `sensitive` · `highRisk`                                                        |
 | `PermissionId`/`PermissionState` | `ids`, `permission`         | namespaced id; `granted` · `ask` · `denied`                                              |
 | `PolicyDecision`      | `policy`                               | `Allow` · `Confirm { reason, can_remember }` · `Deny(reason)`                            |
-| `ConfirmationRequest` | `confirmation`                         | What the user must approve: opaque id, tool id, action, trusted subject, reason, expiry, `canRemember: false` |
-| `ConfirmationDecision`| `service`                              | The UI's only input: `{ confirmationId, toolId, approved }`                               |
-| `ConfirmationStore`   | `confirmation`                         | Pending calls kept in Rust; one-time, expiring, tool-matched                              |
+| `ConfirmationRequest` | `confirmation`                         | What the confirmation window shows: CSPRNG id, tool id (display), action, trusted subject, risk, `level`, reason, expiry, `canRemember: false`. Never sent to the Command Center |
+| `ConfirmationDecision`| `service`                              | The confirmation window's only input: `{ confirmationId, decision: "approve" \| "cancel" }` |
+| `ConfirmationStore`   | `confirmation`                         | The single pending call, kept in Rust; one-time, expiring                                  |
+| `SurfaceAssignment`   | `confirmation`                         | Which confirmation the trusted window was opened for (used by the shell)                   |
 | `ExecutionOutcome`    | `executor` (internal)                  | `Completed` · `ConfirmationRequired` · `Denied` · `Declined` · `Failed` · `SubjectChanged` |
 | `ApplicationDescriptor` / `ApplicationSummary` | `apps::model`  | Discovered application (internal) / its path-free projection for the UI ([APPLICATIONS.md](APPLICATIONS.md)) |
 | `ApplicationResult`   | `apps::tools`                          | Structured app tool data: `opened` · `notFound` · `ambiguous` · `launchFailed` · `closeRequested` · `notRunning` · `closeUnsupported` · `catalogUnavailable` |
@@ -68,10 +69,15 @@ owns only presentation and the session transcript.
 4. **Policy.** `PolicyEngine::evaluate` decides from the _registered_ definition,
    the grants, the platform and the origin ([ADR 0003](adr/0003-agent-tool-security-model.md)).
 5. **Confirmation** (implemented). If required, the call is stored in the
-   `ConfirmationStore` and the state becomes `AwaitingConfirmation`; the UI gets a
-   `ConfirmationRequest`. Approving runs the **stored** call once, re-checking
-   policy and the resolved subject ([ADR 0010](adr/0010-trusted-confirmation-lifecycle.md)).
-   Cancel, expiry (90 s), a new request or dismissal discard it.
+   `ConfirmationStore` and the state becomes `AwaitingConfirmation`; Rust opens
+   the dedicated confirmation window, which alone receives the
+   `ConfirmationRequest`. Approving there runs the **stored** call once,
+   re-checking policy and the resolved subject
+   ([ADR 0010](adr/0010-trusted-confirmation-lifecycle.md),
+   [ADR 0011](adr/0011-dedicated-confirmation-surface.md)). Cancel, closing the
+   window, expiry (60 s), a new request, dismissal or quitting discard it.
+   **An agent can request an action but can never approve its own request**:
+   no resolver, tool or model has a path to `decide`.
 6. **Execution.** The tool parses its input into a typed struct
    (`deny_unknown_fields`), calls its port, and returns data plus a summary.
 7. **Audit.** The executor records requested / denied / confirmation / completed /

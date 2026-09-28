@@ -139,9 +139,12 @@ translated.
   and whenever the language changes. Rust validates them (≤ 48 characters, no
   control characters); the actions behind each item are fixed and cannot be
   changed by the labels.
-- **Confirmation dialog.** Rendered by the Command Center from structured
-  fields (`action`, `subject`, `reason`), so it follows the interface language.
-  It never shows free text from the request or a model.
+- **Confirmation window.** A separate window (`confirmation.html`) that
+  renders structured fields (`action`, `level`, `subject`, `reason`) with the
+  `confirm.*` messages. It reuses the interface-language preference the other
+  windows share (same origin); the language is presentation only and never
+  part of authorization. It never shows free text from the request, a tool or
+  a model. Built-in application names are localized by id.
 
 ### What is not localized
 

@@ -28,6 +28,7 @@ steps to validate on a physical Windows machine.
 | Global shortcut `Ctrl+Alt+Space` (summon + focus input) | `integration.rs`, `surfaces.rs::summon` | ⚠️ registered under X11 (reported Active); key press not exercised | ✅ compiled | REQUIRES_WINDOWS_VALIDATION |
 | Focus when summoned (foreground-lock fallback: taskbar flash) | `surfaces.rs::show_command_center` | ⚠️ not observable without a window manager | — | REQUIRES_WINDOWS_VALIDATION |
 | Single instance (second launch shows the existing windows) | `tauri-plugin-single-instance`   | ⚠️ not exercised                     | ✅ compiled            | REQUIRES_WINDOWS_VALIDATION      |
+| Trusted confirmation window (created by Rust, 2-command capability, approve / cancel / × / OS close / expiry / hide / quit) | `src-tauri/src/confirmation.rs`, `surfaces/confirmation/` | ✅ exercised under Xvfb with a temporary, uncommitted fake application adapter: window opened centered and localized, context loaded through its capability, approve executed once and closed it, ×, WM close request, hiding the Command Center, expiry and quit all cancelled with nothing executed | ✅ compiled | REQUIRES_WINDOWS_VALIDATION (focus, always-on-top, Alt+F4, DPI) |
 | Strict CSP with production build                   | `tauri.conf.json`                            | ✅ release binary ran under Xvfb (WebKitGTK) | —                     | REQUIRES_WINDOWS_VALIDATION      |
 | Interface language: automatic detection from the Windows display language | `i18n/detect.ts` (`navigator.languages`) | ⚠️ container has no pt_BR/es locales; validated in Chromium with a pt-BR locale | — | REQUIRES_WINDOWS_VALIDATION |
 | Interface language: persistence across restarts and sync between windows | `i18n/preferences.ts`, `i18n/store.ts` (localStorage) | ✅ Tauri app restarted under Xvfb kept Español | — | REQUIRES_WINDOWS_VALIDATION |
@@ -175,9 +176,10 @@ A11. An app that requires administrator rights (if available) → SERSHI says it
 
 _Close_
 
-A12. With Spotify open: `Close Spotify` → a confirmation dialog "Close Spotify?"
-     with a countdown; Cancel has focus; the core is amber ("Waiting for you").
-     Nothing closes while the dialog is shown.
+A12. With Spotify open: `Close Spotify` → the separate confirmation window
+     "Close Spotify?" appears with a countdown; Cancel has focus; the core is
+     amber ("Waiting for you"). Nothing closes while it is shown. (Full
+     confirmation checklist: C1–C15 below.)
 A13. Press **Cancel** (or Esc) → Spotify stays open; reply "Cancelled. Nothing
      was changed."; Activity "Cancelled: Close application · Spotify".
 A14. Repeat and press **Close Spotify** → Spotify closes gracefully (it may ask
@@ -191,8 +193,8 @@ A17. `Close File Explorer` → "can't close File Explorer safely yet" without a
      confirmation; the taskbar is unaffected.
 A18. `Close Spotify` while Spotify is not running → "Spotify isn't running."
      without a confirmation.
-A19. Ask to close, wait 90 s without answering → the dialog closes, reply "This
-     request expired…", Activity "Approval expired".
+A19. Ask to close, wait 60 s without answering → the confirmation window
+     closes, reply "This request expired…", Activity "Approval expired".
 
 _Tray and window lifecycle_
 
@@ -230,6 +232,44 @@ A28. Español: tray menu (Abrir / Ocultar SERSHI, Salir de SERSHI), confirmation
 A29. Português: same surfaces translated; no overflow or clipped text in the
      dialog, Settings rows and candidate buttons.
 
+**Trusted confirmation window (Gate 1A)**
+
+C1. `Close Spotify` (Spotify running).
+C2. A **separate** SERSHI window appears, centered and above other windows,
+    showing "Confirmation required · Close Spotify?". It has keyboard focus
+    (or, if Windows refuses focus, its taskbar button flashes). Record which.
+C3. The Command Center shows only "…is waiting for your approval in the
+    confirmation window" — **no approve button** anywhere in it.
+C4. Press **Cancel** → the window disappears; Spotify stays open; the Command
+    Center shows "Cancelled. Nothing was changed.".
+C5. Repeat `Close Spotify`.
+C6. Press **Close Spotify** → Spotify closes gracefully (may ask to save) **or**
+    SERSHI answers "can't close Spotify safely yet". Record which.
+C7. The confirmation window disappears after the decision.
+C8. Replay: there is no way to approve again — the window is gone; asking
+    again creates a new confirmation. (Automated: `approved_close_runs_once_and_cannot_be_replayed`.)
+C9. `Close Spotify`, wait more than 60 s → the window closes by itself, the
+    reply says the request expired, Spotify stays open.
+C10. `Close Spotify`, close the confirmation window with its × **and** (a
+     second time) with **Alt+F4** → both cancel; Spotify stays open.
+C11. Settings → Language → **Español**, `Cierra Spotify` → the window reads
+     "Se requiere confirmación · ¿Cerrar Spotify?", buttons "Cancelar" /
+     "Cerrar Spotify".
+C12. **Português**, `Feche o Spotify` → "Confirmação necessária · Fechar
+     Spotify?", "Cancelar" / "Fechar Spotify"; no clipped text.
+C13. Click the companion while the confirmation window is open → the Command
+     Center comes forward; nothing is approved; the confirmation window stays
+     (or comes back to front).
+C14. Press **Ctrl+Alt+Space** while the confirmation window is open → SERSHI
+     comes forward with the confirmation window focused; nothing is approved.
+C15. With the confirmation window open, quit SERSHI from the tray → SERSHI
+     exits; Spotify stays open; relaunch SERSHI → no confirmation reappears.
+C16. Accidental input: type `Close Spotify` and keep **Enter** held down as the
+     window appears → the request is cancelled or nothing happens; it is
+     never approved. Double-click quickly where the Approve button will appear
+     → nothing is approved.
+C17. At 150% display scaling the window is fully visible and nothing clips.
+
 **Production build**
 
 19. `pnpm tauri build --bundles nsis`, install, launch from the Start menu: no
@@ -249,7 +289,7 @@ Monitor setup:        (single / multiple — if single: NOT_TESTED_MULTI_MONITOR
 Validation date:      (YYYY-MM-DD)
 Commit:               (git rev-parse HEAD)
 Catalog scan time:    (ms, first scan / refresh)
-Results:              1–20, 19a–19f, A1–A29: PASS / FAIL / NOT_TESTED each
+Results:              1–20, 19a–19f, A1–A29, C1–C17: PASS / FAIL / NOT_TESTED each
 Notes:
 ```
 

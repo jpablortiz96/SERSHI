@@ -1,6 +1,11 @@
 # 0010 — Trusted confirmation lifecycle
 
-**Status:** Accepted · 2026-09
+**Status:** Accepted · 2026-09 · amended by [0011](0011-dedicated-confirmation-surface.md)
+
+> Amended by ADR 0011: approval moved to a dedicated confirmation window,
+> ids come from the OS CSPRNG, decisions no longer carry `toolId`, one
+> confirmation is pending at a time and the TTL is 60 s. The text below is
+> the original decision.
 
 ## Context
 

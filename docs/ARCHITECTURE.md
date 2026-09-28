@@ -1,8 +1,10 @@
 # Architecture
 
 SERSHI is a Windows-first desktop application built on **Tauri 2**: a Rust process
-owns everything privileged, and React renders two windows that only ever _ask_ the
-Rust side for things through narrow, typed IPC commands.
+owns everything privileged, and React renders three windows — the Command Center,
+the floating companion and, only while an approval is pending, the trusted
+confirmation window — that only ever _ask_ the Rust side for things through
+narrow, typed IPC commands.
 
 This document describes the system as it exists now and the boundaries that later
 versions must respect. Decisions and their alternatives are recorded in
@@ -15,9 +17,11 @@ flowchart TB
     subgraph UI["Experience layer — WebView (React, TypeScript)"]
         CC["Command Center<br/>window: main"]
         CO["Floating companion<br/>window: companion"]
+        CF["Confirmation surface<br/>window: confirmation (on demand)"]
         IPCC["src/ipc — typed client<br/>(only module allowed to import Tauri)"]
         CC --> IPCC
         CO --> IPCC
+        CF --> IPCC
     end
 
     subgraph Shell["Desktop shell — apps/desktop/src-tauri (Rust)"]
@@ -145,34 +149,45 @@ happens during **Planning**, before any approval is requested:
 ### Confirmation lifecycle
 
 Sensitive actions (today: `system.close_application`) stop in
-`AwaitingConfirmation`. The pending call lives in Rust, never in the UI. See
-[ADR 0010](adr/0010-trusted-confirmation-lifecycle.md).
+`AwaitingConfirmation`. The pending call lives in Rust; approval happens only
+in a dedicated confirmation window that Rust creates and destroys. See
+[ADR 0010](adr/0010-trusted-confirmation-lifecycle.md) and
+[ADR 0011](adr/0011-dedicated-confirmation-surface.md).
 
 ```mermaid
 sequenceDiagram
-    participant UI as Command Center
+    participant CC as Command Center
+    participant Shell as Tauri shell
     participant Svc as AssistantService
     participant Store as ConfirmationStore
-    participant Exe as ToolExecutor
+    participant CW as Confirmation window
 
-    UI->>Svc: submit_command("Close Notepad")
-    Svc->>Exe: execute → policy: RequireConfirmation, prepare: Notepad is running
-    Exe-->>Svc: ConfirmationRequired(draft)
-    Svc->>Store: create(draft) → random id, expires in 90 s
-    Svc-->>UI: state = awaitingConfirmation, outcome.confirmation
-    UI->>Svc: decide_confirmation({ confirmationId, toolId, approved })
-    Svc->>Store: take(id, toolId, now) — one-time, even on mismatch
-    Store-->>Svc: PendingConfirmation (the stored call)
-    Svc->>Exe: execute_approved(stored call, approved subject)
-    Note over Exe: re-resolves; if the application changed → SubjectChanged (nothing runs)
-    Exe-->>Svc: Completed
-    Svc-->>UI: state = success
+    CC->>Shell: submit_command("Close Notepad")
+    Shell->>Svc: submit → policy: RequireConfirmation, prepare: Notepad is running
+    Svc->>Store: create(draft) → CSPRNG id, expires in 60 s
+    Svc-->>CC: outcome: needsConfirmation (no id), state = awaitingConfirmation
+    Shell->>CW: create window "confirmation" (assigned to that id)
+    CW->>Shell: get_confirmation_context()
+    Shell-->>CW: ConfirmationRequest (structured, trusted fields)
+    CW->>Shell: decide_confirmation({ confirmationId, decision: "approve" })
+    Shell->>Shell: caller is "confirmation" and id is its assignment
+    Shell->>Svc: decide
+    Svc->>Store: take(id, now) — one-time
+    Svc->>Svc: re-run policy, re-resolve subject, execute the STORED call
+    Shell->>CW: destroy
+    Shell-->>CC: event sershi://command-outcome (completed)
 ```
 
-Expiry is enforced by `take()` itself; the shell additionally schedules
-`expire_confirmations` at TTL + 250 ms so the UI and activity update without
-user action. A new request, dismissing the assistant or hiding the Command
-Center cancels pending approvals.
+- **Shell side** (`src-tauri/src/confirmation.rs`): a `SurfaceAssignment`
+  (from the core) records which confirmation the window shows. `sync()`
+  reconciles it with the core after every change: open, reload for a
+  replacement, or destroy. Closing the window (× or the OS close request)
+  cancels its own confirmation only.
+- **Expiry**: enforced by the store at decision time; a timer at TTL + 250 ms
+  also expires it, destroys the window and reports the outcome.
+- **Cancellation from elsewhere**: a new request, Escape (dismiss), hiding the
+  Command Center and quitting cancel the pending confirmation and destroy the
+  window. Summoning SERSHI while one is pending brings the window forward.
 
 ### Application catalog
 
@@ -193,7 +208,8 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
 2. **Per-window permissions.** `build.rs` declares every command; Tauri generates a
    permission per command; `capabilities/*.json` grants them per window. The
    companion can call exactly `get_assistant_snapshot` and `summon_command_center`;
-   only the Command Center can decide confirmations.
+   the confirmation window exactly `get_confirmation_context` and
+   `decide_confirmation`, which no other window has.
 3. **Types come from Rust.** `ts-rs` generates `packages/contracts/src/generated`
    from the Rust types. `pnpm contracts:generate` regenerates; CI fails on drift.
 4. **Rust-serialized fixtures** (`packages/contracts/fixtures`) are validated by the
@@ -209,8 +225,8 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
 | `get_runtime_info`        | main               | Version, platform, capabilities, tool definitions   |
 | `list_activity`           | main               | Recent activity (≤ 100)                             |
 | `submit_command`          | main               | Run a user command through the pipeline (async; states broadcast live) |
-| `decide_confirmation`     | main               | Approve or cancel a pending confirmation (`{ confirmationId, toolId, approved }`) |
-| `get_pending_confirmation`| main               | Restore a still-pending confirmation after a reload  |
+| `get_confirmation_context`| confirmation       | The window's assigned confirmation (structured fields) |
+| `decide_confirmation`     | confirmation       | `{ confirmationId, decision: "approve" \| "cancel" }` — nothing else |
 | `get_application_catalog` | main               | Catalog status; names and sources in developer builds only |
 | `refresh_application_catalog` | main           | Re-scan installed applications                      |
 | `get_integration_status`  | main               | Tray, shortcut, single-instance status              |
@@ -225,6 +241,7 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
 | `sershi://assistant-state` | `AssistantSnapshot` | all windows |
 | `sershi://activity`        | `ActivityEntry`     | all windows |
 | `sershi://focus-command`   | none                | main        |
+| `sershi://command-outcome` | `CommandOutcome`    | main (outcome of a confirmation decided, cancelled or expired elsewhere) |
 
 **Telemetry vs tools.** `get_system_snapshot` is the user looking at their own
 machine; it bypasses the tool pipeline and is not recorded as activity (it is
@@ -299,7 +316,10 @@ All of it is REQUIRES_WINDOWS_VALIDATION; see
 
 ## Frontend architecture
 
-- **Two entry points** (`index.html`, `companion.html`), one Vite build.
+- **Three entry points** (`index.html`, `companion.html`, `confirmation.html`),
+  one Vite build. The confirmation entry contains only its surface (no
+  Command Center code) and its own IPC module (`src/ipc/confirmation.ts`),
+  which no other surface imports.
 - **`src/ipc`** — the only module that imports `@tauri-apps/api` (ESLint-enforced).
 - **`src/state`** — small Zustand stores that _mirror_ core state (assistant, activity)
   or hold session-only UI state (conversation). See [ADR 0007](adr/0007-frontend-state-management.md).

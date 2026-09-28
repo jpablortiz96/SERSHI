@@ -176,7 +176,7 @@ the mark. Icons label actions; they never replace text for important meaning.
 | Press                 | scale 0.94–0.97, `duration.instant`; release with `ease.spring`                      |
 | Tooltip               | CSS `data-tip`, fade + 4 px rise, `duration.fast` / `ease.enter`                    |
 | Disabled              | `text.disabled`, `not-allowed` cursor, and a reason (tooltip or label)               |
-| Confirmation dialog   | Modal (`role="dialog"`, `aria-modal`), overlay surface, `radius.xl`, `shadow.e3`. States the action, the resolved subject and the risk in plain words; primary button names the action ("Close Notepad"), never "OK" / "Allow action?". **Cancel is focused first**; Escape cancels; focus is trapped and restored. A countdown (tabular numerals) and a shrinking meter show the time left. Nothing in it comes from request text or a model |
+| Confirmation window   | Its own compact 440×320 window (not a browser alert, message box or in-page modal): overlay surface with a faint state-colored glow, SERSHI mark and wordmark, "Confirmation required" label, the question as the title ("Close Notepad?"), plain-words body and risk, reason, countdown (tabular numerals) and shrinking meter. Primary button names the action ("Close Notepad"), never "OK" / "Allow action?". **Cancel is focused first**; Escape and × cancel. Approve fades in over a 600 ms arming delay. Risk colour: sensitive = amber, high risk = stronger coral accent on the caution line; red is not used for ordinary confirmations. Nothing in it comes from request text or a model |
 | Candidate choices     | When a name is ambiguous, the reply lists candidates as secondary buttons; choosing one re-asks with the exact name |
 
 ## Accessibility
