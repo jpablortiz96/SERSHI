@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+use crate::confirmation::{ConfirmationAction, ConfirmationSubject};
 use crate::ids::{PermissionId, ToolId};
 use crate::platform::Platform;
 
@@ -69,7 +70,7 @@ pub enum CallOrigin {
 }
 
 /// A structured request to run one tool.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCall {
     pub tool_id: ToolId,
@@ -90,12 +91,40 @@ impl ToolCall {
 /// What a tool returns: structured data plus a short, human-readable
 /// summary composed by the tool itself (not by a model), so results can be
 /// shown faithfully even without a language model.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub struct ToolOutput {
     pub data: Value,
+    /// Canonical English summary.
     pub summary: String,
+    /// Trusted name of what the tool acted on (e.g. a resolved application's
+    /// display name), safe to record in activity. Never raw user input.
+    pub subject: Option<String>,
+}
+
+impl ToolOutput {
+    pub fn new(data: Value, summary: impl Into<String>) -> Self {
+        Self {
+            data,
+            summary: summary.into(),
+            subject: None,
+        }
+    }
+
+    pub fn with_subject(mut self, subject: impl Into<String>) -> Self {
+        self.subject = Some(subject.into());
+        self
+    }
+}
+
+/// How serious a declined outcome is for the user.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    /// Nothing went wrong, but nothing happened (not found, ambiguous…).
+    Attention,
+    /// The action was attempted and failed (e.g. Windows blocked it).
+    Failure,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -106,10 +135,42 @@ pub enum ToolError {
     Unavailable(String),
     #[error("tool failed: {0}")]
     Failed(String),
+    /// An expected, structured negative result the user should see, such as
+    /// "application not found". `output.data` carries the details.
+    #[error("declined: {}", .output.summary)]
+    Declined {
+        output: ToolOutput,
+        severity: Severity,
+    },
+}
+
+/// The result of [`Tool::prepare`]: what a call would act on, resolved from
+/// trusted data before anything runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Prepared {
+    pub action: ConfirmationAction,
+    pub subject: Option<ConfirmationSubject>,
+}
+
+impl Default for Prepared {
+    fn default() -> Self {
+        Self {
+            action: ConfirmationAction::RunTool,
+            subject: None,
+        }
+    }
 }
 
 pub trait Tool: Send + Sync + fmt::Debug {
     fn definition(&self) -> &ToolDefinition;
+
+    /// Validates input and resolves the call's target without side effects.
+    /// Runs after policy allows the call and before any confirmation, so the
+    /// confirmation can name the resolved target rather than echo input.
+    fn prepare(&self, _input: &Value) -> Result<Prepared, ToolError> {
+        Ok(Prepared::default())
+    }
+
     fn execute(&self, input: &Value) -> Result<ToolOutput, ToolError>;
 }
 
@@ -196,10 +257,7 @@ pub(crate) mod test_support {
                     timeout_ms: 1_000,
                     platforms: vec![Platform::Windows, Platform::Linux, Platform::Macos],
                 },
-                result: Ok(ToolOutput {
-                    data: json!({"ok": true}),
-                    summary: "done".to_owned(),
-                }),
+                result: Ok(ToolOutput::new(json!({"ok": true}), "done")),
             }
         }
     }

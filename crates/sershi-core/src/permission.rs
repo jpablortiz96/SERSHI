@@ -23,9 +23,10 @@ pub enum PermissionState {
     Denied,
 }
 
-/// Permissions granted on first run. Only harmless, read-only system
-/// information is pre-approved; everything else starts at [`PermissionState::Ask`].
-pub const DEFAULT_GRANTED: &[&str] = &["system.info.read"];
+/// Permissions granted on first run: read-only system information and
+/// launching installed applications (a safe, user-requested action). Closing
+/// applications and everything else start at [`PermissionState::Ask`].
+pub const DEFAULT_GRANTED: &[&str] = &["system.info.read", "system.apps.launch"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PermissionGrants {
@@ -69,11 +70,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_read_only_system_info_is_granted_by_default() {
+    fn only_read_only_and_launch_permissions_are_granted_by_default() {
         let grants = PermissionGrants::default();
         let info = PermissionId::new("system.info.read").unwrap();
         assert_eq!(grants.state(&info), PermissionState::Granted);
         let launch = PermissionId::new("system.apps.launch").unwrap();
-        assert_eq!(grants.state(&launch), PermissionState::Ask);
+        assert_eq!(grants.state(&launch), PermissionState::Granted);
+        let close = PermissionId::new("system.apps.close").unwrap();
+        assert_eq!(grants.state(&close), PermissionState::Ask);
     }
 }

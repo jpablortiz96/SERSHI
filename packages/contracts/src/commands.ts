@@ -1,10 +1,15 @@
 import type { ActivityEntry } from "./generated/ActivityEntry";
+import type { ApplicationCatalogInfo } from "./generated/ApplicationCatalogInfo";
 import type { AssistantSnapshot } from "./generated/AssistantSnapshot";
 import type { AssistantState } from "./generated/AssistantState";
 import type { CommandOutcome } from "./generated/CommandOutcome";
 import type { CommandRequest } from "./generated/CommandRequest";
+import type { ConfirmationDecision } from "./generated/ConfirmationDecision";
+import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
+import type { IntegrationStatus } from "./generated/IntegrationStatus";
 import type { RuntimeInfo } from "./generated/RuntimeInfo";
 import type { SystemSnapshot } from "./generated/SystemSnapshot";
+import type { TrayLabels } from "./generated/TrayLabels";
 
 type NoArgs = Record<string, never>;
 
@@ -19,7 +24,14 @@ export interface CommandMap {
   get_runtime_info: { args: NoArgs; result: RuntimeInfo };
   list_activity: { args: { limit: number }; result: ActivityEntry[] };
   submit_command: { args: { request: CommandRequest }; result: CommandOutcome };
+  decide_confirmation: { args: { decision: ConfirmationDecision }; result: CommandOutcome };
+  get_pending_confirmation: { args: NoArgs; result: ConfirmationRequest | null };
+  get_application_catalog: { args: NoArgs; result: ApplicationCatalogInfo };
+  refresh_application_catalog: { args: NoArgs; result: ApplicationCatalogInfo };
+  get_integration_status: { args: NoArgs; result: IntegrationStatus };
+  set_tray_labels: { args: { labels: TrayLabels }; result: null };
   summon_command_center: { args: NoArgs; result: null };
+  hide_command_center: { args: NoArgs; result: null };
   dismiss_assistant: { args: NoArgs; result: null };
   preview_assistant_state: { args: { state: AssistantState | null }; result: AssistantSnapshot };
   quit_app: { args: NoArgs; result: null };
@@ -33,7 +45,14 @@ export const COMMAND_NAMES = [
   "get_runtime_info",
   "list_activity",
   "submit_command",
+  "decide_confirmation",
+  "get_pending_confirmation",
+  "get_application_catalog",
+  "refresh_application_catalog",
+  "get_integration_status",
+  "set_tray_labels",
   "summon_command_center",
+  "hide_command_center",
   "dismiss_assistant",
   "preview_assistant_state",
   "quit_app",
@@ -43,11 +62,14 @@ export const COMMAND_NAMES = [
 export const EVENTS = {
   assistantState: "sershi://assistant-state",
   activity: "sershi://activity",
+  /** The Command Center should focus its command input (summon/shortcut). */
+  focusCommand: "sershi://focus-command",
 } as const;
 
 export interface EventMap {
   [EVENTS.assistantState]: AssistantSnapshot;
   [EVENTS.activity]: ActivityEntry;
+  [EVENTS.focusCommand]: null;
 }
 
 export type EventName = keyof EventMap;

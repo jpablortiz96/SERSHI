@@ -8,6 +8,11 @@ export type ActivityEntry = { id: number,
  */
 atMs: number, kind: ActivityKind, toolId: ToolId | null, 
 /**
+ * Trusted name of what was acted on (a resolved application's display
+ * name). Never raw user input, paths or command lines.
+ */
+subject: string | null, 
+/**
  * Human-readable, system-composed. Must never contain user content.
  */
 summary: string, 

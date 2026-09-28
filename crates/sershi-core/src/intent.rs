@@ -34,8 +34,8 @@ impl AnswerTopic {
                  processor. Language understanding arrives once an AI provider is connected."
             }
             Self::Help => {
-                "Right now I can report system information, memory usage and processor load. \
-                 Try \"How much memory am I using?\". Opening apps, files, voice and connected \
+                "I can report system information, memory usage and processor load, and open or \
+                 close installed applications. Try \"Open Notepad\". Files, voice and connected \
                  services are on the roadmap."
             }
         }
@@ -52,11 +52,6 @@ pub struct UnavailableCapability {
     pub milestone: &'static str,
 }
 
-const APPS: UnavailableCapability = UnavailableCapability {
-    id: "apps.launch",
-    label: "Opening and closing applications",
-    milestone: "v0.1",
-};
 const BATTERY: UnavailableCapability = UnavailableCapability {
     id: "system.battery",
     label: "Battery status",
@@ -97,13 +92,43 @@ pub trait IntentResolver: Send + Sync + Debug {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct KeywordIntentResolver;
 
-/// Leading verbs that request an action on an application.
-const ACTION_VERBS: &[&str] = &[
-    // English
-    "open", "launch", "start", "run", "close", "quit", // Spanish
-    "abre", "abrir", "abra", "inicia", "iniciar", "ejecuta", "ejecutar", "cierra", "cerrar",
-    // Portuguese
-    "inicie", "execute", "executar", "rode", "feche", "fechar",
+/// Imperative verbs that open an application.
+#[rustfmt::skip]
+const OPEN_VERBS: &[&str] = &[
+    /* en */ "open", "launch", "start", "run",
+    /* es */ "abre", "abrir", "abra", "inicia", "iniciar", "ejecuta", "ejecutar",
+    /* pt */ "inicie", "execute", "executar", "rode",
+];
+/// Imperative verbs that close an application.
+#[rustfmt::skip]
+const CLOSE_VERBS: &[&str] = &[
+    /* en */ "close", "quit", "exit",
+    /* es */ "cierra", "cerrar", "cierre",
+    /* pt */ "feche", "fechar", "encerre", "encerrar",
+];
+/// Courtesy prefixes skipped before the verb.
+const POLITE_PREFIXES: &[&[&str]] = &[
+    &["please"],
+    &["can", "you"],
+    &["could", "you"],
+    &["por", "favor"],
+    &["puedes"],
+    &["podrias"],
+    &["podrías"],
+    &["pode"],
+    &["voce", "pode"],
+    &["você", "pode"],
+];
+/// Articles dropped between the verb and the name ("abra o Spotify").
+#[rustfmt::skip]
+const ARTICLES: &[&str] = &[
+    "the", "el", "la", "los", "las", "un", "una", "o", "a", "os", "as", "um", "uma",
+];
+/// Trailing words that are not part of the name ("open Spotify app please").
+#[rustfmt::skip]
+const TRAILING_FILLER: &[&str] = &[
+    "app", "application", "aplicación", "aplicacion", "aplicativo", "programa", "please",
+    "favor", "por",
 ];
 const MEMORY: &[&str] = &["ram", "memory", "memoria", "memória"];
 const CPU: &[&str] = &["cpu", "processor", "load", "procesador", "processador"];
@@ -167,13 +192,13 @@ impl IntentResolver for KeywordIntentResolver {
             .collect();
         let has = |candidates: &[&str]| words.iter().any(|w| candidates.contains(w));
 
-        let Some(first) = words.first() else {
+        if words.is_empty() {
             return Intent::NotUnderstood;
-        };
-        // Action verbs first: "open task manager to check memory" is an
-        // action request, not a memory question.
-        if ACTION_VERBS.contains(first) {
-            return Intent::NotYetAvailable(APPS);
+        }
+        // Application commands first: "open task manager to check memory" is
+        // an action request, not a memory question.
+        if let Some(intent) = application_command(text) {
+            return intent;
         }
         if has(MEMORY) {
             return tool("system.get_memory");
@@ -201,6 +226,60 @@ impl IntentResolver for KeywordIntentResolver {
         }
         Intent::NotUnderstood
     }
+}
+
+/// Recognises "<verb> <application>" commands. Only imperative commands
+/// qualify: the verb must be the first word (after an optional courtesy
+/// prefix), so "I like Spotify" or "Spotify is open" never act.
+fn application_command(text: &str) -> Option<Intent> {
+    let key = |t: &str| {
+        t.trim_matches(|c: char| !c.is_alphanumeric())
+            .to_lowercase()
+    };
+    let tokens: Vec<&str> = text.split_whitespace().collect();
+    let mut rest: &[&str] = &tokens;
+
+    for prefix in POLITE_PREFIXES {
+        if rest.len() > prefix.len() && rest.iter().zip(prefix.iter()).all(|(t, p)| key(t) == *p) {
+            rest = &rest[prefix.len()..];
+            break;
+        }
+    }
+    let (verb, mut name) = rest.split_first()?;
+    let verb = key(verb);
+    let tool_id = if OPEN_VERBS.contains(&verb.as_str()) {
+        crate::apps::tools::OPEN_APPLICATION
+    } else if CLOSE_VERBS.contains(&verb.as_str()) {
+        crate::apps::tools::CLOSE_APPLICATION
+    } else {
+        return None;
+    };
+    if let Some((first, tail)) = name.split_first()
+        && !tail.is_empty()
+        && ARTICLES.contains(&key(first).as_str())
+    {
+        name = tail;
+    }
+    while let Some((last, head)) = name.split_last() {
+        if !head.is_empty() && TRAILING_FILLER.contains(&key(last).as_str()) {
+            name = head;
+        } else {
+            break;
+        }
+    }
+    let application = name
+        .join(" ")
+        .trim_matches(|c: char| c.is_whitespace() || ".,;!?¿¡\"'“”«»".contains(c))
+        .to_owned();
+    if application.is_empty() || (name.len() == 1 && ARTICLES.contains(&key(name[0]).as_str())) {
+        return Some(Intent::NotUnderstood);
+    }
+    let tool_id = ToolId::new(tool_id).ok()?;
+    Some(Intent::UseTool(ToolCall::new(
+        tool_id,
+        serde_json::json!({ "application": application }),
+        CallOrigin::User,
+    )))
 }
 
 fn tool(id: &'static str) -> Intent {
@@ -234,21 +313,95 @@ mod tests {
         );
     }
 
+    fn app_command(text: &str) -> Option<(String, String)> {
+        match KeywordIntentResolver.resolve(text) {
+            Intent::UseTool(call) => Some((
+                call.tool_id.to_string(),
+                call.input["application"].as_str()?.to_owned(),
+            )),
+            _ => None,
+        }
+    }
+
     #[test]
-    fn action_requests_are_honestly_unavailable() {
-        for text in [
-            "Open Spotify",
-            "run the tests",
-            "open task manager to check memory",
+    fn open_commands_in_three_languages() {
+        for (text, app) in [
+            ("Open Spotify", "Spotify"),
+            ("Launch Spotify", "Spotify"),
+            ("Start Spotify", "Spotify"),
+            ("open the calculator app", "calculator"),
+            ("Please open Google Chrome", "Google Chrome"),
+            ("Abre Spotify", "Spotify"),
+            ("Abrir Spotify", "Spotify"),
+            ("Inicia Spotify", "Spotify"),
+            ("Abre el Bloc de notas", "Bloc de notas"),
+            ("abre la calculadora", "calculadora"),
+            ("¿Puedes abrir Spotify?", "Spotify"),
+            ("Abra o Spotify", "Spotify"),
+            ("Inicie o Spotify", "Spotify"),
+            ("Abra a Calculadora", "Calculadora"),
+            ("Abra o Visual Studio Code, por favor", "Visual Studio Code"),
         ] {
-            assert!(
-                matches!(
-                    KeywordIntentResolver.resolve(text),
-                    Intent::NotYetAvailable(_)
-                ),
+            assert_eq!(
+                app_command(text),
+                Some(("system.open_application".into(), app.into())),
                 "{text}"
             );
         }
+    }
+
+    #[test]
+    fn close_commands_in_three_languages() {
+        for (text, app) in [
+            ("Close Spotify", "Spotify"),
+            ("quit Chrome", "Chrome"),
+            ("Cierra Spotify", "Spotify"),
+            ("Cerrar Spotify", "Spotify"),
+            ("Feche o Spotify", "Spotify"),
+            ("Fechar Spotify", "Spotify"),
+        ] {
+            assert_eq!(
+                app_command(text),
+                Some(("system.close_application".into(), app.into())),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn statements_about_applications_never_act() {
+        for text in [
+            "I like Spotify",
+            "Spotify is open",
+            "is Spotify open?",
+            "opening Spotify later",
+            "the app to open is Spotify",
+            "Me gusta abrir Spotify",
+            "O Spotify está aberto",
+        ] {
+            assert_eq!(app_command(text), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn a_verb_without_an_application_is_not_understood() {
+        for text in ["open", "Abre", "abra o", "close the"] {
+            assert_eq!(
+                KeywordIntentResolver.resolve(text),
+                Intent::NotUnderstood,
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn application_names_are_passed_as_data_not_commands() {
+        // The name is forwarded verbatim; the tool rejects anything path- or
+        // command-like, and nothing is ever executed as text.
+        let Some((_, app)) = app_command("open cmd /c del *") else {
+            panic!("expected a tool call");
+        };
+        assert_eq!(app, "cmd /c del *");
     }
 
     #[test]
@@ -271,13 +424,6 @@ mod tests {
             ("Fale sobre este computador", "system.get_info"),
         ] {
             assert_eq!(tool_of(text).as_deref(), Some(expected), "{text}");
-        }
-        for text in ["Abre Spotify", "Abra o Spotify"] {
-            assert_eq!(
-                KeywordIntentResolver.resolve(text),
-                Intent::NotYetAvailable(APPS),
-                "{text}"
-            );
         }
         assert_eq!(
             KeywordIntentResolver.resolve("Hola"),

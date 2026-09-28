@@ -46,6 +46,11 @@ describe("IPC command surface", () => {
     );
   });
 
+  it("confirmation decisions are main-window only; the companion cannot approve anything", () => {
+    expect(grantedCommands("command-center")).toContain("decide_confirmation");
+    expect(grantedCommands("companion")).not.toContain("decide_confirmation");
+  });
+
   it("no command resembles generic execution", () => {
     for (const name of COMMAND_NAMES) {
       expect(name).not.toMatch(/exec|shell|run_command|eval|spawn/);

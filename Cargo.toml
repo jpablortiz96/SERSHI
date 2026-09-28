@@ -19,7 +19,8 @@ sershi-core = { path = "crates/sershi-core" }
 sershi-platform = { path = "crates/sershi-platform" }
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# Only crates/sershi-platform/src/windows (Win32 FFI) may opt out, with #![allow(unsafe_code)].
+unsafe_code = "deny"
 missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]

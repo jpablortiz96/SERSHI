@@ -1,9 +1,118 @@
 [
   {
+    "id": 18,
+    "atMs": 1767225600000,
+    "kind": "confirmationRequired",
+    "toolId": "system.close_application",
+    "subject": "Spotify",
+    "summary": "Close application is waiting for your approval",
+    "durationMs": null
+  },
+  {
+    "id": 17,
+    "atMs": 1767225600000,
+    "kind": "toolRequested",
+    "toolId": "system.close_application",
+    "subject": null,
+    "summary": "Requested Close application",
+    "durationMs": null
+  },
+  {
+    "id": 16,
+    "atMs": 1767225600000,
+    "kind": "commandReceived",
+    "toolId": null,
+    "subject": null,
+    "summary": "Command received",
+    "durationMs": null
+  },
+  {
+    "id": 15,
+    "atMs": 1767225600000,
+    "kind": "toolDeclined",
+    "toolId": "system.open_application",
+    "subject": null,
+    "summary": "Open application could not complete",
+    "durationMs": 0
+  },
+  {
+    "id": 14,
+    "atMs": 1767225600000,
+    "kind": "toolRequested",
+    "toolId": "system.open_application",
+    "subject": null,
+    "summary": "Requested Open application",
+    "durationMs": null
+  },
+  {
+    "id": 13,
+    "atMs": 1767225600000,
+    "kind": "commandReceived",
+    "toolId": null,
+    "subject": null,
+    "summary": "Command received",
+    "durationMs": null
+  },
+  {
+    "id": 12,
+    "atMs": 1767225600000,
+    "kind": "toolDeclined",
+    "toolId": "system.open_application",
+    "subject": null,
+    "summary": "Open application could not complete",
+    "durationMs": 0
+  },
+  {
+    "id": 11,
+    "atMs": 1767225600000,
+    "kind": "toolRequested",
+    "toolId": "system.open_application",
+    "subject": null,
+    "summary": "Requested Open application",
+    "durationMs": null
+  },
+  {
+    "id": 10,
+    "atMs": 1767225600000,
+    "kind": "commandReceived",
+    "toolId": null,
+    "subject": null,
+    "summary": "Command received",
+    "durationMs": null
+  },
+  {
+    "id": 9,
+    "atMs": 1767225600000,
+    "kind": "toolCompleted",
+    "toolId": "system.open_application",
+    "subject": "Spotify",
+    "summary": "Open application completed",
+    "durationMs": 0
+  },
+  {
+    "id": 8,
+    "atMs": 1767225600000,
+    "kind": "toolRequested",
+    "toolId": "system.open_application",
+    "subject": null,
+    "summary": "Requested Open application",
+    "durationMs": null
+  },
+  {
+    "id": 7,
+    "atMs": 1767225600000,
+    "kind": "commandReceived",
+    "toolId": null,
+    "subject": null,
+    "summary": "Command received",
+    "durationMs": null
+  },
+  {
     "id": 6,
     "atMs": 1767225600000,
     "kind": "commandReceived",
     "toolId": null,
+    "subject": null,
     "summary": "Command received",
     "durationMs": null
   },
@@ -12,7 +121,8 @@
     "atMs": 1767225600000,
     "kind": "capabilityUnavailable",
     "toolId": null,
-    "summary": "Opening and closing applications is planned for v0.1",
+    "subject": null,
+    "summary": "Battery status is planned for v0.1",
     "durationMs": null
   },
   {
@@ -20,6 +130,7 @@
     "atMs": 1767225600000,
     "kind": "commandReceived",
     "toolId": null,
+    "subject": null,
     "summary": "Command received",
     "durationMs": null
   },
@@ -28,6 +139,7 @@
     "atMs": 1767225600000,
     "kind": "toolCompleted",
     "toolId": "system.get_memory",
+    "subject": null,
     "summary": "Memory usage completed",
     "durationMs": 0
   },
@@ -36,6 +148,7 @@
     "atMs": 1767225600000,
     "kind": "toolRequested",
     "toolId": "system.get_memory",
+    "subject": null,
     "summary": "Requested Memory usage",
     "durationMs": null
   },
@@ -44,6 +157,7 @@
     "atMs": 1767225600000,
     "kind": "commandReceived",
     "toolId": null,
+    "subject": null,
     "summary": "Command received",
     "durationMs": null
   }

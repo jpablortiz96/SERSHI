@@ -1,5 +1,39 @@
 [
   {
+    "id": "system.close_application",
+    "name": "Close application",
+    "description": "Ask a running application to close its windows. Unsaved work may be lost.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "application": {
+          "description": "The application's name as the user said it, e.g. \"Spotify\". Never a path, command or arguments.",
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "application"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "permissions": [
+      "system.apps.close"
+    ],
+    "risk": "sensitive",
+    "timeoutMs": 15000,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
     "id": "system.get_cpu",
     "name": "Processor usage",
     "description": "Processor model, core count and current load.",
@@ -63,6 +97,40 @@
       "windows",
       "linux",
       "macos"
+    ]
+  },
+  {
+    "id": "system.open_application",
+    "name": "Open application",
+    "description": "Open an installed application by name.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "application": {
+          "description": "The application's name as the user said it, e.g. \"Spotify\". Never a path, command or arguments.",
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "application"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "permissions": [
+      "system.apps.launch"
+    ],
+    "risk": "safe",
+    "timeoutMs": 15000,
+    "platforms": [
+      "windows"
     ]
   }
 ]

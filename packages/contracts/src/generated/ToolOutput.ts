@@ -6,4 +6,13 @@ import type { JsonValue } from "./serde_json/JsonValue";
  * summary composed by the tool itself (not by a model), so results can be
  * shown faithfully even without a language model.
  */
-export type ToolOutput = { data: JsonValue, summary: string, };
+export type ToolOutput = { data: JsonValue, 
+/**
+ * Canonical English summary.
+ */
+summary: string, 
+/**
+ * Trusted name of what the tool acted on (e.g. a resolved application's
+ * display name), safe to record in activity. Never raw user input.
+ */
+subject: string | null, };

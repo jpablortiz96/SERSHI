@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "reply": "Opened Spotify.",
+  "detail": null,
+  "toolId": "system.open_application",
+  "data": {
+    "application": {
+      "displayName": "Spotify",
+      "id": "spotify",
+      "source": "packagedApp"
+    },
+    "kind": "opened",
+    "matched": "exact"
+  },
+  "confirmation": null,
+  "durationMs": 0
+}

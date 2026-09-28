@@ -1,0 +1,24 @@
+{
+  "status": "unresolved",
+  "reply": "I found more than one application matching \"visual studio\". Which one?",
+  "detail": null,
+  "toolId": "system.open_application",
+  "data": {
+    "candidates": [
+      {
+        "displayName": "Visual Studio 2022",
+        "id": "visual-studio-2022",
+        "source": "startMenu"
+      },
+      {
+        "displayName": "Visual Studio Code",
+        "id": "visual-studio-code",
+        "source": "startMenu"
+      }
+    ],
+    "kind": "ambiguous",
+    "query": "visual studio"
+  },
+  "confirmation": null,
+  "durationMs": null
+}

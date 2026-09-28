@@ -118,9 +118,9 @@ fn info_output(s: &SystemSnapshot) -> ToolOutput {
             .as_deref()
             .map(|v| format!(" {v}"))
             .unwrap_or_default();
-    ToolOutput {
-        data: to_value(s),
-        summary: format!(
+    ToolOutput::new(
+        to_value(s),
+        format!(
             "{}{version} on {}, {} with {} logical cores, {} of memory.",
             s.os.name,
             s.os.arch,
@@ -128,19 +128,19 @@ fn info_output(s: &SystemSnapshot) -> ToolOutput {
             s.cpu.logical_cores,
             format_bytes(s.memory.total_bytes),
         ),
-    }
+    )
 }
 
 fn memory_output(s: &SystemSnapshot) -> ToolOutput {
-    ToolOutput {
-        data: to_value(&s.memory),
-        summary: format!(
+    ToolOutput::new(
+        to_value(&s.memory),
+        format!(
             "You're using {} of {} memory ({:.0}%).",
             format_bytes(s.memory.used_bytes),
             format_bytes(s.memory.total_bytes),
             s.memory.used_percent(),
         ),
-    }
+    )
 }
 
 fn cpu_output(s: &SystemSnapshot) -> ToolOutput {
@@ -148,13 +148,13 @@ fn cpu_output(s: &SystemSnapshot) -> ToolOutput {
         Some(p) => format!("running at {p:.0}%"),
         None => "still taking its first measurement — ask again in a moment".to_owned(),
     };
-    ToolOutput {
-        data: to_value(&s.cpu),
-        summary: format!(
+    ToolOutput::new(
+        to_value(&s.cpu),
+        format!(
             "Your processor is {load} across {} cores.",
             s.cpu.logical_cores
         ),
-    }
+    )
 }
 
 #[cfg(test)]

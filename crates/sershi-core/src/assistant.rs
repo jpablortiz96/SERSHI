@@ -36,14 +36,18 @@ pub enum AssistantState {
     Speaking,
     /// A request completed. Transient; settles back to idle.
     Success,
-    /// Needs attention but nothing failed (e.g. confirmation required).
+    /// Needs attention but nothing failed (e.g. an application was not
+    /// found). Transient.
     Warning,
+    /// Waiting for the user to approve or cancel a pending action. Not
+    /// transient: it lasts until the user decides or the request expires.
+    AwaitingConfirmation,
     /// A request failed. Transient; settles back to idle.
     Error,
 }
 
 impl AssistantState {
-    pub const ALL: [AssistantState; 11] = [
+    pub const ALL: [AssistantState; 12] = [
         Self::Sleeping,
         Self::Idle,
         Self::Awake,
@@ -54,6 +58,7 @@ impl AssistantState {
         Self::Speaking,
         Self::Success,
         Self::Warning,
+        Self::AwaitingConfirmation,
         Self::Error,
     ];
 
@@ -94,8 +99,12 @@ pub enum AssistantEvent {
     SpeechStarted,
     /// The request completed successfully.
     Completed,
-    /// The request needs the user's attention (e.g. a confirmation).
+    /// The request needs the user's attention (nothing will run).
     AttentionNeeded,
+    /// An action is waiting for the user's approval.
+    ConfirmationRequested,
+    /// The user approved the pending action; it runs now.
+    ConfirmationApproved,
     /// The request failed.
     Failed,
     /// A transient outcome finished displaying.
@@ -124,12 +133,14 @@ pub fn transition(
     let next = match (from, event) {
         (S::Sleeping, E::Wake) => S::Idle,
         (S::Sleeping | S::Idle, E::Activate) => S::Awake,
-        (s, E::Sleep) if !s.is_busy() => S::Sleeping,
+        (s, E::Sleep) if !s.is_busy() && s != S::AwaitingConfirmation => S::Sleeping,
 
         (S::Idle | S::Awake, E::StartListening) => S::Listening,
         (S::Sleeping | S::Idle | S::Awake | S::Listening, E::RequestReceived) => S::Thinking,
         // A new request may start while a previous outcome is still showing.
         (s, E::RequestReceived) if s.is_transient() => S::Thinking,
+        // A new request replaces a pending confirmation (the service cancels it).
+        (S::AwaitingConfirmation, E::RequestReceived) => S::Thinking,
 
         (S::Thinking, E::PlanStarted) => S::Planning,
         (S::Thinking | S::Planning | S::Executing, E::ExecutionStarted) => S::Executing,
@@ -137,6 +148,8 @@ pub fn transition(
 
         (S::Thinking | S::Planning | S::Executing | S::Speaking, E::Completed) => S::Success,
         (S::Thinking | S::Planning | S::Executing | S::Speaking, E::AttentionNeeded) => S::Warning,
+        (S::Thinking | S::Planning, E::ConfirmationRequested) => S::AwaitingConfirmation,
+        (S::AwaitingConfirmation, E::ConfirmationApproved) => S::Executing,
         // Anything can fail, except a state with nothing in flight.
         (s, E::Failed) if s != S::Sleeping => S::Error,
 
@@ -290,6 +303,42 @@ mod tests {
         let mut m = StateMachine::default();
         assert!(m.apply(E::Completed).is_err());
         assert_eq!(m.snapshot(), StateMachine::default().snapshot());
+    }
+
+    #[test]
+    fn confirmation_waits_until_decided_and_never_settles_on_its_own() {
+        let mut m = StateMachine::default();
+        m.apply(E::RequestReceived).unwrap();
+        m.apply(E::PlanStarted).unwrap();
+        assert_eq!(
+            m.apply(E::ConfirmationRequested).unwrap().state,
+            S::AwaitingConfirmation
+        );
+        assert!(m.clone().apply(E::Settle).is_err(), "must not auto-settle");
+        assert!(
+            m.clone().apply(E::Sleep).is_err(),
+            "must not sleep while waiting"
+        );
+        assert!(
+            m.clone().apply(E::ExecutionStarted).is_err(),
+            "only an approval may start execution"
+        );
+        assert_eq!(m.clone().apply(E::Dismiss).unwrap().state, S::Idle);
+        assert_eq!(
+            m.apply(E::ConfirmationApproved).unwrap().state,
+            S::Executing
+        );
+    }
+
+    #[test]
+    fn only_awaiting_confirmation_accepts_an_approval() {
+        for s in S::ALL {
+            assert_eq!(
+                transition(s, E::ConfirmationApproved).is_ok(),
+                s == S::AwaitingConfirmation,
+                "{s:?}"
+            );
+        }
     }
 
     #[test]

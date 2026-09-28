@@ -28,6 +28,7 @@ describe("design tokens", () => {
       "speaking",
       "success",
       "warning",
+      "awaiting-confirmation",
       "error",
       "offline",
       "private",

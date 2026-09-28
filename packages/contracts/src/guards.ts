@@ -7,6 +7,7 @@ import type { ActivityEntry } from "./generated/ActivityEntry";
 import type { AssistantSnapshot } from "./generated/AssistantSnapshot";
 import type { AssistantState } from "./generated/AssistantState";
 import type { CommandOutcome } from "./generated/CommandOutcome";
+import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { SystemSnapshot } from "./generated/SystemSnapshot";
 
 /** Mirrors `AssistantState::ALL` in Rust. */
@@ -21,6 +22,7 @@ export const ASSISTANT_STATES = [
   "speaking",
   "success",
   "warning",
+  "awaitingConfirmation",
   "error",
 ] as const satisfies readonly AssistantState[];
 
@@ -53,6 +55,7 @@ export function isActivityEntry(v: unknown): v is ActivityEntry {
     isStr(v.kind) &&
     isStr(v.summary) &&
     isNullable(v.toolId, isStr) &&
+    isNullable(v.subject, isStr) &&
     isNullable(v.durationMs, isNum)
   );
 }
@@ -73,6 +76,30 @@ export function isSystemSnapshot(v: unknown): v is SystemSnapshot {
   );
 }
 
+export function isConfirmationRequest(v: unknown): v is ConfirmationRequest {
+  return (
+    isObj(v) &&
+    isStr(v.id) &&
+    /^[0-9a-f]{32}$/.test(v.id) &&
+    isStr(v.toolId) &&
+    isStr(v.action) &&
+    isStr(v.risk) &&
+    isNum(v.expiresAtMs) &&
+    typeof v.canRemember === "boolean"
+  );
+}
+
 export function isCommandOutcome(v: unknown): v is CommandOutcome {
-  return isObj(v) && isStr(v.status) && isStr(v.reply) && isNullable(v.toolId, isStr);
+  return (
+    isObj(v) &&
+    isStr(v.status) &&
+    isStr(v.reply) &&
+    isNullable(v.toolId, isStr) &&
+    isNullable(v.confirmation, isConfirmationRequest)
+  );
+}
+
+/** `null` payload (e.g. the focus-command event). */
+export function isNullPayload(v: unknown): v is null {
+  return v === null;
 }

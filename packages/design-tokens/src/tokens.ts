@@ -77,6 +77,8 @@ export const tokens = {
     speaking: "#7fe6f2",
     success: "#5fe3b0",
     warning: "#f2b870",
+    /** Waiting for the user's approval: calmer and paler than warning. */
+    awaitingConfirmation: "#ecc98a",
     error: "#f2777a",
     offline: "#6b7486",
     private: "#c9d2de",

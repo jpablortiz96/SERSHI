@@ -9,8 +9,10 @@
 //! [`policy::PolicyEngine`].** See `docs/AGENT_MODEL.md`.
 
 pub mod activity;
+pub mod apps;
 pub mod assistant;
 pub mod builtin;
+pub mod confirmation;
 pub mod executor;
 pub mod ids;
 pub mod intent;

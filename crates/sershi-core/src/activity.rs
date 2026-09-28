@@ -21,7 +21,12 @@ pub enum ActivityKind {
     ToolCompleted,
     ToolFailed,
     ToolDenied,
+    /// The tool ran into an expected negative result (e.g. not found).
+    ToolDeclined,
     ConfirmationRequired,
+    ConfirmationApproved,
+    ConfirmationCancelled,
+    ConfirmationExpired,
     CapabilityUnavailable,
 }
 
@@ -36,6 +41,9 @@ pub struct ActivityEntry {
     pub at_ms: u64,
     pub kind: ActivityKind,
     pub tool_id: Option<ToolId>,
+    /// Trusted name of what was acted on (a resolved application's display
+    /// name). Never raw user input, paths or command lines.
+    pub subject: Option<String>,
     /// Human-readable, system-composed. Must never contain user content.
     pub summary: String,
     /// Wall time of a completed or failed tool execution.
@@ -63,6 +71,7 @@ impl Default for ActivityLog {
 pub struct NewActivity {
     pub kind: ActivityKind,
     pub tool_id: Option<ToolId>,
+    pub subject: Option<String>,
     pub summary: String,
     pub duration_ms: Option<u32>,
 }
@@ -72,6 +81,7 @@ impl NewActivity {
         Self {
             kind,
             tool_id: None,
+            subject: None,
             summary: summary.into(),
             duration_ms: None,
         }
@@ -79,6 +89,11 @@ impl NewActivity {
 
     pub fn tool(mut self, tool_id: &ToolId) -> Self {
         self.tool_id = Some(tool_id.clone());
+        self
+    }
+
+    pub fn subject_opt(mut self, subject: Option<String>) -> Self {
+        self.subject = subject;
         self
     }
 
@@ -103,6 +118,7 @@ impl ActivityLog {
             at_ms,
             kind: activity.kind,
             tool_id: activity.tool_id,
+            subject: activity.subject,
             summary: activity.summary,
             duration_ms: activity.duration_ms,
         };

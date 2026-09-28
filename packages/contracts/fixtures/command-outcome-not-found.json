@@ -1,0 +1,12 @@
+{
+  "status": "unresolved",
+  "reply": "I couldn't find Photoshop on this computer.",
+  "detail": null,
+  "toolId": "system.open_application",
+  "data": {
+    "kind": "notFound",
+    "query": "Photoshop"
+  },
+  "confirmation": null,
+  "durationMs": null
+}

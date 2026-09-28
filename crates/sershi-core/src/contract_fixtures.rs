@@ -13,6 +13,8 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
+use crate::apps::manager::test_support::FakeApps;
+use crate::apps::{ApplicationManager, tools as app_tools};
 use crate::builtin::{register_all, test_support::FakeSystem};
 use crate::executor::ToolExecutor;
 use crate::intent::KeywordIntentResolver;
@@ -30,40 +32,45 @@ fn write<T: Serialize>(name: &str, value: &T) {
     std::fs::write(dir.join(format!("{name}.json")), json).unwrap();
 }
 
+fn submit(service: &mut AssistantService, text: &str) -> crate::service::CommandOutcome {
+    service.submit(&CommandRequest { text: text.into() }, &mut |_| {})
+}
+
 #[test]
 fn write_contract_fixtures() {
     let mut registry = ToolRegistry::default();
     register_all(&mut registry, Arc::new(FakeSystem::ok())).unwrap();
+    let apps = Arc::new(ApplicationManager::new(FakeApps::new(), || {
+        1_767_225_600_000
+    }));
+    app_tools::register(&mut registry, apps).unwrap();
     let mut service = AssistantService::new(
         ToolExecutor::new(registry, PolicyEngine::new(Platform::Windows)),
         Box::new(KeywordIntentResolver),
         PermissionGrants::default(),
         || 1_767_225_600_000,
     );
-    let outcome = service.submit(
-        &CommandRequest {
-            text: "memory".into(),
-        },
-        &mut |_| {},
-    );
-    let unavailable = service.submit(
-        &CommandRequest {
-            text: "open spotify".into(),
-        },
-        &mut |_| {},
-    );
+    let completed = submit(&mut service, "memory");
+    let unavailable = submit(&mut service, "battery status");
+    let answer = submit(&mut service, "hola");
+    let opened = submit(&mut service, "Abre Spotify");
+    let not_found = submit(&mut service, "Open Photoshop");
+    let ambiguous = submit(&mut service, "open visual studio");
+    let confirmation = submit(&mut service, "Close Spotify");
 
-    let answer = service.submit(
-        &CommandRequest {
-            text: "hola".into(),
-        },
-        &mut |_| {},
-    );
+    // Confirmation ids are random; pin one so the fixture is stable.
+    let mut confirmation = serde_json::to_value(&confirmation).unwrap();
+    confirmation["confirmation"]["id"] = "0123456789abcdef0123456789abcdef".into();
+
     write("system-snapshot", &FakeSystem::ok().snapshot().unwrap());
     write("assistant-snapshot", &service.snapshot());
-    write("command-outcome-completed", &outcome);
+    write("command-outcome-completed", &completed);
     write("command-outcome-unavailable", &unavailable);
     write("command-outcome-answer", &answer);
-    write("activity", &service.recent_activity(10));
+    write("command-outcome-opened", &opened);
+    write("command-outcome-not-found", &not_found);
+    write("command-outcome-ambiguous", &ambiguous);
+    write("command-outcome-confirmation", &confirmation);
+    write("activity", &service.recent_activity(20));
     write("tool-definitions", &service.tool_definitions());
 }

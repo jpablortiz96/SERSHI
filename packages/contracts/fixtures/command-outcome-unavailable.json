@@ -1,9 +1,9 @@
 {
   "status": "unavailable",
-  "reply": "Opening and closing applications isn't available yet — it's planned for v0.1.",
+  "reply": "Battery status isn't available yet — it's planned for v0.1.",
   "detail": {
     "kind": "unavailable",
-    "capability": "apps.launch",
+    "capability": "system.battery",
     "milestone": "v0.1"
   },
   "toolId": null,
