@@ -23,33 +23,40 @@ flowchart TB
     subgraph Shell["Desktop shell — apps/desktop/src-tauri (Rust)"]
         CMD["IPC commands<br/>per-window permissions"]
         EV["Event broadcaster"]
-        WIN["Window behaviour"]
+        WIN["Surfaces<br/>(show / hide / summon)"]
+        TRAY["Tray · global shortcut<br/>single instance"]
     end
 
     subgraph Core["sershi-core — portable domain (Rust)"]
         SVC["AssistantService<br/>(application layer)"]
         SM["State machine"]
         INT["IntentResolver"]
-        EXE["ToolExecutor"]
+        EXE["ToolExecutor<br/>plan · prepare · execute"]
+        CONF["ConfirmationStore"]
+        APPS["ApplicationManager<br/>(catalog + resolution)"]
         POL["PolicyEngine"]
         REG["ToolRegistry"]
         ACT["ActivityLog"]
-        PORTS["Ports<br/>(SystemInfoProvider, …)"]
+        PORTS["Ports<br/>(SystemInfoProvider,<br/>ApplicationPlatform)"]
     end
 
     subgraph Platform["sershi-platform — adapters (Rust)"]
         SYS["SysinfoSystemInfo<br/>(portable)"]
         CAP["Capability report"]
-        WINMOD["windows/ — cfg(windows) only"]
+        WINMOD["WindowsApplications<br/>windows/ — cfg(windows) only"]
     end
 
     IPCC -- "invoke (typed)" --> CMD
     EV -- "events" --> IPCC
     CMD --> SVC
-    SVC --> SM & INT & EXE & ACT
+    SVC --> SM & INT & EXE & ACT & CONF
     EXE --> POL & REG
+    REG -. "tools depend on" .-> APPS
+    APPS --> PORTS
     REG -. "tools depend on" .-> PORTS
     SYS -- implements --> PORTS
+    WINMOD -- implements --> PORTS
+    TRAY --> WIN
     CMD --> CAP
 ```
 
@@ -73,9 +80,9 @@ React UI  ──IPC──▶  Desktop shell  ──▶  Application (AssistantSe
 
 | Unit                          | Kind          | Owns                                                                                                                  | May depend on                               |
 | ----------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `crates/sershi-core`          | Rust lib      | Assistant state machine, tool model, policy, permissions, activity, intent boundary, application service, IPC payloads | `serde`, `thiserror` (+ `ts-rs` behind a feature) |
-| `crates/sershi-platform`      | Rust lib      | OS adapters for core ports; capability report; `windows/` module                                                      | `sershi-core`, `sysinfo`                    |
-| `apps/desktop/src-tauri`      | Rust bin/lib  | Windows, IPC commands, event broadcast, timers                                                                        | `sershi-core`, `sershi-platform`, `tauri`   |
+| `crates/sershi-core`          | Rust lib      | Assistant state machine, tool model, policy, permissions, confirmations, application catalog, activity, intent boundary, application service, IPC payloads | `serde`, `thiserror` (+ `ts-rs` behind a feature) |
+| `crates/sershi-platform`      | Rust lib      | OS adapters for core ports; capability report; `windows/` module (the only code allowed `unsafe`, for Win32 FFI)       | `sershi-core`, `sysinfo`, `windows` (Windows only) |
+| `apps/desktop/src-tauri`      | Rust bin/lib  | Windows, IPC commands, event broadcast, timers, tray, global shortcut, single instance                                | `sershi-core`, `sershi-platform`, `tauri` + plugins |
 | `packages/contracts`          | TS package    | IPC types (generated from Rust), command/event map, runtime guards                                                    | —                                           |
 | `packages/design-tokens`      | TS package    | Design tokens and runtime theming                                                                                      | —                                           |
 | `apps/desktop/src`            | React app     | Both window UIs, stores mirroring core state                                                                          | `@sershi/contracts`, `@sershi/design-tokens`, `@tauri-apps/api` (in `src/ipc` only) |
@@ -86,7 +93,7 @@ crate is created when a boundary needs enforcing by the compiler (e.g. a future
 
 ## The request lifecycle
 
-The vertical slice implemented today. Every future capability (LLM tool calls,
+The vertical slice implemented today (a safe, read-only tool). Every future capability (LLM tool calls,
 voice, routines) enters at the same point and passes through the same steps.
 
 ```mermaid
@@ -106,10 +113,13 @@ sequenceDiagram
     Svc-->>UI: event: state = thinking
     Svc->>Int: resolve(text)
     Int-->>Svc: Intent::UseTool(ToolCall)
-    Svc-->>UI: event: state = executing
+    Svc-->>UI: event: state = planning
     Svc->>Exe: execute(call, grants)
     Exe->>Pol: evaluate(definition, call, grants)
     Pol-->>Exe: Allow
+    Exe->>Tool: prepare(input)
+    Tool-->>Exe: Prepared (no confirmation needed)
+    Exe-->>UI: event: state = executing
     Exe->>Tool: execute(input)
     Tool->>Port: snapshot()
     Port-->>Tool: SystemSnapshot
@@ -120,6 +130,60 @@ sequenceDiagram
     Note over Shell: after 2.4 s, Settle → idle<br/>(only if revision unchanged)
 ```
 
+The executor splits every call into three steps so that anything a tool must
+look up before acting (resolving an application, checking it is running)
+happens during **Planning**, before any approval is requested:
+
+1. **plan** — registry lookup, input validation, policy (`Allow` / `Deny` /
+   `RequireConfirmation`).
+2. **prepare** — the tool's own read-only checks; it may answer early
+   (`ToolError::Declined`: "not found", "isn't running") or describe what a
+   confirmation should name (`ConfirmationSubject`, from trusted data).
+3. **execute** — the side effect, only after policy allowed it or the user
+   approved it.
+
+### Confirmation lifecycle
+
+Sensitive actions (today: `system.close_application`) stop in
+`AwaitingConfirmation`. The pending call lives in Rust, never in the UI. See
+[ADR 0010](adr/0010-trusted-confirmation-lifecycle.md).
+
+```mermaid
+sequenceDiagram
+    participant UI as Command Center
+    participant Svc as AssistantService
+    participant Store as ConfirmationStore
+    participant Exe as ToolExecutor
+
+    UI->>Svc: submit_command("Close Notepad")
+    Svc->>Exe: execute → policy: RequireConfirmation, prepare: Notepad is running
+    Exe-->>Svc: ConfirmationRequired(draft)
+    Svc->>Store: create(draft) → random id, expires in 90 s
+    Svc-->>UI: state = awaitingConfirmation, outcome.confirmation
+    UI->>Svc: decide_confirmation({ confirmationId, toolId, approved })
+    Svc->>Store: take(id, toolId, now) — one-time, even on mismatch
+    Store-->>Svc: PendingConfirmation (the stored call)
+    Svc->>Exe: execute_approved(stored call, approved subject)
+    Note over Exe: re-resolves; if the application changed → SubjectChanged (nothing runs)
+    Exe-->>Svc: Completed
+    Svc-->>UI: state = success
+```
+
+Expiry is enforced by `take()` itself; the shell additionally schedules
+`expire_confirmations` at TTL + 250 ms so the UI and activity update without
+user action. A new request, dismissing the assistant or hiding the Command
+Center cancels pending approvals.
+
+### Application catalog
+
+`ApplicationManager` (core) caches the catalog produced by the
+`ApplicationPlatform` port and resolves names deterministically
+(exact → alias → prefix → words; ambiguity is reported, never guessed). The
+Windows adapter (`WindowsApplications`) discovers built-ins, packaged apps,
+Start Menu shortcuts and App Paths, launches without a shell and closes only
+with `WM_CLOSE`. Details: [APPLICATIONS.md](APPLICATIONS.md),
+[ADR 0009](adr/0009-windows-application-discovery.md).
+
 ## IPC
 
 IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
@@ -128,7 +192,8 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
    A contract test fails if a command name even resembles generic execution.
 2. **Per-window permissions.** `build.rs` declares every command; Tauri generates a
    permission per command; `capabilities/*.json` grants them per window. The
-   companion can call exactly `get_assistant_snapshot` and `summon_command_center`.
+   companion can call exactly `get_assistant_snapshot` and `summon_command_center`;
+   only the Command Center can decide confirmations.
 3. **Types come from Rust.** `ts-rs` generates `packages/contracts/src/generated`
    from the Rust types. `pnpm contracts:generate` regenerates; CI fails on drift.
 4. **Rust-serialized fixtures** (`packages/contracts/fixtures`) are validated by the
@@ -143,15 +208,23 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
 | `get_system_snapshot`     | main               | Read-only telemetry (polled while visible)          |
 | `get_runtime_info`        | main               | Version, platform, capabilities, tool definitions   |
 | `list_activity`           | main               | Recent activity (≤ 100)                             |
-| `submit_command`          | main               | Run a user command through the pipeline             |
-| `dismiss_assistant`       | main               | `Awake → Idle`                                      |
+| `submit_command`          | main               | Run a user command through the pipeline (async; states broadcast live) |
+| `decide_confirmation`     | main               | Approve or cancel a pending confirmation (`{ confirmationId, toolId, approved }`) |
+| `get_pending_confirmation`| main               | Restore a still-pending confirmation after a reload  |
+| `get_application_catalog` | main               | Catalog status; names and sources in developer builds only |
+| `refresh_application_catalog` | main           | Re-scan installed applications                      |
+| `get_integration_status`  | main               | Tray, shortcut, single-instance status              |
+| `set_tray_labels`         | main               | Localized tray labels (≤ 48 chars, no control chars; actions are fixed) |
+| `hide_command_center`     | main               | × button: hide, keep running                        |
+| `dismiss_assistant`       | main               | `Awake`/`AwaitingConfirmation → Idle` (cancels pending approvals) |
 | `preview_assistant_state` | main               | Developer builds only: visual preview               |
 | `quit_app`                | main               | Exit                                                |
 
-| Event                      | Payload             |
-| -------------------------- | ------------------- |
-| `sershi://assistant-state` | `AssistantSnapshot` |
-| `sershi://activity`        | `ActivityEntry`     |
+| Event                      | Payload             | Target      |
+| -------------------------- | ------------------- | ----------- |
+| `sershi://assistant-state` | `AssistantSnapshot` | all windows |
+| `sershi://activity`        | `ActivityEntry`     | all windows |
+| `sershi://focus-command`   | none                | main        |
 
 **Telemetry vs tools.** `get_system_snapshot` is the user looking at their own
 machine; it bypasses the tool pipeline and is not recorded as activity (it is
@@ -178,10 +251,15 @@ stateDiagram-v2
     Thinking --> Planning: PlanStarted
     Thinking --> Executing: ExecutionStarted
     Planning --> Executing: ExecutionStarted
+    Planning --> AwaitingConfirmation: ConfirmationRequested
+    AwaitingConfirmation --> Executing: ConfirmationApproved
+    AwaitingConfirmation --> Idle: Dismiss (cancel, expiry)
+    AwaitingConfirmation --> Thinking: RequestReceived
     Executing --> Speaking: SpeechStarted
     Thinking --> Success: Completed
     Executing --> Success: Completed
     Speaking --> Success: Completed
+    Planning --> Warning: AttentionNeeded
     Executing --> Warning: AttentionNeeded
     Executing --> Error: Failed
     Success --> Idle: Settle
@@ -199,6 +277,25 @@ tested definition. Any non-sleeping state can `Fail`; busy states cannot `Sleep`
   applies only if the revision is unchanged, so a new request is never clobbered.
 - **Preview.** Developer Mode can set `previewState`; surfaces render it, but policy
   and execution only ever read `state`.
+
+## Desktop shell and window lifecycle
+
+- **Single instance** (`tauri-plugin-single-instance`, registered first): a
+  second launch shows the existing windows instead of starting a new process.
+- **Close hides.** The Command Center's × and the OS close request hide the
+  window; SERSHI keeps running in the tray. Quit is explicit (tray menu,
+  Settings → About).
+- **Tray** — Open / Hide / Quit (labels follow the UI language via
+  `set_tray_labels`); left click summons.
+- **Global shortcut** — `Ctrl+Alt+Space` summons: show, restore, focus, then
+  emit `sershi://focus-command` so the input is focused. If Windows refuses
+  focus, `request_user_attention` flashes the taskbar button instead. If the
+  shortcut is taken, SERSHI keeps running and Settings says so.
+- **Summon semantics** — tray click, shortcut, second instance and the
+  companion all call the same `surfaces::summon`.
+
+All of it is REQUIRES_WINDOWS_VALIDATION; see
+[WINDOWS_PLATFORM.md](WINDOWS_PLATFORM.md).
 
 ## Frontend architecture
 
@@ -241,7 +338,10 @@ Designed, not yet implemented — see ADRs [0004](adr/0004-persistence.md) and
 
 ## Performance principles
 
-- Nothing heavy at startup: no models, no network, one `sysinfo` handle.
+- Nothing heavy at startup: no models, no network, one `sysinfo` handle. The
+  application catalog warms up in the background 5 s after launch.
+- Native calls are bounded (discovery 20 s, launch 10 s, close 5 s) and run
+  off the UI thread; commands that may touch them are `async` IPC commands.
 - Telemetry polls only while the Command Center is visible (2 s interval).
 - The companion animates only `transform`/`opacity`; loops pause when sleeping.
 - No continuous canvas or WebGL rendering.

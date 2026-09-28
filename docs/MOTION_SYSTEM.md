@@ -86,11 +86,15 @@ Colors always cross-fade over `duration.cinematic` with `ease.standard`.
 | speaking → idle          | Settling back                        | `slow`, `cinematic` color             | Pulses fade; breathing continues                                                | Color only                             |
 | any → success            | Quiet confirmation                   | `cinematic`, `enter`                  | Single mint ripple (scale 1 → 2.3, fade out); holds 2.4 s then settles         | No ripple; mint hue + "Done" label     |
 | any → warning            | Needs attention, not alarm           | 2.4 s loop, `breathe`                 | Ember ripple, halo pulses slowly; holds 4 s                                     | Ember hue + label                      |
+| planning → awaitingConfirmation | Pausing for the user, patiently | 3.2 s loop, `breathe`                 | Hue → soft gold; halo pulses slowly (slower than warning); orbits pause; the dialog opens | Gold hue + "Waiting for you" label; static halo |
+| awaitingConfirmation → executing | Permission granted            | `cinematic` color                     | Orbits resume; drive arc in; hue → volt blue                                    | Color only                             |
 | any → error              | Clear but not dramatic               | `slow`, `spring`                      | Body contracts to 0.86 and recovers; coral ripple; orbits pause                 | Coral hue + label, no contraction      |
 | error → idle             | Recovery                             | `cinematic` color                     | Orbits resume, hue returns to ice                                               | Color only                             |
 
 Settle timing lives in the Rust shell (`runtime::schedule_settle`) and is discarded
-if a newer request changed the state first.
+if a newer request changed the state first. `awaitingConfirmation` does not
+settle on a timer; it ends with the user's decision or the confirmation's expiry
+(`runtime::schedule_expiry`).
 
 ## Command Center motion
 
@@ -105,7 +109,7 @@ if a newer request changed the state first.
 | Sending                       | Signal dot pulses (1 s) while the core works                                |
 | Memory meter                  | `scaleX` over `cinematic`                                                   |
 | Ambient                       | 28 s drift, alternate; re-tint over `cinematic`                             |
-| Confirmation (v0.1)           | Dialog rises 8 px with `enter`; backdrop dims over `default`; no bounce     |
+| Confirmation                  | Dialog rises over `slow` with `enter`; backdrop fades in over `default`; no bounce. A 1 px state-colored line marks the top edge; the expiry meter shrinks linearly (`scaleX`) |
 | Notification (v0.1)           | From the companion: slides 8 px, holds, fades with `exit`                   |
 
 ## Performance

@@ -30,14 +30,17 @@ deliberately minimal.
 | Works today                                                                 | Not yet                                                        |
 | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Command Center (Home, Activity, Settings) and floating companion            | AI provider / natural language understanding (v0.1)            |
-| Shared assistant state with animated transitions across both windows        | Opening apps, files, battery (v0.1)                            |
-| Typed command pipeline: intent → policy → tool → audit → response           | Confirmation UI, persistent settings (v0.1)                    |
+| Shared assistant state with animated transitions across both windows        | Files, battery, folders (v0.1)                                 |
+| Typed command pipeline: intent → policy → tool → audit → response           | Persistent settings and remembered permissions (v0.1)          |
 | Safe tools: system info, memory, processor load                             | Voice (v0.3), e-mail/calendar (v0.4), skills (v0.5)            |
-| Live telemetry, activity log, developer state preview                       | Installer for end users (v0.9)                                 |
-| Interface in English, Español and Português, switchable live                | Conversation language independent of the UI (v0.3)             |
+| Windows: open and close installed applications by name ("Abre Spotify"), with a trusted confirmation before closing | Installer for end users (v0.9) |
+| Tray icon, global shortcut (Ctrl+Alt+Space), single instance, × hides       | Configurable shortcut, start with Windows (v0.1)               |
+| Live telemetry, activity log, developer state preview                       | Conversation language independent of the UI (v0.3)             |
+| Interface in English, Español and Português, switchable live                |                                                                |
 
-Anything SERSHI can't do yet, it says so. Windows-specific window behaviour is
-**not yet validated on Windows hardware** — see
+Anything SERSHI can't do yet, it says so. Windows-specific behaviour — window
+handling, application control, tray and shortcut — compiles and passes CI on
+Windows but is **not yet validated on Windows hardware** — see
 [Windows platform](docs/WINDOWS_PLATFORM.md#validation-status).
 
 ![Companion states](docs/assets/companion-states.webp)
@@ -92,7 +95,7 @@ docs/                    architecture, security, design, ADRs
 [Agent model](docs/AGENT_MODEL.md) · [Security](docs/SECURITY.md) ·
 [Design system](docs/DESIGN_SYSTEM.md) · [Motion](docs/MOTION_SYSTEM.md) ·
 [Brand](docs/BRAND.md) · [Localization](docs/LOCALIZATION.md) · [Windows](docs/WINDOWS_PLATFORM.md) ·
-[Testing](docs/TESTING.md) · [Skills](docs/SKILLS.md) · [Memory](docs/MEMORY.md) ·
+[Applications](docs/APPLICATIONS.md) · [Testing](docs/TESTING.md) · [Skills](docs/SKILLS.md) · [Memory](docs/MEMORY.md) ·
 [Roadmap](docs/ROADMAP.md) · [Decisions](docs/adr/README.md)
 
 ## Roadmap

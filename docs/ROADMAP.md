@@ -17,20 +17,37 @@ validation.
 - ✅ Localization foundation: English, Español (Latinoamérica), Português (Brasil)
 - ⏳ Manual Windows validation ([checklist](WINDOWS_PLATFORM.md#manual-validation-checklist))
 
+### Prompt 1 — Windows Native Operator (implemented, pending Windows validation)
+
+- ✅ Application discovery (built-ins, `shell:AppsFolder`, Start Menu, App Paths)
+  with aliases and deterministic resolution ([APPLICATIONS.md](APPLICATIONS.md))
+- ✅ `system.open_application` (safe) and `system.close_application` (sensitive,
+  graceful `WM_CLOSE`, always confirmed)
+- ✅ Trusted confirmation lifecycle owned by Rust: one-time, expiring,
+  tool-matched; `AwaitingConfirmation` state and dialog
+- ✅ Tray (Open / Hide / Quit), global shortcut `Ctrl+Alt+Space`, single
+  instance, × hides instead of quitting
+- ✅ Settings → Windows integration; Developer Mode catalog inspector
+- ⏳ Physical Windows validation ([checklist](WINDOWS_PLATFORM.md#manual-validation-checklist), items A1–A29)
+
 ## v0.1 — Operator
 
 **Objective:** the v0.1 journey works on Windows: launch → companion → "Open
 Spotify" → policy → Spotify opens → success.
 
-- Windows app launcher (`system.open_application`), safe close, battery, open folder,
-  file search in permitted folders
-- Confirmation UI and one-time / remembered grants
+- ✅ Windows app launcher (`system.open_application`) and safe close (Prompt 1)
+- Battery, open folder, file search in permitted folders
+- ✅ Confirmation UI with one-time approvals (Prompt 1); remembered grants need
+  `sershi-storage`
 - `sershi-storage` (SQLite): settings, grants, persistent activity
 - `CredentialStore` (Windows Credential Manager)
 - First `LlmProvider` (Ollama, local) + model-backed `IntentResolver`; keyword
   resolver as fallback
-- Tray icon, global shortcut (Command Center + Quick Command `Alt+Space`),
-  companion click-through and size/position settings
+- ✅ Tray icon and global shortcut (Prompt 1; `Ctrl+Alt+Space`, since `Alt+Space`
+  belongs to Windows and PowerToys). Configurable shortcut, Quick Command,
+  companion click-through and size/position settings remain
+- Per-category launch policy (e.g. confirm before opening shells or security
+  tools when requests are model-proposed)
 - Async execution runtime with tool timeouts and cancellation
 
 **Excludes:** voice, cloud providers other than optional OpenAI/Anthropic adapters,

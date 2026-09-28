@@ -28,7 +28,11 @@ conversation language; fixed product copy follows the interface language.
 The rule-based intent resolver already recognises English, Spanish and
 Portuguese keywords (`crates/sershi-core/src/intent.rs`). This is vocabulary
 matching so the suggestions shown in every interface language work. It is not
-language detection.
+language detection. Application commands work in all three languages whatever
+the interface language: open (`open`/`launch`/`start`/`run`,
+`abre`/`abrir`/`inicia`/`ejecuta`, `abra`/`abrir`/`inicie`/`execute`) and close
+(`close`/`quit`/`exit`, `cierra`/`cerrar`, `feche`/`fechar`/`encerre`). Only
+imperatives act; see [APPLICATIONS.md](APPLICATIONS.md#intent-parsing).
 
 ## Locale selection
 
@@ -118,6 +122,26 @@ the interface language (`i18n/domain.ts`). The core's English `reply` and
 something it cannot phrase, such as a new tool without translations yet. The
 conversation stores outcomes rather than rendered text, so past replies
 re-render when the language changes.
+
+### Application names
+
+Built-in Windows applications have localized display names in the UI
+(`apps.calculator`, `apps.notepad`, `apps.explorer`, `apps.settings`) and are
+recognised under their names in every supported language (“Calculadora”,
+“Bloc de notas”, “Explorador de archivos”, “Configuración”, “Configurações”…).
+Third-party application names come from the system as discovered and are never
+translated.
+
+### Surfaces outside the WebView
+
+- **Tray menu.** Rust creates it with English labels; the Command Center sends
+  the current language's `tray.*` labels through `set_tray_labels` at start-up
+  and whenever the language changes. Rust validates them (≤ 48 characters, no
+  control characters); the actions behind each item are fixed and cannot be
+  changed by the labels.
+- **Confirmation dialog.** Rendered by the Command Center from structured
+  fields (`action`, `subject`, `reason`), so it follows the interface language.
+  It never shows free text from the request or a model.
 
 ### What is not localized
 

@@ -60,12 +60,21 @@ flowchart LR
 | Model-proposed sensitive actions confirm    | `policy.rs`                                                  | `model_proposed_sensitive_actions_need_confirmation_even_when_granted` |
 | Validated identifiers (no injection via ids) | `sershi-core::ids`                                          | `rejects_malformed_or_hostile_ids`                   |
 | Strict tool inputs (`deny_unknown_fields`)  | `tool::parse_input`                                          | `rejects_unexpected_input`                           |
-| Command length limit (1000 chars)           | `service.rs`                                                 | `invalid_requests_are_rejected_without_state_changes` |
-| Activity never stores user text or error details | `service.rs`, `executor.rs`                             | `user_command_text_never_reaches_the_activity_log`, `failures_are_reported_without_leaking_details_into_activity` |
+| Command length limit (1000 chars)           | `service/`                                                   | `invalid_requests_are_rejected_without_state_changes` |
+| Activity never stores user text or error details | `service/`, `executor.rs`                               | `user_command_text_never_reaches_the_activity_log`, `failures_are_reported_without_leaking_details_into_activity` |
+| Application tools take a name, never a path, command or argument | `apps/tools.rs` (`requested_name`, ≤ 80 chars, `\ / : < > \| " * ?` and control chars rejected) | `never_accepts_paths_commands_or_extra_fields`, `application_names_are_passed_as_data_not_commands` |
+| Launch without a shell (`CreateProcessW`, `IApplicationActivationManager`; `ShellExecuteExW` only for fixed `ms-settings:` and installer shortcuts) | `sershi-platform/src/windows/launch.rs`, `packaged.rs` | Review; `cargo clippy --target x86_64-pc-windows-msvc` |
+| Ambiguous or unknown names never launch     | `apps/catalog.rs`, `apps/tools.rs`                           | `ambiguous_requests_are_never_guessed`, `not_found_and_ambiguous_never_launch` |
+| Close is graceful only (`WM_CLOSE`; no `TerminateProcess`, no `taskkill`) and never targets Explorer, Settings or SERSHI | `windows/close.rs`, `windows/known.rs` | Review |
+| No elevation: SERSHI never requests administrator rights or triggers UAC itself | `windows/launch.rs` (`ERROR_ELEVATION_REQUIRED` → structured error) | `launch_errors_are_structured_without_internal_details` |
+| Trusted confirmations (see below)           | `confirmation.rs`, `service/`, `executor.rs`                 | `service/tests.rs` confirmation suite, `confirmation.rs` tests |
+| `decide_confirmation` granted to the Command Center only | `capabilities/command-center.json`             | `commands.test.ts`                                   |
+| No paths in outcomes, activity or UI (`ApplicationSummary` only) | `apps/model.rs`, `apps/tools.rs`               | `commands.test.ts` ("no paths in outcomes"), `launch_errors_are_structured_without_internal_details` |
+| Tray labels validated (≤ 48 chars, no control chars); actions fixed | `ipc.rs` `TrayLabels::is_valid`             | `ipc.rs` tests                                       |
 | Strict Content-Security-Policy              | `tauri.conf.json` (`script-src 'self'`, `style-src 'self'`, no remote origins) | Manual review                                |
 | Frozen JS prototypes                        | `tauri.conf.json` `freezePrototype`                          | Manual review                                        |
 | Only `src/ipc` may import Tauri APIs        | `eslint.config.js`                                           | `pnpm lint`                                          |
-| No `unsafe` Rust; no `unwrap`/`expect`/`panic` in production code | Workspace lints                        | `cargo clippy -D warnings`                           |
+| No `unsafe` Rust outside the Win32 FFI module; no `unwrap`/`expect`/`panic` in production code | Workspace lints (`unsafe_code = "deny"`; only `sershi-platform/src/windows` opts out, each block commented) | `cargo clippy -D warnings` (Linux and Windows targets) |
 | No secrets in the repository                | `.gitignore` (`.env*`, keys)                                 | Review                                               |
 | No telemetry or network calls               | Fonts bundled locally; CSP `connect-src` is IPC only         | Review                                               |
 | Install scripts restricted                  | `pnpm-workspace.yaml` `onlyBuiltDependencies`                | Review                                               |
@@ -80,11 +89,43 @@ flowchart LR
 | **Prohibited**| Anything on the policy deny-list                            | Never runs                                                                                             |
 
 Permissions are namespaced (`system.info.read`, `files.write`, `spotify.control`)
-with per-user state `granted` / `ask` / `denied`. Only `system.info.read` is granted
-by default. Grants are user data (persisted in v0.1), never inferred by a model, and
+with per-user state `granted` / `ask` / `denied`. Granted by default:
+`system.info.read` and `system.apps.launch` (opening an application the user
+names is equivalent to clicking it in the Start Menu). `system.apps.close` is
+`ask`, so closing always confirms. Grants are user data (persisted in v0.1), never inferred by a model, and
 changing personality or prompts cannot change them.
 
-### Confirmation design (v0.1, with the first sensitive tool)
+### Trusted confirmations (implemented)
+
+The first sensitive tool, `system.close_application`, introduced the
+confirmation lifecycle ([ADR 0010](adr/0010-trusted-confirmation-lifecycle.md)):
+
+- The pending call is stored **in Rust** (`ConfirmationStore`). The UI only
+  receives an opaque id plus display data, and can only answer
+  `{ confirmationId, toolId, approved }`.
+- Ids are 32 hex characters derived from the standard library's OS-seeded
+  `RandomState` (not a CSPRNG). They are unguessable handles, not secrets: the
+  real guarantees are that only the core issues them, the decision must also
+  name the pending tool, and each id works once. Malformed ids are rejected
+  at deserialization.
+- `take()` is **one-time**: a confirmation is consumed on approval, cancel,
+  expiry **and** on a mismatched tool id, so replays and guesses do nothing.
+- Expiry: 90 s, enforced at decision time; at most 8 pending.
+- On approval the executor **re-runs policy** (a revoked permission still wins)
+  and **re-resolves** the application; if it no longer matches what the user
+  approved, nothing runs (`SubjectChanged`).
+- The dialog names the **resolved** application from trusted discovery data,
+  never the request text or model output.
+- Remembering is never offered today (`canRemember: false`); no authorization
+  state lives in `localStorage`.
+- A new request, dismissing the assistant or hiding the Command Center cancels
+  pending confirmations. Every step is audited (`confirmationRequired`,
+  `confirmationApproved`, `confirmationCancelled`, `confirmationExpired`).
+
+The dialog is modal, focuses **Cancel** first, cancels on Escape and shows the
+remaining time.
+
+### Confirmation copy
 
 A confirmation must state **what** SERSHI wants to do, **what data** is affected,
 **why** it needs permission, and **whether** the decision can be remembered.
@@ -142,7 +183,11 @@ privacy-preserving.
 | Credential theft from disk                          | OS credential store; nothing plaintext                                                          |
 | Sensitive data in logs or bug reports               | Template-only activity; redaction rules for diagnostics                                         |
 | Supply-chain compromise via dependencies            | Minimal dependencies, lockfiles, restricted install scripts, `--locked` CI builds              |
-| UI spoofing of confirmations                        | (v0.1) Confirmations rendered by trusted surfaces with state that the model cannot author       |
+| UI spoofing of confirmations                        | Pending calls live in Rust; the UI can only approve an id the core issued, once, for the same tool; subject from trusted discovery |
+| Text → command injection via application names      | Names are data resolved against a discovered catalog; no shell, no arguments, path-like input rejected |
+| Launching a malicious binary                        | Only discovered targets (Start Menu, App Paths, packages, built-ins) can launch; SERSHI trusts what the user or an installer already registered, like the Start Menu does |
+| Elevation abuse                                     | No elevation requests; `ERROR_ELEVATION_REQUIRED` is reported, never retried elevated           |
+| Data loss by closing apps                           | Sensitive + confirmation; `WM_CLOSE` only, so apps can prompt to save; no forced termination   |
 
 ## Assumptions
 

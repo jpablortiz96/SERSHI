@@ -78,6 +78,7 @@ element that derives from it. Derive tints with `color-mix(in oklab, var(--state
 | speaking     | `state.speaking`  | `#7fe6f2` aqua           | Responding                       |
 | success      | `state.success`   | `#5fe3b0` mint           | Completed                        |
 | warning      | `state.warning`   | `#f2b870` ember          | Needs attention (rare warmth)    |
+| awaitingConfirmation | `state.awaitingConfirmation` | `#ecc98a` soft gold | Waiting for the user's approval — warm like warning, but paler and calmer: a question, not a problem |
 | error        | `state.error`     | `#f2777a` coral          | Failed                           |
 | offline      | `state.offline`   | `#6b7486`                | Condition: no connectivity       |
 | private      | `state.private`   | `#c9d2de`                | Condition: mic/screen off        |
@@ -175,6 +176,8 @@ the mark. Icons label actions; they never replace text for important meaning.
 | Press                 | scale 0.94–0.97, `duration.instant`; release with `ease.spring`                      |
 | Tooltip               | CSS `data-tip`, fade + 4 px rise, `duration.fast` / `ease.enter`                    |
 | Disabled              | `text.disabled`, `not-allowed` cursor, and a reason (tooltip or label)               |
+| Confirmation dialog   | Modal (`role="dialog"`, `aria-modal`), overlay surface, `radius.xl`, `shadow.e3`. States the action, the resolved subject and the risk in plain words; primary button names the action ("Close Notepad"), never "OK" / "Allow action?". **Cancel is focused first**; Escape cancels; focus is trapped and restored. A countdown (tabular numerals) and a shrinking meter show the time left. Nothing in it comes from request text or a model |
+| Candidate choices     | When a name is ambiguous, the reply lists candidates as secondary buttons; choosing one re-asks with the exact name |
 
 ## Accessibility
 

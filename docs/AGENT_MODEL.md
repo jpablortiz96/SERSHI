@@ -15,21 +15,26 @@ User → Request → Intent/Plan → ToolCall → Policy → Permission → Risk
 
 | Entity                | Where (today)                          | Notes                                                                                   |
 | --------------------- | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `AssistantState`      | `sershi-core::assistant`               | 11 states; see [ARCHITECTURE.md](ARCHITECTURE.md#assistant-state)                        |
+| `AssistantState`      | `sershi-core::assistant`               | 12 states (incl. `awaitingConfirmation`); see [ARCHITECTURE.md](ARCHITECTURE.md#assistant-state)                        |
 | `AssistantSnapshot`   | `assistant`                            | state + preview + revision; broadcast to every surface                                   |
 | `CommandRequest`      | `service`                              | Raw user text (≤ 1000 chars). Never persisted by the core                                 |
 | `Intent`              | `intent`                               | `UseTool(ToolCall)` · `Reply` · `NotYetAvailable` · `NotUnderstood`                       |
 | `ToolDefinition`      | `tool`                                 | id, name, description, input/output JSON Schema, permissions, risk, timeout, platforms    |
 | `ToolCall`            | `tool`                                 | tool id + typed JSON input + origin (`User` / `Agent` / `Routine`)                       |
-| `ToolOutput`          | `tool`                                 | structured `data` + tool-composed human `summary`                                        |
+| `ToolOutput`          | `tool`                                 | structured `data` + tool-composed human `summary` + optional trusted `subject` (e.g. the resolved application name, for activity) |
+| `Prepared`            | `tool`                                 | Result of `Tool::prepare`: the confirmation action and trusted `ConfirmationSubject`     |
 | `RiskLevel`           | `tool`                                 | `safe` · `sensitive` · `highRisk`                                                        |
 | `PermissionId`/`PermissionState` | `ids`, `permission`         | namespaced id; `granted` · `ask` · `denied`                                              |
 | `PolicyDecision`      | `policy`                               | `Allow` · `Confirm { reason, can_remember }` · `Deny(reason)`                            |
-| `ConfirmationRequest` | `executor`                             | What the user must approve                                                                |
-| `ExecutionOutcome`    | `executor`                             | `completed` · `confirmationRequired` · `denied` · `failed`                               |
-| `CommandOutcome`      | `service`                              | What the UI receives: status, tool id, data, structured `detail`, duration, and a canonical English `reply` used as fallback |
+| `ConfirmationRequest` | `confirmation`                         | What the user must approve: opaque id, tool id, action, trusted subject, reason, expiry, `canRemember: false` |
+| `ConfirmationDecision`| `service`                              | The UI's only input: `{ confirmationId, toolId, approved }`                               |
+| `ConfirmationStore`   | `confirmation`                         | Pending calls kept in Rust; one-time, expiring, tool-matched                              |
+| `ExecutionOutcome`    | `executor` (internal)                  | `Completed` · `ConfirmationRequired` · `Denied` · `Declined` · `Failed` · `SubjectChanged` |
+| `ApplicationDescriptor` / `ApplicationSummary` | `apps::model`  | Discovered application (internal) / its path-free projection for the UI ([APPLICATIONS.md](APPLICATIONS.md)) |
+| `ApplicationResult`   | `apps::tools`                          | Structured app tool data: `opened` · `notFound` · `ambiguous` · `launchFailed` · `closeRequested` · `notRunning` · `closeUnsupported` · `catalogUnavailable` |
+| `CommandOutcome`      | `service`                              | What the UI receives: status (incl. `unresolved`, `cancelled`, `expired`), tool id, data, structured `detail`, `confirmation`, duration, and a canonical English `reply` used as fallback |
 | `OutcomeDetail`       | `service`                              | `answer` · `unavailable` (capability id, milestone) · `denied` (reason) · `rejected` (reason) — lets surfaces phrase replies in the interface language |
-| `ActivityEntry`       | `activity`                             | Audit record; never contains user content                                                |
+| `ActivityEntry`       | `activity`                             | Audit record; never contains user content. `subject` holds only a resolved display name from trusted data |
 | `PlatformCapability`  | `platform`                             | Honest per-platform capability status                                                    |
 | `AgentPlan`           | _v0.1+_                                | Ordered `ToolCall`s with dependencies; rendered as the Planning state                    |
 | `Conversation`/`Message` | UI session store (`state/conversation.ts`) | Session-only today; persisted metadata in v0.7                                  |
@@ -54,19 +59,25 @@ owns only presentation and the session transcript.
    - v0.1: an LLM-backed resolver presents tool definitions as function schemas and
      returns structured calls with `CallOrigin::Agent`. Free-form text output is a
      reply, never an action.
-3. **Plan** (v0.1+). Multi-step requests become an `AgentPlan`; the Planning state
-   is shown; each step is still an individual `ToolCall`.
+3. **Plan.** The Planning state covers policy and the tool's own `prepare`
+   step (e.g. resolving "Notepad" against the application catalog and checking
+   it is running). `prepare` is read-only; it can answer early ("not found",
+   "ambiguous", "isn't running") without asking for approval. Multi-step
+   requests become an `AgentPlan` in v0.1+; each step is still an individual
+   `ToolCall`.
 4. **Policy.** `PolicyEngine::evaluate` decides from the _registered_ definition,
    the grants, the platform and the origin ([ADR 0003](adr/0003-agent-tool-security-model.md)).
-5. **Confirmation.** If required, the call is returned as a `ConfirmationRequest`
-   and not executed (implemented). In v0.1 the confirmation UI lets the user approve,
-   which re-submits the same call with a one-time grant.
+5. **Confirmation** (implemented). If required, the call is stored in the
+   `ConfirmationStore` and the state becomes `AwaitingConfirmation`; the UI gets a
+   `ConfirmationRequest`. Approving runs the **stored** call once, re-checking
+   policy and the resolved subject ([ADR 0010](adr/0010-trusted-confirmation-lifecycle.md)).
+   Cancel, expiry (90 s), a new request or dismissal discard it.
 6. **Execution.** The tool parses its input into a typed struct
    (`deny_unknown_fields`), calls its port, and returns data plus a summary.
 7. **Audit.** The executor records requested / denied / confirmation / completed /
    failed activity with durations, without payloads.
 8. **Response.** The service maps the outcome to a `CommandOutcome` and a state
-   (`Success`, `Warning`, `Error`), then settles to `Idle`.
+   (`Success`, `Warning`, `Error`, `AwaitingConfirmation`), then settles to `Idle`.
 
 ## Tools shipped today
 
@@ -75,13 +86,18 @@ owns only presentation and the session transcript.
 | `system.get_info`   | safe | `system.info.read` | windows, linux, macos     | REQUIRES_WINDOWS_VALIDATION    |
 | `system.get_memory` | safe | `system.info.read` | windows, linux, macos     | REQUIRES_WINDOWS_VALIDATION    |
 | `system.get_cpu`    | safe | `system.info.read` | windows, linux, macos     | REQUIRES_WINDOWS_VALIDATION    |
+| `system.open_application`  | safe      | `system.apps.launch` (granted by default) | windows | REQUIRES_WINDOWS_VALIDATION |
+| `system.close_application` | sensitive | `system.apps.close` (ask)                 | windows | REQUIRES_WINDOWS_VALIDATION |
+
+Both application tools take exactly `{ "application": "<name>" }` — never a
+path, command line or arguments — and resolve it against the discovered
+catalog. Close always confirms and only sends `WM_CLOSE`. See
+[APPLICATIONS.md](APPLICATIONS.md).
 
 ## v0.1 tools (designed)
 
 | Tool                         | Risk      | Permission            | Notes                                                                      |
 | ---------------------------- | --------- | --------------------- | -------------------------------------------------------------------------- |
-| `system.open_application`    | safe      | `system.apps.launch`  | Resolves a known app (App Paths, Start menu) to an executable; never a shell string |
-| `system.close_application`   | sensitive | `system.apps.close`   | Graceful close (`WM_CLOSE`) of an app SERSHI can identify; never force-kill by default |
 | `system.get_battery`         | safe      | `system.info.read`    | `GetSystemPowerStatus`                                                     |
 | `files.open_folder`          | safe      | `files.folders.open`  | Known folders + user-approved roots                                        |
 | `files.search`               | safe      | `files.read`          | Only within permitted directories                                          |

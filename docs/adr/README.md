@@ -14,5 +14,7 @@ such.
 | [0006](0006-windows-platform-boundary.md)       | One platform crate with a `cfg(windows)` module    | Accepted |
 | [0007](0007-frontend-state-management.md)       | Rust owns state; Zustand mirrors it                | Accepted |
 | [0008](0008-license.md)                         | Apache-2.0                                         | Proposed |
+| [0009](0009-windows-application-discovery.md)   | Discovered apps, native launch, graceful close     | Accepted |
+| [0010](0010-trusted-confirmation-lifecycle.md)  | Rust-owned, one-time, expiring confirmations       | Accepted |
 
 Template: `Status · Context · Decision · Alternatives · Consequences`.
