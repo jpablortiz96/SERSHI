@@ -102,7 +102,7 @@ export const ptBR: Messages = {
     cpuWarmingUp:
       "Seu processador ainda está fazendo a primeira medição em {cores} núcleos. Pergunte de novo em instantes.",
     systemInfo: "{os} em {arch}, {cpu} com {cores} núcleos lógicos e {memory} GB de memória.",
-    needsConfirmation: "A ferramenta “{tool}” precisa da sua aprovação antes de ser executada.",
+    needsConfirmation: "“{tool}” aguarda sua aprovação na janela de confirmação.",
     denied: {
       unknownTool: "Não posso usar a ferramenta “{tool}” porque ela não está instalada.",
       prohibited: "Não posso usar a ferramenta “{tool}” porque ela está bloqueada pela política.",
@@ -289,7 +289,6 @@ export const ptBR: Messages = {
       groupLabel: "Prévia do estado do assistente",
       live: "Ao vivo",
       catalog: "Aplicativos detectados",
-      previewConfirmation: "Prévia de confirmação",
     },
     about: {
       version: "Versão",
@@ -324,7 +323,7 @@ export const ptBR: Messages = {
   },
 
   confirm: {
-    label: "Aprovação necessária",
+    label: "Confirmação necessária",
     closeApplication: {
       title: "Fechar {app}?",
       body: "O SERSHI vai pedir para {app} fechar as janelas.",
@@ -342,8 +341,10 @@ export const ptBR: Messages = {
       agentInitiatedSensitiveAction: "Esta ação foi proposta automaticamente.",
     },
     cancel: "Cancelar",
+    dismiss: "Cancelar e fechar",
     expires: "Expira em {seconds} s",
-    preview: "Apenas prévia — nada será executado.",
+    expired: "Esta solicitação expirou.",
+    unavailable: "Esta solicitação não aguarda mais sua aprovação.",
   },
 
   tray: {

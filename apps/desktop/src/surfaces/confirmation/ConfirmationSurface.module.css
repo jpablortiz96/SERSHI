@@ -1,31 +1,26 @@
-/* Trusted approval surface: calm, specific, unmistakably SERSHI's own. */
+/*
+ * Trusted approval surface: its own compact window. Calm, specific,
+ * unmistakably SERSHI's own — not a browser alert or a system message box.
+ */
 
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-  display: grid;
-  place-items: center;
-  padding: var(--space-6);
-  background: rgb(4 5 7 / 0.62);
-  animation: fade var(--duration-default) var(--ease-standard) both;
-}
-
-.dialog {
+.surface {
   position: relative;
-  width: min(460px, 100%);
-  padding: var(--space-6);
-  border-radius: var(--radius-xl);
-  background: var(--surface-overlay);
-  box-shadow:
-    inset 0 0 0 1px var(--border-subtle),
-    var(--shadow-e3);
-  animation: rise var(--duration-slow) var(--ease-enter) both;
-  outline: none;
+  display: grid;
+  height: 100vh;
+  padding: var(--space-5) var(--space-6) var(--space-5);
+  background:
+    radial-gradient(
+      120% 70% at 50% -10%,
+      color-mix(in oklab, var(--state-color) 9%, transparent),
+      transparent 70%
+    ),
+    var(--surface-overlay);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  overflow: hidden;
 }
 
 /* A single line of state light along the top edge. */
-.dialog::before {
+.surface::before {
   content: "";
   position: absolute;
   inset: 0 var(--space-8) auto;
@@ -38,6 +33,23 @@
   );
 }
 
+.dialog {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  animation: rise var(--duration-slow) var(--ease-enter) both;
+  outline: none;
+}
+
+.notice {
+  align-self: center;
+  justify-self: center;
+  margin: 0;
+  max-width: 32ch;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -45,12 +57,53 @@
   margin-bottom: var(--space-4);
 }
 
-.glyph {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--state-color);
-  box-shadow: 0 0 10px var(--state-color);
+.mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-size: var(--type-caption-size);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--text-secondary);
+}
+
+.label {
+  margin: 0 0 var(--space-1);
+  color: color-mix(in oklab, var(--state-color) 70%, var(--text-secondary));
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-tertiary);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.close:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.close svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
 }
 
 .risk {
@@ -103,7 +156,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin: var(--space-5) 0 var(--space-6);
+  margin: auto 0 var(--space-4);
+  padding-top: var(--space-4);
   color: var(--text-tertiary);
 }
 
@@ -180,10 +234,23 @@
   opacity: var(--opacity-disabled);
 }
 
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
+/* Arming: Approve fades in rather than snapping, and ignores input meanwhile. */
+.confirm[data-armed="false"] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.confirm[data-armed="true"] {
+  transition:
+    opacity var(--duration-default) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-default) var(--ease-standard),
+    transform var(--duration-default) var(--ease-spring);
+}
+
+/* High risk (future tools): a stronger, not alarming, accent. */
+.dialog[data-level="highRisk"] .caution {
+  color: color-mix(in oklab, var(--state-error) 60%, var(--text-primary)) !important;
 }
 
 @keyframes rise {
@@ -200,7 +267,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .backdrop,
   .dialog {
     animation-duration: var(--duration-instant);
   }

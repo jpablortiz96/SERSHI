@@ -34,8 +34,6 @@ function statusOf(reply: Reply): Status {
       return "offline";
     case "unreachable":
       return "failed";
-    case "expired":
-      return "expired";
   }
 }
 
@@ -47,8 +45,6 @@ function replyText({ t, format }: I18n, reply: Reply): string {
       return t("reply.offline");
     case "unreachable":
       return t("reply.coreUnreachable");
-    case "expired":
-      return t("reply.expired");
   }
 }
 

@@ -10,16 +10,13 @@ import type { CommandOutcome } from "@sershi/contracts";
 import { create } from "zustand";
 
 import { desktopRuntime, sershi } from "../ipc";
-import { useConfirmation } from "./confirmation";
 
 export type Reply =
   | { kind: "outcome"; outcome: CommandOutcome }
   /** Browser preview: no core to answer. */
   | { kind: "offline" }
   /** The IPC call itself failed. */
-  | { kind: "unreachable" }
-  /** A confirmation dialog timed out before the user decided. */
-  | { kind: "expired" };
+  | { kind: "unreachable" };
 
 export type Message =
   { id: number; role: "user"; text: string } | { id: number; role: "sershi"; reply: Reply };
@@ -28,7 +25,7 @@ interface ConversationStore {
   messages: Message[];
   pending: boolean;
   submit: (text: string) => Promise<void>;
-  /** Adds a reply that did not come from `submit` (e.g. a confirmation decision). */
+  /** Adds a reply that did not come from `submit` (a decision on the confirmation surface). */
   addReply: (reply: Reply) => void;
   clear: () => void;
 }
@@ -66,13 +63,11 @@ export const useConversation = create<ConversationStore>((set, get) => {
 
       set({ pending: true });
       try {
-        // A new request replaces any pending approval (the core cancels it too).
-        useConfirmation.getState().clear();
+        // A new request cancels any pending approval (in the core). If this
+        // one needs approval, the core opens the confirmation window; this
+        // surface only learns that approval is pending.
         const outcome = await sershi.submitCommand(text);
         push({ role: "sershi", reply: { kind: "outcome", outcome } });
-        if (outcome.status === "needsConfirmation" && outcome.confirmation) {
-          useConfirmation.getState().show(outcome.confirmation);
-        }
       } catch {
         push({ role: "sershi", reply: { kind: "unreachable" } });
       } finally {

@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 
-import { ConfirmationDialog } from "../../components/confirmation/ConfirmationDialog";
 import { Ambient } from "../../components/shell/Ambient";
 import { TitleBar, VIEWS, type View } from "../../components/shell/TitleBar";
 import { useI18n } from "../../i18n";
 import { desktopRuntime, sershi } from "../../ipc";
 import { connectActivity } from "../../state/activity";
 import { connectAssistant, useDisplayState } from "../../state/assistant";
-import { restorePendingConfirmation } from "../../state/confirmation";
+import { useConversation } from "../../state/conversation";
 import { ActivityView } from "./ActivityView";
 import styles from "./CommandCenter.module.css";
 import { HomeView } from "./HomeView";
@@ -21,7 +20,11 @@ export function CommandCenter() {
   useEffect(() => {
     const disconnectAssistant = connectAssistant();
     const disconnectActivity = connectActivity();
-    restorePendingConfirmation();
+    // Approvals happen in the trusted confirmation window; their outcomes
+    // (approved, cancelled, expired) arrive here for the transcript.
+    const stopOutcomes = sershi.onCommandOutcome((outcome) => {
+      useConversation.getState().addReply({ kind: "outcome", outcome });
+    });
     // Summon (companion, tray, shortcut) always lands on the command input.
     const stopFocus = sershi.onFocusCommand(() => {
       setView("home");
@@ -30,6 +33,7 @@ export function CommandCenter() {
       disconnectAssistant();
       disconnectActivity();
       stopFocus();
+      stopOutcomes();
     };
   }, []);
 
@@ -72,7 +76,6 @@ export function CommandCenter() {
         {view === "activity" && <ActivityView />}
         {view === "settings" && <SettingsView />}
       </main>
-      <ConfirmationDialog />
     </div>
   );
 }

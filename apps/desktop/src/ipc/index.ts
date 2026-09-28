@@ -3,13 +3,12 @@ import {
   isActivityEntry,
   isAssistantSnapshot,
   isCommandOutcome,
-  isConfirmationRequest,
   isNullPayload,
   isSystemSnapshot,
   type ActivityEntry,
   type AssistantSnapshot,
   type AssistantState,
-  type ConfirmationRequest,
+  type CommandOutcome,
   type TrayLabels,
 } from "@sershi/contracts";
 
@@ -28,18 +27,6 @@ export const sershi = {
   getRuntimeInfo: () => call("get_runtime_info", {}),
   listActivity: (limit: number) => call("list_activity", { limit }, isActivityList),
   submitCommand: (text: string) => call("submit_command", { request: { text } }, isCommandOutcome),
-  decideConfirmation: (request: ConfirmationRequest, approved: boolean) =>
-    call(
-      "decide_confirmation",
-      { decision: { confirmationId: request.id, toolId: request.toolId, approved } },
-      isCommandOutcome,
-    ),
-  getPendingConfirmation: () =>
-    call(
-      "get_pending_confirmation",
-      {},
-      (v): v is ConfirmationRequest | null => v === null || isConfirmationRequest(v),
-    ),
   getApplicationCatalog: () => call("get_application_catalog", {}),
   refreshApplicationCatalog: () => call("refresh_application_catalog", {}),
   getIntegrationStatus: () => call("get_integration_status", {}),
@@ -56,4 +43,7 @@ export const sershi = {
   onActivity: (handler: (entry: ActivityEntry) => void) =>
     subscribe(EVENTS.activity, isActivityEntry, handler),
   onFocusCommand: (handler: () => void) => subscribe(EVENTS.focusCommand, isNullPayload, handler),
+  /** Outcomes of confirmations decided on the trusted surface (or expired). */
+  onCommandOutcome: (handler: (outcome: CommandOutcome) => void) =>
+    subscribe(EVENTS.commandOutcome, isCommandOutcome, handler),
 };

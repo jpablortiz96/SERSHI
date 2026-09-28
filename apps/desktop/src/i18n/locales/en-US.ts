@@ -103,7 +103,7 @@ export const enUS = {
     cpuWarmingUp:
       "Your processor is still taking its first measurement across {cores} cores — ask again in a moment.",
     systemInfo: "{os} on {arch}, {cpu} with {cores} logical cores and {memory} GB of memory.",
-    needsConfirmation: "{tool} needs your approval before it can run.",
+    needsConfirmation: "{tool} is waiting for your approval in the confirmation window.",
     denied: {
       unknownTool: "I can't use {tool} because that tool isn't installed.",
       prohibited: "I can't use {tool} because it is blocked by policy.",
@@ -285,7 +285,6 @@ export const enUS = {
       groupLabel: "Preview assistant state",
       live: "Live",
       catalog: "Discovered applications",
-      previewConfirmation: "Preview confirmation",
     },
     about: {
       version: "Version",
@@ -320,7 +319,7 @@ export const enUS = {
   },
 
   confirm: {
-    label: "Approval required",
+    label: "Confirmation required",
     closeApplication: {
       title: "Close {app}?",
       body: "SERSHI will ask {app} to close its windows.",
@@ -338,8 +337,10 @@ export const enUS = {
       agentInitiatedSensitiveAction: "This action was proposed automatically.",
     },
     cancel: "Cancel",
+    dismiss: "Cancel and close",
     expires: "Expires in {seconds} s",
-    preview: "Preview only — nothing will run.",
+    expired: "This request expired.",
+    unavailable: "This request is no longer waiting for approval.",
   },
 
   tray: {

@@ -1,15 +1,9 @@
-import type {
-  ApplicationCatalogInfo,
-  ConfirmationRequest,
-  FeatureStatus,
-  IntegrationStatus,
-} from "@sershi/contracts";
+import type { ApplicationCatalogInfo, FeatureStatus, IntegrationStatus } from "@sershi/contracts";
 import { useEffect, useState } from "react";
 
 import { useI18n } from "../../i18n";
 import { applicationName } from "../../i18n/domain";
 import { desktopRuntime, sershi } from "../../ipc";
-import { useConfirmation } from "../../state/confirmation";
 import styles from "./Page.module.css";
 import { Pill, Row, Section } from "./SettingsParts";
 
@@ -154,28 +148,10 @@ export function WindowsIntegration() {
   );
 }
 
-/** A sample used only by the Developer Mode preview; it can never be decided. */
-function previewRequest(): ConfirmationRequest {
-  return {
-    id: "0".repeat(32),
-    toolId: "system.close_application",
-    action: "closeApplication",
-    subject: {
-      kind: "application",
-      application: { id: "windows.notepad", displayName: "Notepad", source: "builtIn" },
-    },
-    risk: "sensitive",
-    reason: "permissionUndecided",
-    canRemember: false,
-    expiresAtMs: Date.now() + 90_000,
-  };
-}
-
 /** Developer Mode: what discovery found (names and sources, never paths). */
 export function CatalogInspector() {
   const { t } = useI18n();
   const { catalog } = useWindowsIntegration();
-  const showPreview = useConfirmation((s) => s.showPreview);
   const apps = catalog?.applications ?? [];
 
   return (
@@ -198,17 +174,6 @@ export function CatalogInspector() {
               : t("settings.windows.catalogNotScanned")}
         </p>
       )}
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.secondary}
-          onClick={() => {
-            showPreview(previewRequest());
-          }}
-        >
-          {t("settings.developer.previewConfirmation")}
-        </button>
-      </div>
     </Section>
   );
 }

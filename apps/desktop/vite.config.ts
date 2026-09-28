@@ -21,6 +21,7 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, "index.html"),
         companion: resolve(import.meta.dirname, "companion.html"),
+        confirmation: resolve(import.meta.dirname, "confirmation.html"),
       },
     },
   },

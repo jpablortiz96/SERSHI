@@ -102,7 +102,7 @@ export const es419: Messages = {
     cpuWarmingUp:
       "Tu procesador aún está tomando su primera medición en {cores} núcleos. Vuelve a preguntar en un momento.",
     systemInfo: "{os} en {arch}, {cpu} con {cores} núcleos lógicos y {memory} GB de memoria.",
-    needsConfirmation: "La herramienta «{tool}» necesita tu aprobación antes de ejecutarse.",
+    needsConfirmation: "«{tool}» espera tu aprobación en la ventana de confirmación.",
     denied: {
       unknownTool: "No puedo usar la herramienta «{tool}» porque no está instalada.",
       prohibited: "No puedo usar la herramienta «{tool}» porque está bloqueada por la política.",
@@ -289,7 +289,6 @@ export const es419: Messages = {
       groupLabel: "Vista previa del estado del asistente",
       live: "En vivo",
       catalog: "Aplicaciones detectadas",
-      previewConfirmation: "Vista previa de confirmación",
     },
     about: {
       version: "Versión",
@@ -324,7 +323,7 @@ export const es419: Messages = {
   },
 
   confirm: {
-    label: "Se requiere aprobación",
+    label: "Se requiere confirmación",
     closeApplication: {
       title: "¿Cerrar {app}?",
       body: "SERSHI le pedirá a {app} que cierre sus ventanas.",
@@ -342,8 +341,10 @@ export const es419: Messages = {
       agentInitiatedSensitiveAction: "Esta acción se propuso de forma automática.",
     },
     cancel: "Cancelar",
+    dismiss: "Cancelar y cerrar",
     expires: "Vence en {seconds} s",
-    preview: "Solo vista previa: no se ejecutará nada.",
+    expired: "Esta solicitud venció.",
+    unavailable: "Esta solicitud ya no espera tu aprobación.",
   },
 
   tray: {
