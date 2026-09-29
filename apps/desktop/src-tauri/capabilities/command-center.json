@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "command-center",
-  "description": "The Command Center window: full read access, command submission and its own window chrome.",
+  "description": "The Command Center window: full read access, command submission (typed or push-to-talk), spoken replies and its own window chrome.",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -22,6 +22,15 @@
     "allow-hide-command-center",
     "allow-dismiss-assistant",
     "allow-preview-assistant-state",
-    "allow-quit-app"
+    "allow-quit-app",
+    "allow-get-voice-status",
+    "allow-configure-voice",
+    "allow-start-voice-capture",
+    "allow-stop-voice-capture",
+    "allow-cancel-voice-capture",
+    "allow-speak-reply",
+    "allow-stop-speaking",
+    "allow-download-voice-model",
+    "allow-cancel-voice-model-download"
   ]
 }

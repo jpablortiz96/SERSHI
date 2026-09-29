@@ -1,8 +1,9 @@
 /**
  * Interface preferences (language, theme, motion, companion, sounds, global
- * shortcut), stored in the WebView's localStorage. Every value is
+ * shortcut, voice), stored in the WebView's localStorage. Every value is
  * presentation or invocation only: nothing here is read by policy,
- * permissions or tools, so no preference can grant authority.
+ * permissions or tools, so no preference can grant authority. Voice
+ * preferences choose devices and languages; they cannot approve anything.
  *
  * Why not the core: SERSHI has no persistent settings store yet (SQLite
  * arrives in v0.1, ADR 0004), and these values are presentation-only — no
@@ -12,7 +13,7 @@
  * once, then becomes the source of truth (docs/LOCALIZATION.md).
  */
 import { isLocalePreference } from "./detect";
-import type { ConversationLanguage, LocalePreference } from "./types";
+import { CONVERSATION_LANGUAGES, type ConversationLanguage, type LocalePreference } from "./types";
 
 export const PREFERENCES_KEY = "sershi.preferences.v1";
 
@@ -49,6 +50,16 @@ export interface Preferences {
    * Invocation only — it never grants any capability.
    */
   shortcut: string | null;
+  /** Speak replies to voice requests. */
+  voiceResponses: boolean;
+  /** Also speak replies to typed requests. Off: typing stays silent. */
+  speakTypedResponses: boolean;
+  /** Microphone endpoint id, or null for the system default. */
+  microphone: string | null;
+  /** Speech voice id, or null to pick one for the reply's language. */
+  speechVoice: string | null;
+  /** Speech-recognition model id, or null for SERSHI's default. */
+  speechModel: string | null;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -61,12 +72,32 @@ export const DEFAULT_PREFERENCES: Preferences = {
   interfaceSounds: false,
   soundVolume: DEFAULT_SOUND_VOLUME,
   shortcut: null,
+  voiceResponses: true,
+  speakTypedResponses: false,
+  microphone: null,
+  speechVoice: null,
+  speechModel: null,
 };
 
 /** Clamps a volume to 0–100; anything else becomes the default. */
 export function clampVolume(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_SOUND_VOLUME;
   return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function printable(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 32 || code === 127) return false;
+  }
+  return true;
+}
+
+/** Device, voice and model ids: short printable text, or null. */
+function parseId(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 && value.length <= 512 && printable(value)
+    ? value
+    : null;
 }
 
 /** Accelerator strings are short, printable and made of +-joined tokens. */
@@ -113,6 +144,16 @@ export function parsePreferences(raw: string | null): Preferences {
       interfaceSounds: "interfaceSounds" in value && value.interfaceSounds === true,
       soundVolume: clampVolume("soundVolume" in value ? value.soundVolume : undefined),
       shortcut: parseShortcut("shortcut" in value ? value.shortcut : undefined),
+      conversationLanguage: oneOf(
+        CONVERSATION_LANGUAGES,
+        "conversationLanguage" in value ? value.conversationLanguage : undefined,
+        DEFAULT_PREFERENCES.conversationLanguage,
+      ),
+      voiceResponses: !("voiceResponses" in value && value.voiceResponses === false),
+      speakTypedResponses: "speakTypedResponses" in value && value.speakTypedResponses === true,
+      microphone: parseId("microphone" in value ? value.microphone : undefined),
+      speechVoice: parseId("speechVoice" in value ? value.speechVoice : undefined),
+      speechModel: parseId("speechModel" in value ? value.speechModel : undefined),
     };
   } catch {
     return DEFAULT_PREFERENCES;

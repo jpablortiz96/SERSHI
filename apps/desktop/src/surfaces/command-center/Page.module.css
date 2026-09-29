@@ -425,3 +425,59 @@ tr[data-tone="signal"] {
   min-width: 4ch;
   color: var(--text-secondary);
 }
+
+/* ─── Voice ─────────────────────────────────────────────────────────── */
+
+.select {
+  width: min(360px, 100%);
+  height: 34px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  font: inherit;
+  font-size: var(--type-small-size);
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.models {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--border-faint);
+}
+
+.model[data-active] {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-idle) 45%, transparent);
+}
+
+.modelActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.progress {
+  width: 100%;
+  height: 4px;
+  margin-top: var(--space-2);
+  accent-color: var(--state-idle);
+}

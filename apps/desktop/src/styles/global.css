@@ -88,6 +88,9 @@ button:disabled {
 [data-state="listening"] {
   --state-color: var(--state-listening);
 }
+[data-state="transcribing"] {
+  --state-color: var(--state-transcribing);
+}
 [data-state="thinking"] {
   --state-color: var(--state-thinking);
 }

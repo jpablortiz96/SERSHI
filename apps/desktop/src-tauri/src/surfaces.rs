@@ -17,6 +17,7 @@ use tauri::{
 
 use crate::confirmation::{self, CONFIRMATION};
 use crate::runtime::{Runtime, broadcast, schedule_settle};
+use crate::voice;
 
 /// Asks the Command Center to focus its command input.
 pub const FOCUS_COMMAND_EVENT: &str = "sershi://focus-command";
@@ -140,8 +141,10 @@ pub fn hide_command_center(app: &AppHandle) {
 }
 
 /// Returns an attending or waiting assistant to idle, cancelling any pending
-/// approval.
+/// approval. Also stops listening (discarding the capture) and talking.
 pub fn dismiss(app: &AppHandle, runtime: &Runtime) -> Result<(), IpcError> {
+    voice::cancel(app);
+    voice::stop_speaking(app);
     let (cancelled, snapshot) = runtime.with_service(|s| {
         let cancelled = s.dismiss(&mut |event| broadcast(app, event));
         (cancelled, s.snapshot())
@@ -175,5 +178,6 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
 /// the process exits, so nothing can execute.
 pub fn quit(app: &AppHandle) {
     confirmation::shutdown(app);
+    voice::shutdown(app);
     app.exit(0);
 }

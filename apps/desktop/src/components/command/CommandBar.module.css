@@ -137,6 +137,43 @@
   color: var(--text-disabled);
 }
 
+/* Push-to-talk. Listening must be unmistakable: the button fills with the
+   listening colour and a ring follows the real microphone level. */
+.icon:not(:disabled):hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.icon[data-mic="listening"] {
+  background: var(--state-listening);
+  color: var(--action-on-primary);
+  box-shadow:
+    0 0 0 calc(3px + var(--voice-level, 0) * 7px)
+      color-mix(in oklab, var(--state-listening) 28%, transparent),
+    0 0 18px -2px var(--state-listening);
+  transition: box-shadow 80ms linear;
+}
+
+.icon[data-mic="listening"]:hover {
+  background: var(--state-listening);
+  color: var(--action-on-primary);
+}
+
+.icon[data-mic="transcribing"] {
+  color: var(--state-transcribing);
+}
+
+.bar[data-voice="listening"] .signal {
+  background: var(--state-listening);
+  box-shadow: 0 0 calc(8px + var(--voice-level, 0) * 12px) var(--state-listening);
+}
+
+:global(html[data-motion="reduced"]) .icon[data-mic="listening"],
+:global(html[data-motion="reduced"]) .bar[data-voice="listening"] .signal {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--state-listening) 28%, transparent);
+  transition: none;
+}
+
 /* Contextual tooltip (CSS only). */
 [data-tip]::after {
   content: attr(data-tip);

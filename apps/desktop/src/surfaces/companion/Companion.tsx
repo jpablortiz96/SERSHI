@@ -7,6 +7,7 @@ import { connectAssistant, useAssistantStore, useDisplayState } from "../../stat
 import { COMPANION_CORE_SIZE, useAppearance } from "../../visual/appearance";
 import { companionRenderer } from "../../visual/companions";
 import { companionIntensity } from "../../visual/stateVisuals";
+import { connectVoiceLevel } from "../../visual/voiceLevel";
 import styles from "./Companion.module.css";
 
 /** Pointer travel (px) that turns a press into a window drag. */
@@ -19,7 +20,9 @@ const DRAG_SETTLE_MS = 900;
  *
  * It renders the shared assistant state and does exactly two things: a
  * click summons the Command Center, a drag moves the window. Its capability
- * file grants it nothing else — it can never approve anything.
+ * file grants it nothing else — it can never approve anything, and it never
+ * sees audio or controls the microphone (it only receives a 0–1 level to
+ * animate Listening and Speaking).
  *
  * Presence adapts to context SERSHI already owns: calmer while the Command
  * Center is on screen, more present when it is the only sign of SERSHI,
@@ -42,6 +45,8 @@ export function Companion() {
   const { t } = useI18n();
 
   useEffect(connectAssistant, []);
+  // Visual only: a bounded 0–1 level while listening or speaking.
+  useEffect(connectVoiceLevel, []);
   useEffect(
     () =>
       sershi.onPresence(({ commandCenterVisible: visible }) => {

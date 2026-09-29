@@ -417,18 +417,32 @@
   opacity: 0.6;
 }
 
-/* receive — listening (visual only until voice exists) */
+/* receive — listening: the rings gather inward and the shell swells with
+   the real microphone level (--voice-level, 0–1, bounded and throttled). */
 .core[data-pattern="receive"] .resonance,
 .core[data-pattern="resonate"] .resonance {
-  opacity: 1;
+  opacity: calc(0.7 + var(--voice-level, 0) * 0.3);
 }
 .core[data-pattern="receive"] .resonance i {
   animation: gather 2.4s var(--ease-standard) calc(var(--i, 0) * -0.8s) infinite;
 }
+.core[data-pattern="receive"] .shell,
+.core[data-pattern="resonate"] .shell {
+  transform: scale(calc(0.94 + var(--voice-level, 0) * 0.07));
+  transition: transform 90ms linear;
+}
 
-/* resonate — speaking (visual only until TTS exists) */
+/* resonate — speaking: outward rings, the shell follows SERSHI's voice. */
 .core[data-pattern="resonate"] .resonance i {
   animation: radiate 1.6s var(--ease-enter) calc(var(--i, 0) * -0.533s) infinite;
+}
+
+/* Reduced motion: no level-driven movement; colour, glyph and label carry
+   the state. */
+:global(html[data-motion="reduced"]) .core[data-pattern="receive"] .shell,
+:global(html[data-motion="reduced"]) .core[data-pattern="resonate"] .shell {
+  transform: none;
+  transition: none;
 }
 
 /* compute — thinking: two structured rings, the light compresses */

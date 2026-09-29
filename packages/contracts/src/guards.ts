@@ -11,6 +11,11 @@ import type { PresenceUpdate } from "./generated/PresenceUpdate";
 import type { ShortcutChange } from "./generated/ShortcutChange";
 import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { SystemSnapshot } from "./generated/SystemSnapshot";
+import type { CaptureStart } from "./generated/CaptureStart";
+import type { ModelProgress } from "./generated/ModelProgress";
+import type { VoiceLevel } from "./generated/VoiceLevel";
+import type { VoiceStatus } from "./generated/VoiceStatus";
+import type { VoiceUpdate } from "./generated/VoiceUpdate";
 
 /** Mirrors `AssistantState::ALL` in Rust. */
 export const ASSISTANT_STATES = [
@@ -18,6 +23,7 @@ export const ASSISTANT_STATES = [
   "idle",
   "awake",
   "listening",
+  "transcribing",
   "thinking",
   "planning",
   "executing",
@@ -116,6 +122,72 @@ export function isShortcutChange(v: unknown): v is ShortcutChange {
 
 export function isPresenceUpdate(v: unknown): v is PresenceUpdate {
   return isObj(v) && typeof v.commandCenterVisible === "boolean";
+}
+
+const VOICE_UPDATE_KINDS = [
+  "heard",
+  "answered",
+  "noSpeech",
+  "unclear",
+  "cancelled",
+  "failed",
+  "deviceFallback",
+] as const satisfies readonly VoiceUpdate["kind"][];
+
+export function isVoiceUpdate(v: unknown): v is VoiceUpdate {
+  if (!isObj(v) || !isStr(v.kind)) return false;
+  if (!(VOICE_UPDATE_KINDS as readonly string[]).includes(v.kind)) return false;
+  switch (v.kind) {
+    case "heard":
+      return isStr(v.text) && isNullable(v.language, isStr);
+    case "answered":
+      return isCommandOutcome(v.outcome);
+    case "failed":
+      return isStr(v.reason);
+    default:
+      return true;
+  }
+}
+
+export function isVoiceLevel(v: unknown): v is VoiceLevel {
+  return (
+    isObj(v) &&
+    isNum(v.level) &&
+    v.level >= 0 &&
+    v.level <= 1 &&
+    (v.source === "input" || v.source === "output")
+  );
+}
+
+function isModelState(v: unknown): boolean {
+  return isObj(v) && isStr(v.kind) && (v.kind !== "downloading" || isNum(v.receivedBytes));
+}
+
+export function isModelProgress(v: unknown): v is ModelProgress {
+  return isObj(v) && isStr(v.model) && isModelState(v.state) && isNullable(v.error, isStr);
+}
+
+export function isVoiceStatus(v: unknown): v is VoiceStatus {
+  return (
+    isObj(v) &&
+    typeof v.supported === "boolean" &&
+    isObj(v.microphone) &&
+    isStr(v.microphone.access) &&
+    Array.isArray(v.microphone.devices) &&
+    v.microphone.devices.every((d) => isObj(d) && isStr(d.id) && isStr(d.name)) &&
+    typeof v.microphone.fallback === "boolean" &&
+    Array.isArray(v.models) &&
+    v.models.every((m) => isObj(m) && isStr(m.id) && isNum(m.sizeBytes) && isModelState(m.state)) &&
+    isStr(v.model) &&
+    Array.isArray(v.voices) &&
+    v.voices.every((x) => isObj(x) && isStr(x.id) && isStr(x.name) && isStr(x.language)) &&
+    typeof v.capturing === "boolean" &&
+    typeof v.speaking === "boolean"
+  );
+}
+
+export function isCaptureStart(v: unknown): v is CaptureStart {
+  return isObj(v) && (v.kind === "started" || (v.kind === "refused" && isStr(v.reason)));
 }
 
 /** `null` payload (e.g. the focus-command event). */

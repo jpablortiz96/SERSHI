@@ -13,11 +13,13 @@ import type { AssistantState } from "@sershi/contracts";
  * - dormant    nothing moves; dimmed
  * - rest       very slow breath, tiny drift — alive but forgettable
  * - attend     core gathers, halo sharpens, orbits align
- * - receive    resonance gathers inward (listening; visual only until voice)
+ * - receive    resonance gathers inward, following the real microphone level
+ *              (listening)
  * - compute    counter-rotating segmented rings, inner light compresses
  * - structure  arcs assemble into ordered geometry, nodes appear, orbits hold
  * - drive      one directional sweep, energy passes outward
- * - resonate   rhythmic outward displacement (speaking; visual only until TTS)
+ * - resonate   rhythmic outward displacement, following SERSHI's real voice
+ *              (speaking)
  * - bloom      brief expansion and a soft ring, then settle
  * - caution    slow amber pulse
  * - await      steady amber invitation; nothing spins
@@ -73,6 +75,14 @@ export const STATE_VISUALS: Record<AssistantState, StateVisual> = {
   idle: { pattern: "rest", energy: 0.45, busy: false, attention: false, glyph: "dot" },
   awake: { pattern: "attend", energy: 0.7, busy: false, attention: false, glyph: "focus" },
   listening: { pattern: "receive", energy: 0.7, busy: true, attention: false, glyph: "waves" },
+  // Recognising what was heard: the same structured compute as thinking.
+  transcribing: {
+    pattern: "compute",
+    energy: 0.7,
+    busy: true,
+    attention: false,
+    glyph: "segments",
+  },
   thinking: { pattern: "compute", energy: 0.75, busy: true, attention: false, glyph: "segments" },
   planning: { pattern: "structure", energy: 0.75, busy: true, attention: false, glyph: "nodes" },
   executing: { pattern: "drive", energy: 0.9, busy: true, attention: false, glyph: "arrow" },

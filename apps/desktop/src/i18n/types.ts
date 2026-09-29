@@ -11,12 +11,19 @@ export const DEFAULT_LOCALE: Locale = "en-US";
 export type LocalePreference = "auto" | Locale;
 
 /**
- * The language SERSHI *understands and answers in* during conversation.
+ * The language SERSHI *hears* in conversation (speech recognition).
  * Deliberately separate from the interface locale: a user may keep the UI in
- * English and speak Spanish. Only `automatic` exists until voice and language
- * models arrive (docs/LOCALIZATION.md).
+ * Spanish and speak English. `automatic` lets the recogniser detect it;
+ * otherwise a BCP-47 language subtag (docs/LOCALIZATION.md, docs/VOICE.md).
  */
-export type ConversationLanguage = "automatic";
+export type ConversationLanguage = "automatic" | "en" | "es" | "pt";
+
+export const CONVERSATION_LANGUAGES: readonly ConversationLanguage[] = [
+  "automatic",
+  "en",
+  "es",
+  "pt",
+];
 
 type Widen<T> = { [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };
 

@@ -59,6 +59,10 @@ describe("locale resources", () => {
           "settings.appearance.themes.light",
           "settings.appearance.companions.orbital",
           "system.memoryTotal",
+          // Speech model names are product names.
+          "voice.models.whisper-base-q8",
+          "voice.models.whisper-large-v3-turbo-q5",
+          "voice.models.whisper-small-q8",
           // A number-and-percent pattern; pt-BR writes it like English.
           ...(locale === "pt-BR" ? ["system.threads", "settings.appearance.volumeValue"] : []),
           ...(locale === "es-419" ? ["settings.sections.general"] : []),

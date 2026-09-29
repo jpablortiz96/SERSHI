@@ -9,6 +9,8 @@ import { connectAssistant, useDisplayState } from "../../state/assistant";
 import { useConversation } from "../../state/conversation";
 import { connectInterfaceSounds } from "../../audio/connect";
 import { applyStoredShortcut } from "../../state/shortcut";
+import { connectVoice } from "../../state/voice";
+import { connectVoiceLevel } from "../../visual/voiceLevel";
 import { useWindowPresence } from "../../visual/windowPresence";
 import { ActivityView } from "./ActivityView";
 import styles from "./CommandCenter.module.css";
@@ -25,6 +27,9 @@ export function CommandCenter() {
     const disconnectAssistant = connectAssistant();
     const disconnectActivity = connectActivity();
     const disconnectSounds = connectInterfaceSounds();
+    // Push-to-talk and spoken replies (the microphone stays off until asked).
+    const disconnectVoice = connectVoice();
+    const disconnectLevel = connectVoiceLevel();
     // The Command Center configures the global shortcut at start-up.
     applyStoredShortcut();
     // Approvals happen in the trusted confirmation window; their outcomes
@@ -40,6 +45,8 @@ export function CommandCenter() {
       disconnectAssistant();
       disconnectActivity();
       disconnectSounds();
+      disconnectVoice();
+      disconnectLevel();
       stopFocus();
       stopOutcomes();
     };
@@ -49,7 +56,12 @@ export function CommandCenter() {
   useEffect(() => {
     if (!desktopRuntime) return;
     sershi
-      .setTrayLabels({ open: t("tray.open"), hide: t("tray.hide"), quit: t("tray.quit") })
+      .setTrayLabels({
+        open: t("tray.open"),
+        hide: t("tray.hide"),
+        quit: t("tray.quit"),
+        listening: t("tray.listening"),
+      })
       .catch(() => undefined);
   }, [t]);
 

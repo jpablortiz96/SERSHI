@@ -20,6 +20,15 @@ const COMMANDS: &[&str] = &[
     "dismiss_assistant",
     "preview_assistant_state",
     "quit_app",
+    "get_voice_status",
+    "configure_voice",
+    "start_voice_capture",
+    "stop_voice_capture",
+    "cancel_voice_capture",
+    "speak_reply",
+    "stop_speaking",
+    "download_voice_model",
+    "cancel_voice_model_download",
 ];
 
 fn main() {

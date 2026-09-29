@@ -31,7 +31,8 @@ import {
 import { companionRenderer } from "../../visual/companions";
 import { playCue } from "../../audio/interfaceAudio";
 import styles from "./Page.module.css";
-import { Pill, Row, Section } from "./SettingsParts";
+import { Choices, Pill, Row, Section } from "./SettingsParts";
+import { VoiceSettings } from "./VoiceSettings";
 import { CatalogInspector, WindowsIntegration } from "./WindowsIntegration";
 
 export function SettingsView() {
@@ -49,12 +50,9 @@ export function SettingsView() {
 
       <Section title={t("settings.sections.general")}>
         <LanguagePicker />
-        <Row
-          label={t("settings.conversation.label")}
-          detail={t("settings.conversation.detail")}
-          value={t("settings.conversation.value")}
-        />
       </Section>
+
+      <VoiceSettings />
 
       <Appearance />
 
@@ -373,61 +371,5 @@ function Appearance() {
         </div>
       </div>
     </Section>
-  );
-}
-
-interface ChoicesProps<T extends string> {
-  name: string;
-  label: string;
-  detail: string;
-  options: readonly T[];
-  value: T;
-  onChange: (value: T) => void;
-  optionLabel: (value: T) => string;
-  optionDetail?: (value: T) => string | undefined;
-}
-
-function Choices<T extends string>({
-  name,
-  label,
-  detail,
-  options,
-  value,
-  onChange,
-  optionLabel,
-  optionDetail,
-}: ChoicesProps<T>) {
-  const labelId = `${name}-label`;
-  return (
-    <div className={styles.rowStacked}>
-      <div>
-        <p className={styles.rowLabel} id={labelId}>
-          {label}
-        </p>
-        <p className={styles.rowDetail}>{detail}</p>
-      </div>
-      <div className={styles.choices} role="radiogroup" aria-labelledby={labelId}>
-        {options.map((option) => {
-          const extra = optionDetail?.(option);
-          return (
-            <label key={option} className={styles.choice}>
-              <input
-                type="radio"
-                name={name}
-                value={option}
-                checked={value === option}
-                onChange={() => {
-                  onChange(option);
-                }}
-              />
-              <span className={styles.choiceText}>
-                <span>{optionLabel(option)}</span>
-                {extra && <span className={styles.choiceDetail}>{extra}</span>}
-              </span>
-            </label>
-          );
-        })}
-      </div>
-    </div>
   );
 }

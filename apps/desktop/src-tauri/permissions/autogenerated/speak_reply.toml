@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-speak-reply"
+description = "Enables the speak_reply command without any pre-configured scope."
+commands.allow = ["speak_reply"]
+
+[[permission]]
+identifier = "deny-speak-reply"
+description = "Denies the speak_reply command without any pre-configured scope."
+commands.deny = ["speak_reply"]

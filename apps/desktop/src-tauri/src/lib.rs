@@ -11,6 +11,7 @@ mod confirmation;
 mod integration;
 mod runtime;
 mod surfaces;
+mod voice;
 
 use tauri::Manager;
 
@@ -25,6 +26,10 @@ pub fn run() {
         .setup(|app| {
             let runtime = runtime::Runtime::new()?;
             app.manage(runtime);
+            // Speech models live in the per-user app-data directory
+            // (%LOCALAPPDATA%\dev.sershi.desktop\models\stt on Windows).
+            let models = app.path().app_local_data_dir()?.join("models").join("stt");
+            app.manage(voice::Voice::new(models));
             app.manage(confirmation::ConfirmationSurface::default());
             let integration = integration::setup(app.handle());
             app.manage(integration);
@@ -53,6 +58,15 @@ pub fn run() {
             commands::dismiss_assistant,
             commands::preview_assistant_state,
             commands::quit_app,
+            commands::get_voice_status,
+            commands::configure_voice,
+            commands::start_voice_capture,
+            commands::stop_voice_capture,
+            commands::cancel_voice_capture,
+            commands::speak_reply,
+            commands::stop_speaking,
+            commands::download_voice_model,
+            commands::cancel_voice_model_download,
         ])
         .build(tauri::generate_context!());
 
@@ -62,6 +76,8 @@ pub fn run() {
             // survives, and nothing can be approved on the way out.
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 confirmation::shutdown(app);
+                // Release the microphone and speaker; stop downloads.
+                voice::shutdown(app);
             }
         }),
         Err(error) => {

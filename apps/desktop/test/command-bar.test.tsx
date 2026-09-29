@@ -14,11 +14,12 @@ describe("command bar (browser preview)", () => {
     expect(desktopRuntime).toBe(false);
   });
 
-  it("cannot send an empty command and offers voice only as a labelled future feature", () => {
+  it("cannot send an empty command; without the desktop core the microphone says why it is off", () => {
     render(<CommandBar />);
     expect(screen.getByRole("button", { name: "Send" })).toHaveProperty("disabled", true);
-    const mic = screen.getByRole("button", { name: /voice input, coming in v0\.3/i });
+    const mic = screen.getByRole("button", { name: "Voice isn't available on this computer" });
     expect(mic).toHaveProperty("disabled", true);
+    expect(mic.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("submits on Enter and answers honestly that the core is not connected", async () => {

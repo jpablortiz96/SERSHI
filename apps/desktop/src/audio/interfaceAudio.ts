@@ -1,9 +1,10 @@
 /**
  * InterfaceAudio — SERSHI's non-voice UI sounds.
  *
- * Separate from the future VoiceAudio (microphone, speech-to-text,
- * text-to-speech; Prompt 3): turning interface sounds off must not silence
- * spoken replies, and voice will get its own settings and pipeline.
+ * Separate from speech (microphone, speech-to-text, text-to-speech; native,
+ * see docs/VOICE.md): turning interface sounds off never silences spoken
+ * replies, and speech has its own settings and pipeline. Ducking rules live
+ * in connect.ts.
  *
  * Idle cost is zero: no AudioContext exists until the first cue, and the
  * context is suspended again shortly after each cue ends, so nothing runs

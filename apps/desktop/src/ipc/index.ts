@@ -2,17 +2,26 @@ import {
   EVENTS,
   isActivityEntry,
   isAssistantSnapshot,
+  isCaptureStart,
   isCommandOutcome,
+  isModelProgress,
   isNullPayload,
   isPresenceUpdate,
   isShortcutChange,
   isSystemSnapshot,
+  isVoiceLevel,
+  isVoiceStatus,
+  isVoiceUpdate,
   type ActivityEntry,
   type AssistantSnapshot,
   type AssistantState,
   type CommandOutcome,
+  type ModelProgress,
   type PresenceUpdate,
   type TrayLabels,
+  type VoiceLevel,
+  type VoiceSettings,
+  type VoiceUpdate,
 } from "@sershi/contracts";
 
 import { call, subscribe } from "./client";
@@ -44,6 +53,17 @@ export const sershi = {
     call("preview_assistant_state", { state }, isAssistantSnapshot),
   quit: () => call("quit_app", {}),
 
+  // Voice: input and output only. Nothing here can approve or grant.
+  getVoiceStatus: () => call("get_voice_status", {}, isVoiceStatus),
+  configureVoice: (settings: VoiceSettings) => call("configure_voice", { settings }, isVoiceStatus),
+  startVoiceCapture: () => call("start_voice_capture", {}, isCaptureStart),
+  stopVoiceCapture: () => call("stop_voice_capture", {}),
+  cancelVoiceCapture: () => call("cancel_voice_capture", {}),
+  speakReply: (text: string, language: string | null) => call("speak_reply", { text, language }),
+  stopSpeaking: () => call("stop_speaking", {}),
+  downloadVoiceModel: (model: string) => call("download_voice_model", { model }),
+  cancelVoiceModelDownload: () => call("cancel_voice_model_download", {}),
+
   onAssistantState: (handler: (snapshot: AssistantSnapshot) => void) =>
     subscribe(EVENTS.assistantState, isAssistantSnapshot, handler),
   onActivity: (handler: (entry: ActivityEntry) => void) =>
@@ -55,4 +75,11 @@ export const sershi = {
   /** Outcomes of confirmations decided on the trusted surface (or expired). */
   onCommandOutcome: (handler: (outcome: CommandOutcome) => void) =>
     subscribe(EVENTS.commandOutcome, isCommandOutcome, handler),
+  onVoice: (handler: (update: VoiceUpdate) => void) =>
+    subscribe(EVENTS.voice, isVoiceUpdate, handler),
+  /** A bounded 0–1 level for visuals; raw audio never reaches the UI. */
+  onVoiceLevel: (handler: (level: VoiceLevel) => void) =>
+    subscribe(EVENTS.voiceLevel, isVoiceLevel, handler),
+  onVoiceModel: (handler: (progress: ModelProgress) => void) =>
+    subscribe(EVENTS.voiceModel, isModelProgress, handler),
 };

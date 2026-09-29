@@ -143,3 +143,24 @@
 :global(html[data-motion="reduced"]) .message {
   animation-duration: var(--duration-instant);
 }
+
+/* "You said": a spoken request, as SERSHI understood it. */
+.message[data-via="voice"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.via {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-1);
+  font-size: var(--type-caption-size);
+  color: var(--text-tertiary);
+}
+
+.via svg {
+  width: 12px;
+  height: 12px;
+}

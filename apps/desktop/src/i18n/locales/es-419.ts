@@ -34,7 +34,11 @@ export const es419: Messages = {
     sleeping: { label: "En reposo", line: "Descansando. Llámame cuando me necesites." },
     idle: { label: "Listo", line: "Listo cuando tú quieras." },
     awake: { label: "Atento", line: "Aquí estoy. ¿Qué te gustaría hacer?" },
-    listening: { label: "Escuchando", line: "Escuchando…" },
+    listening: {
+      label: "Escuchando",
+      line: "Escuchando… haz clic en el micrófono cuando termines.",
+    },
+    transcribing: { label: "Transcribiendo", line: "Entendiendo lo que dijiste…" },
     thinking: { label: "Pensando", line: "Entendiendo tu solicitud…" },
     planning: { label: "Planificando", line: "Eligiendo los pasos adecuados…" },
     executing: { label: "Ejecutando", line: "Ejecutando una acción aprobada…" },
@@ -70,8 +74,14 @@ export const es419: Messages = {
   command: {
     label: "Comando",
     placeholder: "Pregúntale a SERSHI o escribe un comando",
-    voice: "Entrada de voz, disponible en v0.3",
-    voiceTip: "La voz llega en v0.3",
+    voice: "Hablar con SERSHI",
+    voiceTip: "Pulsar para hablar",
+    voiceStop: "Dejar de escuchar y enviar",
+    voiceBusy: "Entendiendo lo que dijiste",
+    voiceUnavailable: "La voz no está disponible en esta computadora",
+    stopSpeaking: "Dejar de hablar",
+    listeningPlaceholder: "Escuchando… haz clic en el micrófono cuando termines · Esc cancela",
+    transcribingPlaceholder: "Entendiendo lo que dijiste…",
     send: "Enviar",
     keyEnter: "Enter",
     keyEscape: "Esc",
@@ -82,6 +92,7 @@ export const es419: Messages = {
   },
 
   transcript: {
+    youSaid: "Dijiste",
     status: {
       unavailable: "Aún no disponible",
       notUnderstood: "No entendido",
@@ -93,6 +104,7 @@ export const es419: Messages = {
       unresolved: "Sin acción",
       cancelled: "Cancelado",
       expired: "Vencido",
+      voice: "Voz",
     },
   },
 
@@ -120,7 +132,7 @@ export const es419: Messages = {
     answer: {
       greeting:
         "Hola. Soy SERSHI. Puedo contarte sobre el sistema, la memoria y el procesador de esta computadora. La comprensión del lenguaje llegará cuando se conecte un proveedor de IA.",
-      help: "Puedo informarte sobre el sistema, el uso de memoria y la carga del procesador, y abrir o cerrar aplicaciones instaladas. Prueba con «Abre el Bloc de notas». Los archivos, la voz y los servicios conectados están en la hoja de ruta.",
+      help: "Puedo informarte sobre el sistema, el uso de memoria y la carga del procesador, y abrir o cerrar aplicaciones instaladas, escribiendo o con el micrófono. Prueba con «Abre el Bloc de notas». Los archivos y los servicios conectados están en la hoja de ruta.",
     },
     rejected: {
       empty: "Escribe o di un comando.",
@@ -158,6 +170,56 @@ export const es419: Messages = {
     coreUnreachable: "Algo salió mal al comunicarme con mi núcleo.",
   },
 
+  voice: {
+    dismiss: "Entendido",
+    noSpeech: "No se detectó voz.",
+    unclear: "No pude entenderlo con claridad. Inténtalo de nuevo un poco más cerca del micrófono.",
+    fallback:
+      "El micrófono que elegiste no está conectado, así que SERSHI usó el predeterminado del sistema.",
+    failure: {
+      unsupported: "La voz aún no está disponible en esta computadora.",
+      noMicrophone: "No se encontró ningún micrófono. Conecta uno e inténtalo de nuevo.",
+      permissionDenied:
+        "Micrófono no disponible. SERSHI no tiene permiso para usar tu micrófono. En Windows, abre Configuración › Privacidad y seguridad › Micrófono y activa “Permitir que las aplicaciones de escritorio accedan al micrófono”.",
+      microphoneSilent:
+        "El micrófono solo envió silencio. Comprueba que no esté silenciado y que Windows permita usarlo a las aplicaciones de escritorio (Configuración › Privacidad y seguridad › Micrófono).",
+      deviceLost: "El micrófono se desconectó o dejó de responder.",
+      modelMissing: "Se necesita un modelo de voz local para que SERSHI entienda lo que dices.",
+      modelCorrupt:
+        "El modelo de voz local está dañado. Descárgalo de nuevo en Configuración › Voz.",
+      recognitionFailed: "Falló el reconocimiento de voz. Inténtalo de nuevo.",
+      speechUnavailable:
+        "Las respuestas habladas no están disponibles: no hay ninguna voz de Windows instalada.",
+      outputUnavailable:
+        "Las respuestas habladas no están disponibles: no se encontró una salida de audio.",
+      busy: "SERSHI está ocupado. Inténtalo de nuevo en un momento.",
+    },
+    model: {
+      title: "Se necesita un modelo de voz local",
+      body: "SERSHI entiende tu voz en esta computadora. Lo que dices nunca sale de ella.",
+      name: "Modelo",
+      download: "Tamaño de descarga",
+      storage: "Espacio necesario",
+      memory: "Memoria mientras se usa",
+      action: "Descargar",
+      later: "Ahora no",
+      downloading: "Descargando… {percent}",
+      cancel: "Cancelar",
+      ready: "Modelo de voz instalado. Pulsa el micrófono para hablar.",
+      error: {
+        network: "La descarga falló. Revisa tu conexión e inténtalo de nuevo.",
+        integrity:
+          "La descarga no coincidió con la suma de verificación esperada, así que se eliminó. Inténtalo de nuevo.",
+        storage: "No se pudo guardar el modelo. Revisa el espacio libre en disco.",
+        cancelled: "Descarga cancelada.",
+      },
+    },
+    models: {
+      "whisper-base-q8": "Whisper Base",
+      "whisper-small-q8": "Whisper Small",
+      "whisper-large-v3-turbo-q5": "Whisper Large v3 Turbo",
+    },
+  },
   system: {
     heading: "Esta computadora",
     reading: "Leyendo el sistema…",
@@ -211,6 +273,8 @@ export const es419: Messages = {
       confirmationExpired: "Aprobación vencida: {tool}",
       appOpened: "Se abrió {app}",
       appCloseRequested: "Se pidió cerrar {app}",
+      microphoneOn: "Micrófono activado",
+      microphoneOff: "Micrófono desactivado",
     },
   },
 
@@ -221,6 +285,7 @@ export const es419: Messages = {
       general: "General",
       appearance: "Apariencia",
       windows: "Integración con Windows",
+      voice: "Voz",
       privacy: "Privacidad",
       tools: "Herramientas y permisos",
       platform: "Plataforma",
@@ -233,19 +298,14 @@ export const es419: Messages = {
       automatic: "Automático",
       automaticDetail: "Idioma del sistema — {language}",
     },
-    conversation: {
-      label: "Idioma de conversación",
-      value: "Automático",
-      detail:
-        "Cuando lleguen la voz y la IA, SERSHI te entenderá en tu propio idioma, sin importar el idioma de la interfaz.",
-    },
     privacy: {
       typed: "Lo que escribes",
       typedValue: "Nunca se guarda en el registro de actividad",
       conversation: "Conversación",
       conversationValue: "Se guarda en memoria solo durante esta sesión",
       devices: "Micrófono y pantalla",
-      devicesValue: "Sin uso: la voz y la visión aún no existen",
+      devicesValue:
+        "Micrófono solo al pulsar para hablar; el audio permanece en memoria. Pantalla: sin uso.",
       analytics: "Analíticas",
       analyticsValue: "Ninguna. SERSHI no envía nada a ningún lado.",
     },
@@ -306,7 +366,7 @@ export const es419: Messages = {
       },
       sounds: "Sonidos de la interfaz",
       soundsDetail:
-        "Señales breves y suaves al iniciar, al invocar a SERSHI, al completar acciones, ante errores y cuando se necesita tu aprobación. Las respuestas habladas tendrán su propio ajuste.",
+        "Señales breves y suaves al iniciar, al invocar a SERSHI, al completar acciones, ante errores y cuando se necesita tu aprobación. Las respuestas habladas tienen sus propios ajustes en Voz.",
       soundOptions: {
         on: "Activados",
         off: "Desactivados",
@@ -315,6 +375,50 @@ export const es419: Messages = {
       volumeDetail: "Solo los sonidos de la interfaz.",
       volumeValue: "{value} %",
       soundSample: "Escuchar muestra",
+    },
+    voice: {
+      microphone: "Micrófono",
+      microphoneDetail: "SERSHI usa el micrófono solo mientras usas pulsar para hablar.",
+      systemDefault: "Predeterminado del sistema",
+      fallback:
+        "El micrófono que elegiste no está conectado; se usa el predeterminado del sistema.",
+      accessDenied:
+        "Windows está bloqueando el acceso al micrófono. Abre Configuración › Privacidad y seguridad › Micrófono y permite las aplicaciones de escritorio.",
+      noDevices: "No se encontró ningún micrófono.",
+      language: "Idioma de conversación",
+      languageDetail:
+        "El idioma que SERSHI escucha, independiente del idioma de la interfaz. Elegir uno hace el reconocimiento unas dos veces más rápido que Automático.",
+      languageAutomatic: "Detectar automáticamente",
+      responses: "Respuestas por voz",
+      responsesDetail: "Responder en voz alta cuando le hablaste a SERSHI.",
+      speakTyped: "Leer en voz alta las respuestas escritas",
+      speakTypedDetail: "Responder también en voz alta cuando escribes.",
+      options: {
+        on: "Activadas",
+        off: "Desactivadas",
+      },
+      voice: "Voz",
+      voiceDetail:
+        "Voces de Windows instaladas. El predeterminado del sistema elige una voz en el idioma de la respuesta.",
+      noVoices: "No hay voces de Windows instaladas.",
+      model: "Modelo de voz local",
+      modelDetail:
+        "La voz se reconoce en esta computadora. Los modelos se descargan solo cuando lo pides y se verifican antes de usarse.",
+      tiers: {
+        fast: "El más rápido, menos preciso fuera del inglés",
+        balanced: "Equilibrado · recomendado",
+        accurate: "El más preciso · lento en la mayoría de las computadoras",
+      },
+      modelMeta: "{size} · unos {memory} de memoria",
+      installed: "Instalado",
+      corrupt: "Dañado",
+      use: "Usar",
+      inUse: "En uso",
+      wakeWord: "Palabra de activación",
+      wakeWordValue: "Aún no disponible: SERSHI solo escucha cuando pulsas el micrófono",
+      privacy:
+        "El audio permanece en memoria y se descarta después del reconocimiento. SERSHI nunca guarda grabaciones, nunca envía audio a ningún lado y nunca registra lo que dices. La voz puede pedir lo mismo que podrías escribir; nunca puede aprobar una acción.",
+      unsupported: "La voz está disponible en la aplicación de escritorio para Windows.",
     },
     windows: {
       appControl: "Control de aplicaciones",
@@ -426,6 +530,7 @@ export const es419: Messages = {
     open: "Abrir SERSHI",
     hide: "Ocultar SERSHI",
     quit: "Salir de SERSHI",
+    listening: "SERSHI — Escuchando",
   },
 
   capabilities: {
@@ -436,7 +541,8 @@ export const es419: Messages = {
     shortcut: "Atajo global y bandeja del sistema",
     aiProvider: "Proveedor de IA",
     contextFiles: "Archivos, portapapeles y pantalla",
-    voice: "Voz y palabra de activación",
+    voice: "Voz (pulsar para hablar)",
+    wakeWord: "Palabra de activación",
     mailCalendar: "Correo y calendario",
   },
 };

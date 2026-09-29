@@ -28,6 +28,12 @@ export function createFormatters(requested: Locale) {
   const hours = unit("hour", "narrow");
   const minutes = unit("minute", "narrow");
   const millis = unit("millisecond", "short");
+  const mb = new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: "megabyte",
+    unitDisplay: "short",
+    maximumFractionDigits: 0,
+  });
 
   return {
     integer: (value: number) => integer.format(value),
@@ -36,6 +42,8 @@ export function createFormatters(requested: Locale) {
       const gb = bytes / GB;
       return gb >= 100 ? integer.format(gb) : decimal1.format(gb);
     },
+    /** Bytes as (decimal) megabytes, e.g. download sizes. */
+    megabytes: (bytes: number) => mb.format(bytes / 1_000_000),
     /** `value` is 0–100. */
     percent: (value: number) => percent.format(value / 100),
     percentParts: (value: number): PercentParts => {

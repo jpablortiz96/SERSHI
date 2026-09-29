@@ -49,8 +49,21 @@ const CAPABILITY_KEYS: Partial<Record<string, PlainKey>> = {
   "ai.provider": "capabilities.aiProvider",
   "context.files": "capabilities.contextFiles",
   voice: "capabilities.voice",
+  "voice.wake_word": "capabilities.wakeWord",
   "connected.mail_calendar": "capabilities.mailCalendar",
 };
+
+const MODEL_KEYS: Partial<Record<string, PlainKey>> = {
+  "whisper-base-q8": "voice.models.whisper-base-q8",
+  "whisper-small-q8": "voice.models.whisper-small-q8",
+  "whisper-large-v3-turbo-q5": "voice.models.whisper-large-v3-turbo-q5",
+};
+
+/** A speech model's display name. */
+export function modelName(t: Translate, id: string): string {
+  const key = MODEL_KEYS[id];
+  return key ? t(key) : id;
+}
 
 export function toolName(t: Translate, toolId: string | null, fallback?: string): string {
   const key = toolId ? TOOL_KEYS[toolId] : undefined;
@@ -127,6 +140,10 @@ function describeEvent(t: Translate, entry: ActivityEntry): string {
       return t("activity.events.confirmationCancelled", { tool });
     case "confirmationExpired":
       return t("activity.events.confirmationExpired", { tool });
+    case "microphoneOn":
+      return t("activity.events.microphoneOn");
+    case "microphoneOff":
+      return t("activity.events.microphoneOff");
   }
 }
 

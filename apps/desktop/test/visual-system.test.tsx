@@ -109,7 +109,10 @@ describe("reduced motion", () => {
       const path = join(dir, name);
       return statSync(path).isDirectory() ? cssFiles(path) : path.endsWith(".css") ? [path] : [];
     });
-  const sheets = cssFiles(src).map((f) => [relative(src, f), readFileSync(f, "utf8")] as const);
+  // Forward slashes on every OS (relative() uses backslashes on Windows).
+  const sheets = cssFiles(src).map(
+    (f) => [relative(src, f).replaceAll("\\", "/"), readFileSync(f, "utf8")] as const,
+  );
 
   it("scans every stylesheet", () => {
     expect(sheets.length).toBeGreaterThan(10);

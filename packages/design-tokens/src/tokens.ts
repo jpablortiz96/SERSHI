@@ -83,6 +83,8 @@ export const tokens = {
     idle: "#9fdfff",
     awake: "#cfefff",
     listening: "#56d4f5",
+    /** Recognising captured speech (the microphone is already off). */
+    transcribing: "#78b4ff",
     thinking: "#9a8cff",
     planning: "#b7a9ff",
     executing: "#5aa9ff",

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from "react";
 
 import { useI18n } from "../../i18n";
-import { sershi } from "../../ipc";
+import { desktopRuntime, sershi } from "../../ipc";
+import { useAssistantStore } from "../../state/assistant";
 import { useConversation } from "../../state/conversation";
-import { ArrowUpIcon, MicIcon } from "../shell/icons";
+import { useVoice } from "../../state/voice";
+import { ArrowUpIcon, MicIcon, StopIcon } from "../shell/icons";
 import styles from "./CommandBar.module.css";
+import { VoicePanel } from "./VoicePanel";
 
 /** Mirrors MAX_COMMAND_CHARS in sershi-core. */
 const MAX_CHARS = 1000;
@@ -14,6 +17,11 @@ export const ACCEPTED_MS = 520;
 /**
  * The primary input. Keyboard-first: "/" focuses from anywhere, Enter sends,
  * ↑ recalls the previous command, Escape clears or dismisses.
+ *
+ * Push-to-talk: the microphone button opens the microphone (click again to
+ * stop and send; Escape cancels). The button's pressed state, the placeholder
+ * and the assistant state all say when SERSHI is listening — it never
+ * listens otherwise. Voice is additive: typing always works.
  */
 export function CommandBar() {
   const [text, setText] = useState("");
@@ -24,6 +32,20 @@ export function CommandBar() {
   const history = useRef<string[]>([]);
   const { submit, pending } = useConversation();
   const { t } = useI18n();
+  // Behaviour follows the real state, never a Developer Mode preview.
+  const state = useAssistantStore((s) => s.snapshot.state);
+  const voiceStatus = useVoice((s) => s.status);
+  const toggleCapture = useVoice((s) => s.toggleCapture);
+  const cancelCapture = useVoice((s) => s.cancelCapture);
+  const stopSpeaking = useVoice((s) => s.stopSpeaking);
+  const listening = state === "listening";
+  const transcribing = state === "transcribing";
+  const speaking = state === "speaking";
+  const voiceAvailable = desktopRuntime && voiceStatus?.supported === true;
+  const listeningRef = useRef(listening);
+  useEffect(() => {
+    listeningRef.current = listening;
+  }, [listening]);
 
   // Summon (companion, tray, global shortcut) focuses the command input.
   useEffect(
@@ -42,13 +64,18 @@ export function CommandBar() {
         e.preventDefault();
         input.current?.focus();
       }
+      // Escape anywhere cancels listening (the input handles its own).
+      if (e.key === "Escape" && listeningRef.current && target !== input.current) {
+        e.preventDefault();
+        cancelCapture();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.clearTimeout(acceptedTimer.current);
     };
-  }, []);
+  }, [cancelCapture]);
 
   const send = (e?: SyntheticEvent) => {
     e?.preventDefault();
@@ -73,17 +100,33 @@ export function CommandBar() {
         setText(previous);
       }
     } else if (e.key === "Escape") {
-      if (text) setText("");
+      if (listening) cancelCapture();
+      else if (text) setText("");
       else sershi.dismissAssistant().catch(() => undefined);
     }
   };
 
+  const micLabel = listening
+    ? t("command.voiceStop")
+    : transcribing
+      ? t("command.voiceBusy")
+      : voiceAvailable
+        ? t("command.voice")
+        : t("command.voiceUnavailable");
+  const placeholder = listening
+    ? t("command.listeningPlaceholder")
+    : transcribing
+      ? t("command.transcribingPlaceholder")
+      : t("command.placeholder");
+
   return (
     <form className={styles.form} onSubmit={send}>
+      <VoicePanel />
       <div
         className={styles.bar}
-        data-pending={pending || undefined}
+        data-pending={pending || transcribing || undefined}
         data-typing={text.trim() ? true : undefined}
+        data-voice={listening ? "listening" : undefined}
       >
         <span className={styles.signal} aria-hidden="true" />
         {accepted && (
@@ -100,18 +143,34 @@ export function CommandBar() {
             setText(e.target.value);
           }}
           onKeyDown={onKeyDown}
-          placeholder={t("command.placeholder")}
+          placeholder={placeholder}
           aria-label={t("command.label")}
           autoComplete="off"
           spellCheck={false}
           autoFocus
         />
+        {speaking && (
+          <button
+            type="button"
+            className={styles.icon}
+            onClick={stopSpeaking}
+            aria-label={t("command.stopSpeaking")}
+            data-tip={t("command.stopSpeaking")}
+          >
+            <StopIcon />
+          </button>
+        )}
         <button
           type="button"
           className={styles.icon}
-          disabled
-          aria-label={t("command.voice")}
-          data-tip={t("command.voiceTip")}
+          data-mic={listening ? "listening" : transcribing ? "transcribing" : undefined}
+          disabled={!voiceAvailable || transcribing}
+          aria-pressed={listening}
+          aria-label={micLabel}
+          data-tip={listening ? t("command.voiceStop") : t("command.voiceTip")}
+          onClick={() => {
+            void toggleCapture(listening);
+          }}
         >
           <MicIcon />
         </button>

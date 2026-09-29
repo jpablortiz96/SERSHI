@@ -12,12 +12,14 @@ use sershi_core::ports::SystemInfoProvider;
 use sershi_core::service::{CommandOutcome, CommandRequest, ServiceEvent};
 use sershi_core::shortcut::ShortcutChange;
 use sershi_core::system::SystemSnapshot;
+use sershi_core::voice::{CaptureStart, VoiceSettings, VoiceStatus};
 use tauri::{AppHandle, State};
 
 use crate::confirmation;
 use crate::integration;
 use crate::runtime::{Runtime, broadcast, schedule_settle};
 use crate::surfaces;
+use crate::voice;
 
 const MAX_ACTIVITY_PAGE: u32 = 100;
 
@@ -71,6 +73,8 @@ pub fn submit_command(
     runtime: State<'_, Runtime>,
     request: CommandRequest,
 ) -> Result<CommandOutcome, IpcError> {
+    // A typed command takes over: SERSHI stops listening and talking.
+    voice::interrupt(&app);
     let (outcome, snapshot) = runtime.with_service(|s| {
         let outcome = s.submit(&request, &mut |event| broadcast(&app, event));
         (outcome, s.snapshot())
@@ -186,4 +190,69 @@ pub fn preview_assistant_state(
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
     surfaces::quit(&app);
+}
+
+// ── Voice (Command Center only; docs/VOICE.md) ────────────────────────────
+//
+// Voice is input and output, never authorization: none of these commands
+// can approve, read a confirmation or change a permission. A transcript is
+// submitted through the same core path as `submit_command`.
+
+/// Microphones, voices, models and whether SERSHI is listening or speaking.
+#[tauri::command(async)]
+pub fn get_voice_status(app: AppHandle) -> Result<VoiceStatus, IpcError> {
+    voice::status(&app)
+}
+
+/// Stores the user's voice preferences (device, language, voice, model).
+#[tauri::command(async)]
+pub fn configure_voice(app: AppHandle, settings: VoiceSettings) -> Result<VoiceStatus, IpcError> {
+    voice::configure(&app, settings)
+}
+
+/// Push-to-talk: opens the microphone (never on its own, never in the
+/// background).
+#[tauri::command(async)]
+pub fn start_voice_capture(app: AppHandle) -> Result<CaptureStart, IpcError> {
+    voice::start_capture(&app)
+}
+
+/// Stops listening and transcribes what was said.
+#[tauri::command]
+pub fn stop_voice_capture(app: AppHandle) {
+    voice::stop_capture(&app);
+}
+
+/// Stops listening and discards what was captured.
+#[tauri::command]
+pub fn cancel_voice_capture(app: AppHandle) {
+    voice::cancel_capture(&app);
+}
+
+/// Speaks a reply the Command Center phrased (output only).
+#[tauri::command(async)]
+pub fn speak_reply(app: AppHandle, text: String, language: Option<String>) -> Result<(), IpcError> {
+    voice::speak(&app, &text, language.as_deref())
+}
+
+#[tauri::command(async)]
+pub fn stop_speaking(app: AppHandle) {
+    voice::stop_speaking(&app);
+}
+
+/// Downloads a speech model from SERSHI's fixed catalog (user-initiated).
+#[tauri::command(async)]
+pub fn download_voice_model(app: AppHandle, model: String) -> Result<(), IpcError> {
+    if model.len() > 64 {
+        return Err(IpcError::new(
+            IpcErrorCode::NotAllowed,
+            "Unknown speech model.",
+        ));
+    }
+    voice::download_model(&app, &model)
+}
+
+#[tauri::command]
+pub fn cancel_voice_model_download(app: AppHandle) {
+    voice::cancel_download(&app);
 }

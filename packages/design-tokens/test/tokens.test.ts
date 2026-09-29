@@ -30,6 +30,7 @@ describe("design tokens", () => {
       "idle",
       "awake",
       "listening",
+      "transcribing",
       "thinking",
       "planning",
       "executing",

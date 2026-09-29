@@ -51,6 +51,7 @@ export const lightTheme: ThemeOverrides = {
     idle: "#2b8fc2",
     awake: "#3d86b8",
     listening: "#0e8fb5",
+    transcribing: "#3a73c9",
     thinking: "#6b5bdc",
     planning: "#7b69e2",
     executing: "#2c79e0",

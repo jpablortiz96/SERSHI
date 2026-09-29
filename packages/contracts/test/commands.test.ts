@@ -174,3 +174,58 @@ describe("Gate 2B: personalization is not privilege", () => {
     }
   });
 });
+
+/**
+ * Gate 3A: voice is input and output, never authorization. Voice commands
+ * belong to the Command Center alone; the companion and the trusted
+ * confirmation surface gain nothing.
+ */
+describe("Gate 3A: voice does not grant authority", () => {
+  const VOICE_COMMANDS = [
+    "get_voice_status",
+    "configure_voice",
+    "start_voice_capture",
+    "stop_voice_capture",
+    "cancel_voice_capture",
+    "speak_reply",
+    "stop_speaking",
+    "download_voice_model",
+    "cancel_voice_model_download",
+  ];
+
+  it("voice commands exist and only the Command Center may call them", () => {
+    for (const command of VOICE_COMMANDS) {
+      expect(COMMAND_NAMES).toContain(command);
+      const holders = ["command-center", "companion", "confirmation"].filter((cap) =>
+        grantedCommands(cap).includes(command),
+      );
+      expect(holders, command).toEqual(["command-center"]);
+    }
+  });
+
+  it("the confirmation surface is unchanged: exactly two commands, no voice", () => {
+    expect(allPermissions("confirmation").sort()).toEqual(
+      ["allow-decide-confirmation", "allow-get-confirmation-context"].sort(),
+    );
+  });
+
+  it("the companion is unchanged: no microphone, no speech, no approval", () => {
+    const companion = grantedCommands("companion");
+    expect(companion.sort()).toEqual(["get_assistant_snapshot", "summon_command_center"].sort());
+    for (const command of VOICE_COMMANDS) expect(companion).not.toContain(command);
+  });
+
+  it("no voice command can approve, decide or touch permissions", () => {
+    for (const command of VOICE_COMMANDS) {
+      expect(command).not.toMatch(/approve|decide|confirm|permission|grant|credential|exec|shell/);
+    }
+    // Still exactly one command that decides, and it is not reachable from voice.
+    expect(COMMAND_NAMES.filter((c) => /decide|approve/.test(c))).toEqual(["decide_confirmation"]);
+  });
+
+  it("raw audio never crosses IPC: voice events carry text or a level", () => {
+    expect(EVENTS.voice).toBe("sershi://voice");
+    expect(EVENTS.voiceLevel).toBe("sershi://voice-level");
+    for (const name of COMMAND_NAMES) expect(name).not.toMatch(/audio|samples|pcm|recording/);
+  });
+});

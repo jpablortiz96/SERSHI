@@ -38,7 +38,8 @@ export const enUS = {
     sleeping: { label: "Sleeping", line: "Resting. Summon me whenever you need me." },
     idle: { label: "Ready", line: "Ready when you are." },
     awake: { label: "Attending", line: "I'm here. What would you like to do?" },
-    listening: { label: "Listening", line: "Listening…" },
+    listening: { label: "Listening", line: "Listening… click the microphone when you're done." },
+    transcribing: { label: "Transcribing", line: "Understanding what you said…" },
     thinking: { label: "Thinking", line: "Understanding your request…" },
     planning: { label: "Planning", line: "Choosing the right steps…" },
     executing: { label: "Working", line: "Running an approved action…" },
@@ -71,8 +72,14 @@ export const enUS = {
   command: {
     label: "Command",
     placeholder: "Ask SERSHI or type a command",
-    voice: "Voice input, coming in v0.3",
-    voiceTip: "Voice arrives in v0.3",
+    voice: "Talk to SERSHI",
+    voiceTip: "Push to talk",
+    voiceStop: "Stop listening and send",
+    voiceBusy: "Understanding what you said",
+    voiceUnavailable: "Voice isn't available on this computer",
+    stopSpeaking: "Stop speaking",
+    listeningPlaceholder: "Listening… click the microphone when you're done · Esc cancels",
+    transcribingPlaceholder: "Understanding what you said…",
     send: "Send",
     keyEnter: "Enter",
     keyEscape: "Esc",
@@ -83,6 +90,7 @@ export const enUS = {
   },
 
   transcript: {
+    youSaid: "You said",
     status: {
       unavailable: "Not available yet",
       notUnderstood: "Not understood",
@@ -94,6 +102,7 @@ export const enUS = {
       unresolved: "No action taken",
       cancelled: "Cancelled",
       expired: "Expired",
+      voice: "Voice",
     },
   },
 
@@ -118,7 +127,7 @@ export const enUS = {
     answer: {
       greeting:
         "Hello. I'm SERSHI. I can tell you about this computer's system, memory and processor. Language understanding arrives once an AI provider is connected.",
-      help: "I can report system information, memory usage and processor load, and open or close installed applications. Try “Open Notepad”. Files, voice and connected services are on the roadmap.",
+      help: "I can report system information, memory usage and processor load, and open or close installed applications — by typing or with the microphone. Try “Open Notepad”. Files and connected services are on the roadmap.",
     },
     rejected: {
       empty: "Type or say a command.",
@@ -154,6 +163,51 @@ export const enUS = {
     coreUnreachable: "Something went wrong reaching my core.",
   },
 
+  voice: {
+    dismiss: "OK",
+    noSpeech: "No speech detected.",
+    unclear: "I couldn't understand that clearly. Try again a little closer to the microphone.",
+    fallback: "Your chosen microphone isn't connected, so SERSHI used the system default.",
+    failure: {
+      unsupported: "Voice isn't available on this computer yet.",
+      noMicrophone: "No microphone was found. Connect one and try again.",
+      permissionDenied:
+        "Microphone unavailable. SERSHI doesn't have permission to use your microphone. In Windows, open Settings › Privacy & security › Microphone and turn on “Let desktop apps access your microphone”.",
+      microphoneSilent:
+        "The microphone sent only silence. Check that it isn't muted and that Windows lets desktop apps use it (Settings › Privacy & security › Microphone).",
+      deviceLost: "The microphone was disconnected or stopped responding.",
+      modelMissing: "A local speech model is needed before SERSHI can understand speech.",
+      modelCorrupt: "The local speech model is damaged. Download it again in Settings › Voice.",
+      recognitionFailed: "Speech recognition failed. Try again.",
+      speechUnavailable: "Spoken replies aren't available: no Windows voice is installed.",
+      outputUnavailable: "Spoken replies aren't available: no audio output was found.",
+      busy: "SERSHI is busy right now. Try again in a moment.",
+    },
+    model: {
+      title: "Local speech model required",
+      body: "SERSHI understands speech on this computer. What you say never leaves it.",
+      name: "Model",
+      download: "Download size",
+      storage: "Storage required",
+      memory: "Memory while in use",
+      action: "Download",
+      later: "Not now",
+      downloading: "Downloading… {percent}",
+      cancel: "Cancel",
+      ready: "Speech model installed. Press the microphone to talk.",
+      error: {
+        network: "The download failed. Check your connection and try again.",
+        integrity: "The download didn't match the expected checksum, so it was deleted. Try again.",
+        storage: "The model couldn't be saved. Check your free disk space.",
+        cancelled: "Download cancelled.",
+      },
+    },
+    models: {
+      "whisper-base-q8": "Whisper Base",
+      "whisper-small-q8": "Whisper Small",
+      "whisper-large-v3-turbo-q5": "Whisper Large v3 Turbo",
+    },
+  },
   system: {
     heading: "This computer",
     reading: "Reading system…",
@@ -207,6 +261,8 @@ export const enUS = {
       confirmationExpired: "Approval expired: {tool}",
       appOpened: "Opened {app}",
       appCloseRequested: "Asked {app} to close",
+      microphoneOn: "Microphone on",
+      microphoneOff: "Microphone off",
     },
   },
 
@@ -217,6 +273,7 @@ export const enUS = {
       general: "General",
       appearance: "Appearance",
       windows: "Windows integration",
+      voice: "Voice",
       privacy: "Privacy",
       tools: "Tools & permissions",
       platform: "Platform",
@@ -229,19 +286,13 @@ export const enUS = {
       automatic: "Automatic",
       automaticDetail: "System language — {language}",
     },
-    conversation: {
-      label: "Conversation language",
-      value: "Automatic",
-      detail:
-        "Once voice and AI arrive, SERSHI will understand you in your own language, whatever the interface language.",
-    },
     privacy: {
       typed: "What you type",
       typedValue: "Never written to the activity log",
       conversation: "Conversation",
       conversationValue: "Kept in memory for this session only",
       devices: "Microphone and screen",
-      devicesValue: "Not used — voice and vision are not built yet",
+      devicesValue: "Microphone only during push-to-talk; audio stays in memory. Screen: not used.",
       analytics: "Analytics",
       analyticsValue: "None. SERSHI sends nothing anywhere.",
     },
@@ -301,7 +352,7 @@ export const enUS = {
       },
       sounds: "Interface sounds",
       soundsDetail:
-        "Short, quiet cues for start-up, summon, completed actions, errors and approval requests. Spoken replies will have their own setting.",
+        "Short, quiet cues for start-up, summon, completed actions, errors and approval requests. Spoken replies have their own settings under Voice.",
       soundOptions: {
         on: "On",
         off: "Off",
@@ -310,6 +361,49 @@ export const enUS = {
       volumeDetail: "Interface sounds only.",
       volumeValue: "{value}%",
       soundSample: "Play sample",
+    },
+    voice: {
+      microphone: "Microphone",
+      microphoneDetail: "SERSHI uses the microphone only while you use push-to-talk.",
+      systemDefault: "System default",
+      fallback: "Your chosen microphone isn't connected — the system default is used.",
+      accessDenied:
+        "Windows is blocking microphone access. Open Settings › Privacy & security › Microphone and allow desktop apps.",
+      noDevices: "No microphone found.",
+      language: "Conversation language",
+      languageDetail:
+        "The language SERSHI listens for, independent of the interface language. Choosing one makes recognition about twice as fast as Automatic.",
+      languageAutomatic: "Detect automatically",
+      responses: "Voice responses",
+      responsesDetail: "Speak replies when you talked to SERSHI.",
+      speakTyped: "Speak typed responses",
+      speakTypedDetail: "Also speak replies when you type.",
+      options: {
+        on: "On",
+        off: "Off",
+      },
+      voice: "Voice",
+      voiceDetail:
+        "Installed Windows voices. System default picks a voice in the reply's language.",
+      noVoices: "No Windows voices are installed.",
+      model: "Local speech model",
+      modelDetail:
+        "Speech is recognised on this computer. Models are downloaded only when you ask, and verified before use.",
+      tiers: {
+        fast: "Fastest, weaker outside English",
+        balanced: "Balanced · recommended",
+        accurate: "Most accurate · slow on most computers",
+      },
+      modelMeta: "{size} · about {memory} of memory",
+      installed: "Installed",
+      corrupt: "Damaged",
+      use: "Use",
+      inUse: "In use",
+      wakeWord: "Wake word",
+      wakeWordValue: "Not available yet — SERSHI listens only when you press the microphone",
+      privacy:
+        "Audio stays in memory and is discarded after recognition. SERSHI never saves recordings, never sends audio anywhere and never logs what you say. Voice can ask for anything you could type; it can never approve an action.",
+      unsupported: "Voice is available in the Windows desktop app.",
     },
     windows: {
       appControl: "Application control",
@@ -422,6 +516,7 @@ export const enUS = {
     open: "Open SERSHI",
     hide: "Hide SERSHI",
     quit: "Quit SERSHI",
+    listening: "SERSHI — Listening",
   },
 
   capabilities: {
@@ -432,7 +527,8 @@ export const enUS = {
     shortcut: "Global shortcut & tray",
     aiProvider: "AI provider",
     contextFiles: "Files, clipboard & screen",
-    voice: "Voice & wake word",
+    voice: "Voice (push-to-talk)",
+    wakeWord: "Wake word",
     mailCalendar: "Email and calendar",
   },
 } as const;

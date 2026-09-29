@@ -36,6 +36,8 @@ struct TrayItems {
 pub struct Integration {
     tray: Mutex<Option<TrayItems>>,
     shortcut: Mutex<ShortcutBinding>,
+    /// Tooltip shown while the microphone is capturing (localized).
+    listening_label: Mutex<String>,
 }
 
 impl Integration {
@@ -66,7 +68,26 @@ impl Integration {
             let _ = items.hide.set_text(&labels.hide);
             let _ = items.quit.set_text(&labels.quit);
         }
+        if let Ok(mut label) = self.listening_label.lock() {
+            label.clone_from(&labels.listening);
+        }
     }
+}
+
+/// Mirrors microphone capture in the tray tooltip, so listening is visible
+/// even when every SERSHI window is hidden. Presentation only.
+pub fn set_listening(app: &AppHandle, listening: bool) {
+    let Some(tray) = app.tray_by_id(TRAY_ID) else {
+        return;
+    };
+    let tooltip = if listening {
+        state(app)
+            .and_then(|i| i.listening_label.lock().ok().map(|l| l.clone()))
+            .unwrap_or_else(|| "SERSHI — Listening".to_owned())
+    } else {
+        "SERSHI".to_owned()
+    };
+    let _ = tray.set_tooltip(Some(tooltip));
 }
 
 /// Sets up the tray. The global shortcut is configured by the Command
@@ -84,6 +105,7 @@ pub fn setup(app: &AppHandle) -> Integration {
     Integration {
         tray: Mutex::new(tray),
         shortcut: Mutex::new(ShortcutBinding::default()),
+        listening_label: Mutex::new("SERSHI — Listening".to_owned()),
     }
 }
 

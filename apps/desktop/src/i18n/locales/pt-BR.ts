@@ -34,7 +34,8 @@ export const ptBR: Messages = {
     sleeping: { label: "Em repouso", line: "Descansando. Me chame quando precisar." },
     idle: { label: "Pronto", line: "Pronto quando você quiser." },
     awake: { label: "Atento", line: "Estou aqui. O que você gostaria de fazer?" },
-    listening: { label: "Ouvindo", line: "Ouvindo…" },
+    listening: { label: "Ouvindo", line: "Ouvindo… clique no microfone quando terminar." },
+    transcribing: { label: "Transcrevendo", line: "Entendendo o que você disse…" },
     thinking: { label: "Pensando", line: "Entendendo seu pedido…" },
     planning: { label: "Planejando", line: "Escolhendo as etapas certas…" },
     executing: { label: "Executando", line: "Executando uma ação aprovada…" },
@@ -70,8 +71,14 @@ export const ptBR: Messages = {
   command: {
     label: "Comando",
     placeholder: "Pergunte ao SERSHI ou digite um comando",
-    voice: "Entrada de voz, disponível na v0.3",
-    voiceTip: "A voz chega na v0.3",
+    voice: "Falar com a SERSHI",
+    voiceTip: "Pressione para falar",
+    voiceStop: "Parar de ouvir e enviar",
+    voiceBusy: "Entendendo o que você disse",
+    voiceUnavailable: "A voz não está disponível neste computador",
+    stopSpeaking: "Parar de falar",
+    listeningPlaceholder: "Ouvindo… clique no microfone quando terminar · Esc cancela",
+    transcribingPlaceholder: "Entendendo o que você disse…",
     send: "Enviar",
     keyEnter: "Enter",
     keyEscape: "Esc",
@@ -82,6 +89,7 @@ export const ptBR: Messages = {
   },
 
   transcript: {
+    youSaid: "Você disse",
     status: {
       unavailable: "Ainda não disponível",
       notUnderstood: "Não entendido",
@@ -93,6 +101,7 @@ export const ptBR: Messages = {
       unresolved: "Nenhuma ação",
       cancelled: "Cancelado",
       expired: "Expirado",
+      voice: "Voz",
     },
   },
 
@@ -120,7 +129,7 @@ export const ptBR: Messages = {
     answer: {
       greeting:
         "Olá. Eu sou o SERSHI. Posso falar sobre o sistema, a memória e o processador deste computador. A compreensão de linguagem chega quando um provedor de IA for conectado.",
-      help: "Consigo informar dados do sistema, o uso de memória e a carga do processador, e abrir ou fechar aplicativos instalados. Tente “Abra o Bloco de notas”. Arquivos, voz e serviços conectados estão no roteiro.",
+      help: "Consigo informar dados do sistema, o uso de memória e a carga do processador, e abrir ou fechar aplicativos instalados, digitando ou pelo microfone. Tente “Abra o Bloco de notas”. Arquivos e serviços conectados estão no roteiro.",
     },
     rejected: {
       empty: "Digite ou fale um comando.",
@@ -158,6 +167,53 @@ export const ptBR: Messages = {
     coreUnreachable: "Algo deu errado ao falar com o meu núcleo.",
   },
 
+  voice: {
+    dismiss: "Entendi",
+    noSpeech: "Nenhuma fala detectada.",
+    unclear: "Não consegui entender com clareza. Tente de novo um pouco mais perto do microfone.",
+    fallback: "O microfone escolhido não está conectado, então a SERSHI usou o padrão do sistema.",
+    failure: {
+      unsupported: "A voz ainda não está disponível neste computador.",
+      noMicrophone: "Nenhum microfone foi encontrado. Conecte um e tente de novo.",
+      permissionDenied:
+        "Microfone indisponível. A SERSHI não tem permissão para usar seu microfone. No Windows, abra Configurações › Privacidade e segurança › Microfone e ative “Permitir que aplicativos da área de trabalho acessem seu microfone”.",
+      microphoneSilent:
+        "O microfone enviou apenas silêncio. Verifique se ele não está mudo e se o Windows permite que aplicativos da área de trabalho o usem (Configurações › Privacidade e segurança › Microfone).",
+      deviceLost: "O microfone foi desconectado ou parou de responder.",
+      modelMissing: "É preciso um modelo de voz local para que a SERSHI entenda o que você diz.",
+      modelCorrupt:
+        "O modelo de voz local está danificado. Baixe-o de novo em Configurações › Voz.",
+      recognitionFailed: "O reconhecimento de fala falhou. Tente de novo.",
+      speechUnavailable: "Respostas faladas indisponíveis: nenhuma voz do Windows está instalada.",
+      outputUnavailable: "Respostas faladas indisponíveis: nenhuma saída de áudio foi encontrada.",
+      busy: "A SERSHI está ocupada. Tente de novo em instantes.",
+    },
+    model: {
+      title: "Modelo de voz local necessário",
+      body: "A SERSHI entende sua voz neste computador. O que você diz nunca sai dele.",
+      name: "Modelo",
+      download: "Tamanho do download",
+      storage: "Espaço necessário",
+      memory: "Memória durante o uso",
+      action: "Baixar",
+      later: "Agora não",
+      downloading: "Baixando… {percent}",
+      cancel: "Cancelar",
+      ready: "Modelo de voz instalado. Pressione o microfone para falar.",
+      error: {
+        network: "O download falhou. Verifique sua conexão e tente de novo.",
+        integrity:
+          "O download não correspondeu à soma de verificação esperada e foi apagado. Tente de novo.",
+        storage: "Não foi possível salvar o modelo. Verifique o espaço livre em disco.",
+        cancelled: "Download cancelado.",
+      },
+    },
+    models: {
+      "whisper-base-q8": "Whisper Base",
+      "whisper-small-q8": "Whisper Small",
+      "whisper-large-v3-turbo-q5": "Whisper Large v3 Turbo",
+    },
+  },
   system: {
     heading: "Este computador",
     reading: "Lendo o sistema…",
@@ -211,6 +267,8 @@ export const ptBR: Messages = {
       confirmationExpired: "Aprovação expirada: {tool}",
       appOpened: "{app} aberto",
       appCloseRequested: "Pedido para fechar {app}",
+      microphoneOn: "Microfone ligado",
+      microphoneOff: "Microfone desligado",
     },
   },
 
@@ -221,6 +279,7 @@ export const ptBR: Messages = {
       general: "Geral",
       appearance: "Aparência",
       windows: "Integração com o Windows",
+      voice: "Voz",
       privacy: "Privacidade",
       tools: "Ferramentas e permissões",
       platform: "Plataforma",
@@ -233,19 +292,14 @@ export const ptBR: Messages = {
       automatic: "Automático",
       automaticDetail: "Idioma do sistema — {language}",
     },
-    conversation: {
-      label: "Idioma da conversa",
-      value: "Automático",
-      detail:
-        "Quando a voz e a IA chegarem, o SERSHI vai entender você no seu próprio idioma, qualquer que seja o idioma da interface.",
-    },
     privacy: {
       typed: "O que você digita",
       typedValue: "Nunca é gravado no registro de atividade",
       conversation: "Conversa",
       conversationValue: "Fica na memória apenas durante esta sessão",
       devices: "Microfone e tela",
-      devicesValue: "Não usados — voz e visão ainda não existem",
+      devicesValue:
+        "Microfone só ao pressionar para falar; o áudio fica na memória. Tela: não usada.",
       analytics: "Análises",
       analyticsValue: "Nenhuma. O SERSHI não envia nada para lugar nenhum.",
     },
@@ -306,7 +360,7 @@ export const ptBR: Messages = {
       },
       sounds: "Sons da interface",
       soundsDetail:
-        "Sinais curtos e suaves ao iniciar, ao chamar o SERSHI, ao concluir ações, em erros e quando sua aprovação é necessária. As respostas faladas terão uma configuração própria.",
+        "Sinais curtos e suaves ao iniciar, ao chamar a SERSHI, ao concluir ações, em erros e quando sua aprovação é necessária. As respostas faladas têm suas próprias configurações em Voz.",
       soundOptions: {
         on: "Ativados",
         off: "Desativados",
@@ -315,6 +369,49 @@ export const ptBR: Messages = {
       volumeDetail: "Somente os sons da interface.",
       volumeValue: "{value}%",
       soundSample: "Ouvir amostra",
+    },
+    voice: {
+      microphone: "Microfone",
+      microphoneDetail: "A SERSHI usa o microfone somente enquanto você usa pressionar para falar.",
+      systemDefault: "Padrão do sistema",
+      fallback: "O microfone escolhido não está conectado — o padrão do sistema é usado.",
+      accessDenied:
+        "O Windows está bloqueando o acesso ao microfone. Abra Configurações › Privacidade e segurança › Microfone e permita os aplicativos da área de trabalho.",
+      noDevices: "Nenhum microfone encontrado.",
+      language: "Idioma da conversa",
+      languageDetail:
+        "O idioma que a SERSHI escuta, independente do idioma da interface. Escolher um deixa o reconhecimento cerca de duas vezes mais rápido que Automático.",
+      languageAutomatic: "Detectar automaticamente",
+      responses: "Respostas por voz",
+      responsesDetail: "Responder em voz alta quando você falou com a SERSHI.",
+      speakTyped: "Falar respostas digitadas",
+      speakTypedDetail: "Responder em voz alta também quando você digita.",
+      options: {
+        on: "Ativadas",
+        off: "Desativadas",
+      },
+      voice: "Voz",
+      voiceDetail:
+        "Vozes do Windows instaladas. O padrão do sistema escolhe uma voz no idioma da resposta.",
+      noVoices: "Nenhuma voz do Windows está instalada.",
+      model: "Modelo de voz local",
+      modelDetail:
+        "A fala é reconhecida neste computador. Os modelos são baixados somente quando você pede e verificados antes do uso.",
+      tiers: {
+        fast: "O mais rápido, menos preciso fora do inglês",
+        balanced: "Equilibrado · recomendado",
+        accurate: "O mais preciso · lento na maioria dos computadores",
+      },
+      modelMeta: "{size} · cerca de {memory} de memória",
+      installed: "Instalado",
+      corrupt: "Danificado",
+      use: "Usar",
+      inUse: "Em uso",
+      wakeWord: "Palavra de ativação",
+      wakeWordValue: "Ainda não disponível — a SERSHI só escuta quando você pressiona o microfone",
+      privacy:
+        "O áudio fica na memória e é descartado após o reconhecimento. A SERSHI nunca salva gravações, nunca envia áudio a lugar nenhum e nunca registra o que você diz. A voz pode pedir tudo o que você poderia digitar; nunca pode aprovar uma ação.",
+      unsupported: "A voz está disponível no aplicativo para Windows.",
     },
     windows: {
       appControl: "Controle de aplicativos",
@@ -426,6 +523,7 @@ export const ptBR: Messages = {
     open: "Abrir o SERSHI",
     hide: "Ocultar o SERSHI",
     quit: "Sair do SERSHI",
+    listening: "SERSHI — Ouvindo",
   },
 
   capabilities: {
@@ -436,7 +534,8 @@ export const ptBR: Messages = {
     shortcut: "Atalho global e bandeja do sistema",
     aiProvider: "Provedor de IA",
     contextFiles: "Arquivos, área de transferência e tela",
-    voice: "Voz e palavra de ativação",
+    voice: "Voz (pressionar para falar)",
+    wakeWord: "Palavra de ativação",
     mailCalendar: "E-mail e calendário",
   },
 };

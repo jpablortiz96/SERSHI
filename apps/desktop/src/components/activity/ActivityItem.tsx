@@ -30,6 +30,9 @@ export const KIND_TONE: Record<ActivityKind, Tone> = {
   confirmationCancelled: "neutral",
   confirmationExpired: "neutral",
   capabilityUnavailable: "warning",
+  // The microphone opening and closing is a system fact worth seeing.
+  microphoneOn: "signal",
+  microphoneOff: "signal",
 };
 
 export function ActivityItem({ entry }: { entry: ActivityEntry }) {

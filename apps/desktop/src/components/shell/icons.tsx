@@ -50,6 +50,12 @@ export const MicIcon = () => (
   </Icon>
 );
 
+export const StopIcon = () => (
+  <Icon>
+    <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" />
+  </Icon>
+);
+
 /** The SERSHI mark, simplified for small sizes. */
 export const Mark = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">

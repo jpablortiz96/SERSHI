@@ -5,9 +5,10 @@ import { useI18n, type I18n } from "../../i18n";
 import { applicationName, asApplicationResult, composeReply } from "../../i18n/domain";
 import { useConversation, type Message, type Reply } from "../../state/conversation";
 import { motionReduced } from "../../visual/appearance";
+import { MicIcon } from "../shell/icons";
 import styles from "./Transcript.module.css";
 
-type Status = CommandStatus | "offline";
+type Status = CommandStatus | "offline" | "voice";
 
 const STATUS_WITH_LABEL = [
   "unavailable",
@@ -20,6 +21,7 @@ const STATUS_WITH_LABEL = [
   "unresolved",
   "cancelled",
   "expired",
+  "voice",
 ] as const satisfies readonly Status[];
 
 type LabelledStatus = (typeof STATUS_WITH_LABEL)[number];
@@ -35,6 +37,8 @@ function statusOf(reply: Reply): Status {
       return "offline";
     case "unreachable":
       return "failed";
+    case "voice":
+      return "voice";
   }
 }
 
@@ -46,6 +50,10 @@ function replyText({ t, format }: I18n, reply: Reply): string {
       return t("reply.offline");
     case "unreachable":
       return t("reply.coreUnreachable");
+    case "voice":
+      return reply.notice === "noSpeech" || reply.notice === "unclear"
+        ? t(`voice.${reply.notice}`)
+        : t(`voice.failure.${reply.notice}`);
   }
 }
 
@@ -94,7 +102,13 @@ export function Transcript({ messages }: { messages: Message[] }) {
         {messages.map((m) => {
           if (m.role === "user") {
             return (
-              <li key={m.id} className={styles.message} data-role="user">
+              <li key={m.id} className={styles.message} data-role="user" data-via={m.via}>
+                {m.via === "voice" && (
+                  <p className={styles.via}>
+                    <MicIcon />
+                    {t("transcript.youSaid")}
+                  </p>
+                )}
                 <p className={styles.user}>{m.text}</p>
               </li>
             );

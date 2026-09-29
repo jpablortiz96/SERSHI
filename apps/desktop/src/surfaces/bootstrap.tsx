@@ -7,7 +7,10 @@ import { StrictMode, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { connectLocale } from "../i18n";
-import { desktopRuntime } from "../ipc";
+// The low-level client only: the trusted confirmation window shares this
+// bootstrap and must not bundle the Command Center's IPC facade (voice
+// included).
+import { desktopRuntime } from "../ipc/client";
 import { connectAppearance } from "../visual/appearance";
 
 /** Shared start-up for every SERSHI window: tokens first, then React. */
