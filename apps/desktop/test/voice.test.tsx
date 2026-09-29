@@ -17,9 +17,13 @@ const startVoiceCapture = vi.fn<() => Promise<CaptureStart>>(() =>
 const stopVoiceCapture = vi.fn(() => Promise.resolve(null));
 const cancelVoiceCapture = vi.fn(() => Promise.resolve(null));
 const stopSpeaking = vi.fn(() => Promise.resolve(null));
-const speakReply = vi.fn((_text: string, _language: string | null) => Promise.resolve(null));
-const downloadVoiceModel = vi.fn((_model: string) => Promise.resolve(null));
-const configureVoice = vi.fn((_settings: VoiceSettings) => Promise.resolve(status()));
+const speakReply = vi.fn<(text: string, language: string | null) => Promise<null>>(() =>
+  Promise.resolve(null),
+);
+const downloadVoiceModel = vi.fn<(model: string) => Promise<null>>(() => Promise.resolve(null));
+const configureVoice = vi.fn<(settings: VoiceSettings) => Promise<VoiceStatus>>(() =>
+  Promise.resolve(status()),
+);
 
 vi.mock("../src/ipc", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/ipc")>();
@@ -109,6 +113,7 @@ describe("push-to-talk", () => {
     const mic = screen.getByRole("button", { name: "Talk to SERSHI" });
     expect(mic.getAttribute("aria-pressed")).toBe("false");
     await act(async () => {
+      await Promise.resolve();
       fireEvent.click(mic);
     });
     expect(startVoiceCapture).toHaveBeenCalledTimes(1);
@@ -158,6 +163,7 @@ describe("push-to-talk", () => {
     startVoiceCapture.mockResolvedValueOnce({ kind: "refused", reason: "modelMissing" });
     render(<CommandBar />);
     await act(async () => {
+      await Promise.resolve();
       fireEvent.click(screen.getByRole("button", { name: "Talk to SERSHI" }));
     });
     expect(screen.getByText("Local speech model required")).toBeTruthy();
@@ -172,6 +178,7 @@ describe("push-to-talk", () => {
     startVoiceCapture.mockResolvedValueOnce({ kind: "refused", reason: "permissionDenied" });
     render(<CommandBar />);
     await act(async () => {
+      await Promise.resolve();
       fireEvent.click(screen.getByRole("button", { name: "Talk to SERSHI" }));
     });
     const alert = screen.getByRole("alert");

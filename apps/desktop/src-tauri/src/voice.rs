@@ -764,9 +764,13 @@ pub fn speak(app: &AppHandle, text: &str, language: Option<&str>) -> Result<(), 
     };
     match voice.platform.output.play(audio, Box::new(gate)) {
         Ok(handle) => {
-            if let Ok(mut inner) = voice.locked() {
-                inner.playback = Some((id, handle));
-            }
+            // Swap under the lock, drop outside it: dropping a playback
+            // joins its thread, whose `finished` callback takes this lock.
+            let previous = voice
+                .locked()
+                .ok()
+                .and_then(|mut inner| inner.playback.replace((id, handle)));
+            drop(previous);
             let _ = ready_tx.send(());
             eprintln!(
                 "SERSHI voice: speech started {} ms after request",
