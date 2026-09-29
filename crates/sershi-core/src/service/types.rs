@@ -151,3 +151,8 @@ pub enum ServiceEvent {
 }
 
 pub type Clock = fn() -> u64;
+
+/// Push-to-talk was refused because SERSHI is working, speaking or already
+/// handling voice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VoiceBusy;

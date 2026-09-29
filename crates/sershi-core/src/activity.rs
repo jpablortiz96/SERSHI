@@ -28,6 +28,10 @@ pub enum ActivityKind {
     ConfirmationCancelled,
     ConfirmationExpired,
     CapabilityUnavailable,
+    /// Push-to-talk opened the microphone.
+    MicrophoneOn,
+    /// The microphone closed (`duration_ms` is how long it was open).
+    MicrophoneOff,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

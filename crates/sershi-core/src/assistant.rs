@@ -1,9 +1,15 @@
 //! The assistant state machine.
 //!
 //! One model of "what is SERSHI doing right now" is shared by every surface:
-//! the floating companion, the Command Center, and (later) the voice pipeline
-//! all render [`AssistantSnapshot`]s produced here. There is no second copy
-//! of this state in the UI.
+//! the floating companion, the Command Center and the voice pipeline all
+//! render [`AssistantSnapshot`]s produced here. There is no second copy of
+//! this state in the UI.
+//!
+//! Voice states are real, never decorative: `Listening` means the microphone
+//! is capturing, `Transcribing` means captured audio is being recognised
+//! locally (the microphone is already off) and `Speaking` means synthesized
+//! speech is playing. Only Developer Mode's `preview_state` may show them
+//! without the underlying activity.
 //!
 //! *States* describe activity. *Conditions* such as offline or private mode
 //! describe the environment and are layered on top by the renderer; they are
@@ -24,15 +30,17 @@ pub enum AssistantState {
     Idle,
     /// The user has summoned SERSHI and it is attending.
     Awake,
-    /// Capturing user input (voice, once v0.3 lands).
+    /// The microphone is capturing (push-to-talk). Never shown otherwise.
     Listening,
+    /// Captured speech is being recognised locally. The microphone is off.
+    Transcribing,
     /// Understanding the request.
     Thinking,
     /// Deciding which tools to use and in what order.
     Planning,
     /// Running an approved tool.
     Executing,
-    /// Delivering a spoken response.
+    /// A spoken response is playing.
     Speaking,
     /// A request completed. Transient; settles back to idle.
     Success,
@@ -47,11 +55,12 @@ pub enum AssistantState {
 }
 
 impl AssistantState {
-    pub const ALL: [AssistantState; 12] = [
+    pub const ALL: [AssistantState; 13] = [
         Self::Sleeping,
         Self::Idle,
         Self::Awake,
         Self::Listening,
+        Self::Transcribing,
         Self::Thinking,
         Self::Planning,
         Self::Executing,
@@ -74,6 +83,11 @@ impl AssistantState {
     pub fn is_transient(self) -> bool {
         matches!(self, Self::Success | Self::Warning | Self::Error)
     }
+
+    /// The voice pipeline owns the moment: capturing or recognising speech.
+    pub fn is_voice_input(self) -> bool {
+        matches!(self, Self::Listening | Self::Transcribing)
+    }
 }
 
 /// Inputs that move the state machine.
@@ -87,16 +101,20 @@ pub enum AssistantEvent {
     Sleep,
     /// The user summoned the assistant (click, shortcut, wake word).
     Activate,
-    /// Begin capturing input.
+    /// The microphone started capturing (push-to-talk).
     StartListening,
+    /// The microphone stopped; captured speech is being recognised.
+    CaptureEnded,
     /// A complete request was received and understanding begins.
     RequestReceived,
     /// Understanding produced a multi-step plan that needs ordering.
     PlanStarted,
     /// An approved tool started running.
     ExecutionStarted,
-    /// A spoken response started.
+    /// A spoken response started playing.
     SpeechStarted,
+    /// A spoken response finished or was stopped.
+    SpeechEnded,
     /// The request completed successfully.
     Completed,
     /// The request needs the user's attention (nothing will run).
@@ -133,10 +151,20 @@ pub fn transition(
     let next = match (from, event) {
         (S::Sleeping, E::Wake) => S::Idle,
         (S::Sleeping | S::Idle, E::Activate) => S::Awake,
-        (s, E::Sleep) if !s.is_busy() && s != S::AwaitingConfirmation => S::Sleeping,
+        (s, E::Sleep) if !s.is_busy() && !s.is_voice_input() && s != S::AwaitingConfirmation => {
+            S::Sleeping
+        }
 
-        (S::Idle | S::Awake, E::StartListening) => S::Listening,
-        (S::Sleeping | S::Idle | S::Awake | S::Listening, E::RequestReceived) => S::Thinking,
+        // Push-to-talk may start while a previous outcome is still showing.
+        // Never while waiting for approval: the service cancels a pending
+        // approval first, so the microphone and a confirmation never overlap.
+        (S::Sleeping | S::Idle | S::Awake, E::StartListening) => S::Listening,
+        (s, E::StartListening) if s.is_transient() => S::Listening,
+        (S::Listening, E::CaptureEnded) => S::Transcribing,
+        // A transcript enters the same request path as typed text.
+        (S::Sleeping | S::Idle | S::Awake | S::Listening | S::Transcribing, E::RequestReceived) => {
+            S::Thinking
+        }
         // A new request may start while a previous outcome is still showing.
         (s, E::RequestReceived) if s.is_transient() => S::Thinking,
         // A new request replaces a pending confirmation (the service cancels it).
@@ -145,9 +173,18 @@ pub fn transition(
         (S::Thinking, E::PlanStarted) => S::Planning,
         (S::Thinking | S::Planning | S::Executing, E::ExecutionStarted) => S::Executing,
         (S::Thinking | S::Planning | S::Executing, E::SpeechStarted) => S::Speaking,
+        // The spoken reply follows the outcome it describes (which may
+        // already have settled).
+        (s, E::SpeechStarted) if s.is_transient() => S::Speaking,
+        (S::Idle | S::Awake, E::SpeechStarted) => S::Speaking,
+        (S::Speaking, E::SpeechEnded) => S::Idle,
 
         (S::Thinking | S::Planning | S::Executing | S::Speaking, E::Completed) => S::Success,
-        (S::Thinking | S::Planning | S::Executing | S::Speaking, E::AttentionNeeded) => S::Warning,
+        // Recognition found no usable speech: nothing runs.
+        (
+            S::Transcribing | S::Thinking | S::Planning | S::Executing | S::Speaking,
+            E::AttentionNeeded,
+        ) => S::Warning,
         (S::Thinking | S::Planning, E::ConfirmationRequested) => S::AwaitingConfirmation,
         (S::AwaitingConfirmation, E::ConfirmationApproved) => S::Executing,
         // Anything can fail, except a state with nothing in flight.
@@ -293,7 +330,14 @@ mod tests {
 
     #[test]
     fn cannot_execute_without_understanding_first() {
-        for s in [S::Sleeping, S::Idle, S::Awake, S::Listening, S::Success] {
+        for s in [
+            S::Sleeping,
+            S::Idle,
+            S::Awake,
+            S::Listening,
+            S::Transcribing,
+            S::Success,
+        ] {
             assert!(transition(s, E::ExecutionStarted).is_err(), "{s:?}");
         }
     }
@@ -350,6 +394,84 @@ mod tests {
         m.apply(E::RequestReceived).unwrap();
         assert!(m.apply_if_current(success.revision, E::Settle).is_none());
         assert_eq!(m.state(), S::Thinking);
+    }
+
+    #[test]
+    fn voice_request_lifecycle() {
+        let mut m = StateMachine::default();
+        for (event, expected) in [
+            (E::StartListening, S::Listening),
+            (E::CaptureEnded, S::Transcribing),
+            (E::RequestReceived, S::Thinking),
+            (E::PlanStarted, S::Planning),
+            (E::ExecutionStarted, S::Executing),
+            (E::Completed, S::Success),
+            (E::SpeechStarted, S::Speaking),
+            (E::SpeechEnded, S::Idle),
+        ] {
+            assert_eq!(m.apply(event).unwrap().state, expected, "after {event:?}");
+        }
+    }
+
+    #[test]
+    fn push_to_talk_starts_from_rest_or_a_showing_outcome_only() {
+        for s in S::ALL {
+            let allowed = matches!(s, S::Sleeping | S::Idle | S::Awake) || s.is_transient();
+            assert_eq!(transition(s, E::StartListening).is_ok(), allowed, "{s:?}");
+        }
+        // In particular: never while an approval is pending or work runs.
+        assert!(transition(S::AwaitingConfirmation, E::StartListening).is_err());
+        assert!(transition(S::Executing, E::StartListening).is_err());
+    }
+
+    #[test]
+    fn only_a_capturing_microphone_can_end_capture() {
+        for s in S::ALL {
+            assert_eq!(
+                transition(s, E::CaptureEnded).is_ok(),
+                s == S::Listening,
+                "{s:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn voice_input_can_be_cancelled_and_cannot_sleep() {
+        for s in [S::Listening, S::Transcribing] {
+            assert_eq!(transition(s, E::Dismiss), Ok(S::Idle));
+            assert!(transition(s, E::Sleep).is_err(), "{s:?}");
+            assert_eq!(transition(s, E::Failed), Ok(S::Error));
+        }
+        // No speech / unclear speech: attention, and nothing runs.
+        assert_eq!(
+            transition(S::Transcribing, E::AttentionNeeded),
+            Ok(S::Warning)
+        );
+    }
+
+    #[test]
+    fn voice_states_never_lead_to_execution_or_approval() {
+        for s in [S::Listening, S::Transcribing, S::Speaking] {
+            assert!(transition(s, E::ExecutionStarted).is_err(), "{s:?}");
+            assert!(transition(s, E::ConfirmationApproved).is_err(), "{s:?}");
+            assert!(transition(s, E::ConfirmationRequested).is_err(), "{s:?}");
+        }
+    }
+
+    #[test]
+    fn speaking_follows_an_outcome_and_ends_at_rest() {
+        for s in [S::Success, S::Warning, S::Error] {
+            assert_eq!(transition(s, E::SpeechStarted), Ok(S::Speaking));
+        }
+        // A pending approval is never overwritten by speech.
+        assert!(transition(S::AwaitingConfirmation, E::SpeechStarted).is_err());
+        for s in S::ALL {
+            assert_eq!(
+                transition(s, E::SpeechEnded).is_ok(),
+                s == S::Speaking,
+                "{s:?}"
+            );
+        }
     }
 
     #[test]

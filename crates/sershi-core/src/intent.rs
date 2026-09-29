@@ -35,8 +35,8 @@ impl AnswerTopic {
             }
             Self::Help => {
                 "I can report system information, memory usage and processor load, and open or \
-                 close installed applications. Try \"Open Notepad\". Files, voice and connected \
-                 services are on the roadmap."
+                 close installed applications — by typing or with the microphone. Try \"Open \
+                 Notepad\". Files and connected services are on the roadmap."
             }
         }
     }
@@ -76,6 +76,10 @@ pub enum Intent {
     Answer(AnswerTopic),
     /// Understood, but the capability does not exist yet.
     NotYetAvailable(UnavailableCapability),
+    /// "Cancel": withdraw whatever is pending. Cancelling only ever reduces
+    /// authority. There is deliberately no counterpart: no intent can
+    /// approve anything (approval exists only on the trusted surface).
+    Cancel,
     /// Not understood.
     NotUnderstood,
 }
@@ -96,14 +100,14 @@ pub struct KeywordIntentResolver;
 #[rustfmt::skip]
 const OPEN_VERBS: &[&str] = &[
     /* en */ "open", "launch", "start", "run",
-    /* es */ "abre", "abrir", "abra", "inicia", "iniciar", "ejecuta", "ejecutar",
+    /* es */ "abre", "abrir", "abra", "abres", "abras", "inicia", "iniciar", "ejecuta", "ejecutar",
     /* pt */ "inicie", "execute", "executar", "rode",
 ];
 /// Imperative verbs that close an application.
 #[rustfmt::skip]
 const CLOSE_VERBS: &[&str] = &[
     /* en */ "close", "quit", "exit",
-    /* es */ "cierra", "cerrar", "cierre",
+    /* es */ "cierra", "cerrar", "cierre", "cierras", "cierres",
     /* pt */ "feche", "fechar", "encerre", "encerrar",
 ];
 /// Courtesy prefixes skipped before the verb.
@@ -181,6 +185,28 @@ const CONNECTED_WORDS: &[&str] = &[
     "reuniões",
 ];
 const GREETINGS: &[&str] = &["hello", "hi", "hey", "hola", "olá", "ola", "oi"];
+/// Whole-utterance cancellations ("Cancel", "Cancelar", "Cancelar ação").
+/// Matched exactly (after courtesy words), so "cancel my meeting" is not one.
+const CANCEL_PHRASES: &[&[&str]] = &[
+    &["cancel"],
+    &["cancel", "that"],
+    &["cancel", "it"],
+    &["never", "mind"],
+    &["nevermind"],
+    &["cancelar"],
+    &["cancela"],
+    &["cancele"],
+    &["cancelalo"],
+    &["cancélalo"],
+    &["cancela", "eso"],
+    &["cancelar", "acción"],
+    &["cancelar", "accion"],
+    &["cancelar", "ação"],
+    &["cancelar", "acao"],
+    &["cancele", "isso"],
+];
+/// Words ignored around a cancellation ("SERSHI, cancel please").
+const CANCEL_FILLER: &[&str] = &["sershi", "please", "por", "favor", "ok", "okay"];
 const HELP_WORDS: &[&str] = &["help", "ayuda", "ajuda"];
 
 impl IntentResolver for KeywordIntentResolver {
@@ -194,6 +220,14 @@ impl IntentResolver for KeywordIntentResolver {
 
         if words.is_empty() {
             return Intent::NotUnderstood;
+        }
+        let core: Vec<&str> = words
+            .iter()
+            .copied()
+            .filter(|w| !CANCEL_FILLER.contains(w))
+            .collect();
+        if CANCEL_PHRASES.contains(&core.as_slice()) {
+            return Intent::Cancel;
         }
         // Application commands first: "open task manager to check memory" is
         // an action request, not a memory question.
@@ -340,6 +374,9 @@ mod tests {
             ("Abra o Spotify", "Spotify"),
             ("Inicie o Spotify", "Spotify"),
             ("Abra a Calculadora", "Calculadora"),
+            // Second-person forms, as speech recognition often hears them.
+            ("¿Abres Spotify?", "Spotify"),
+            ("Abras Spotify.", "Spotify"),
             ("Abra o Visual Studio Code, por favor", "Visual Studio Code"),
         ] {
             assert_eq!(
@@ -357,6 +394,7 @@ mod tests {
             ("quit Chrome", "Chrome"),
             ("Cierra Spotify", "Spotify"),
             ("Cerrar Spotify", "Spotify"),
+            ("Cierras Spotify.", "Spotify"),
             ("Feche o Spotify", "Spotify"),
             ("Fechar Spotify", "Spotify"),
         ] {
@@ -433,6 +471,71 @@ mod tests {
             KeywordIntentResolver.resolve("ajuda"),
             Intent::Answer(AnswerTopic::Help)
         );
+    }
+
+    #[test]
+    fn cancellation_is_an_exact_utterance() {
+        for text in [
+            "Cancel",
+            "cancel that",
+            "Cancelar.",
+            "¡Cancela!",
+            "Cancelar ação",
+            "cancelar acción",
+            "SERSHI, cancel please",
+            "Cancelar, por favor",
+            "Never mind",
+        ] {
+            assert_eq!(
+                KeywordIntentResolver.resolve(text),
+                Intent::Cancel,
+                "{text}"
+            );
+        }
+        for text in ["cancel my meeting", "how do I cancel", "cancelar Spotify"] {
+            assert_ne!(
+                KeywordIntentResolver.resolve(text),
+                Intent::Cancel,
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn approval_words_are_never_an_intent() {
+        // Approval exists only on the trusted confirmation surface. Spoken or
+        // typed, these are just words that SERSHI does not act on.
+        for text in [
+            "yes",
+            "Yes.",
+            "sí",
+            "Sí",
+            "si",
+            "sim",
+            "ok",
+            "okay",
+            "approve",
+            "approved",
+            "aprobar",
+            "apruebo",
+            "aprovar",
+            "confirm",
+            "confirmar",
+            "confirmo",
+            "do it",
+            "hazlo",
+            "faça",
+            "allow",
+            "permitir",
+            "SERSHI, yes",
+            "Sí, ciérralo",
+        ] {
+            let intent = KeywordIntentResolver.resolve(text);
+            assert!(
+                matches!(intent, Intent::NotUnderstood | Intent::Answer(_)),
+                "{text}: {intent:?}"
+            );
+        }
     }
 
     #[test]

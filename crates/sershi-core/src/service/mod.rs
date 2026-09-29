@@ -10,8 +10,17 @@
 //!
 //! Invariant: the service never approves on its own. Approval enters only
 //! through [`AssistantService::decide`], which the desktop shell accepts only
-//! from the trusted confirmation surface; intent resolution, tools and model
-//! output have no path to it.
+//! from the trusted confirmation surface; intent resolution, tools, model
+//! output and voice have no path to it.
+//!
+//! Voice (push-to-talk) adds states around the same pipeline:
+//!
+//! ```text
+//! begin_listening → Listening ─ end_listening → Transcribing
+//!     ─ submit_transcript(text) → submit(text)   (exactly the typed path)
+//!     ─ voice_unusable → Warning   (no speech / unclear: nothing runs)
+//! outcome ─ begin_speaking → Speaking ─ end_speaking → Idle
+//! ```
 //!
 //! The service is synchronous and owns no threads or timers; the desktop shell
 //! wraps it in a mutex and schedules settle and expiry timers.
@@ -23,7 +32,7 @@ mod tests;
 
 pub use types::{
     Clock, CommandOutcome, CommandRequest, CommandStatus, ConfirmationChoice, ConfirmationDecision,
-    MAX_COMMAND_CHARS, OutcomeDetail, RejectionReason, ServiceEvent,
+    MAX_COMMAND_CHARS, OutcomeDetail, RejectionReason, ServiceEvent, VoiceBusy,
 };
 
 use crate::activity::{ActivityEntry, ActivityKind, ActivityLog, NewActivity};
@@ -110,6 +119,133 @@ impl AssistantService {
         self.machine.set_preview(preview)
     }
 
+    // ── Voice ─────────────────────────────────────────────────────────────
+
+    /// Push-to-talk: the microphone is about to open. A pending approval is
+    /// cancelled first — a spoken request, like any new request, replaces
+    /// it — so the microphone and an approval never overlap and nothing said
+    /// can reach it. Returns the cancellation to report, if any.
+    pub fn begin_listening(
+        &mut self,
+        notify: Notify<'_>,
+    ) -> Result<Option<CommandOutcome>, VoiceBusy> {
+        let state = self.machine.state();
+        if state.is_busy() || state.is_voice_input() {
+            return Err(VoiceBusy);
+        }
+        let watermark = self.watermark();
+        let cancelled = self.cancel_confirmations();
+        if state == AssistantState::AwaitingConfirmation {
+            self.transition(AssistantEvent::Dismiss, notify);
+        }
+        self.record(NewActivity::new(
+            ActivityKind::MicrophoneOn,
+            "Microphone on",
+        ));
+        self.transition(AssistantEvent::StartListening, notify);
+        self.flush_activity(watermark, notify);
+        Ok(cancelled.as_ref().map(cancelled_outcome))
+    }
+
+    /// The microphone closed after `duration_ms`; recognition starts.
+    /// Returns false if SERSHI was no longer listening.
+    pub fn end_listening(&mut self, duration_ms: u32, notify: Notify<'_>) -> bool {
+        if self.machine.state() != AssistantState::Listening {
+            return false;
+        }
+        let watermark = self.watermark();
+        self.record_microphone_off(duration_ms);
+        self.transition(AssistantEvent::CaptureEnded, notify);
+        self.flush_activity(watermark, notify);
+        true
+    }
+
+    /// Submits a recognised transcript through exactly the same path as
+    /// typed text ([`Self::submit`]). `None` if the voice interaction was
+    /// superseded (cancelled, or a typed command arrived first).
+    pub fn submit_transcript(&mut self, text: &str, notify: Notify<'_>) -> Option<CommandOutcome> {
+        if self.machine.state() != AssistantState::Transcribing {
+            return None;
+        }
+        Some(self.submit(
+            &CommandRequest {
+                text: text.to_owned(),
+            },
+            notify,
+        ))
+    }
+
+    /// Recognition heard nothing usable (silence, unclear speech). Nothing
+    /// runs; the assistant shows it needs attention.
+    pub fn voice_unusable(&mut self, notify: Notify<'_>) -> bool {
+        if self.machine.state() != AssistantState::Transcribing {
+            return false;
+        }
+        self.transition(AssistantEvent::AttentionNeeded, notify);
+        true
+    }
+
+    /// The voice interaction was cancelled (Escape, the Command Center was
+    /// hidden, a typed command took over). `mic_ms` is how long the
+    /// microphone was open if it was still capturing.
+    pub fn cancel_voice(&mut self, mic_ms: Option<u32>, notify: Notify<'_>) -> bool {
+        self.end_voice(mic_ms, AssistantEvent::Dismiss, notify)
+    }
+
+    /// Capture or recognition failed.
+    pub fn voice_failed(&mut self, mic_ms: Option<u32>, notify: Notify<'_>) -> bool {
+        self.end_voice(mic_ms, AssistantEvent::Failed, notify)
+    }
+
+    fn end_voice(
+        &mut self,
+        mic_ms: Option<u32>,
+        event: AssistantEvent,
+        notify: Notify<'_>,
+    ) -> bool {
+        let state = self.machine.state();
+        if !state.is_voice_input() {
+            return false;
+        }
+        let watermark = self.watermark();
+        if state == AssistantState::Listening {
+            self.record_microphone_off(mic_ms.unwrap_or(0));
+        }
+        self.transition(event, notify);
+        self.flush_activity(watermark, notify);
+        true
+    }
+
+    fn record_microphone_off(&mut self, duration_ms: u32) {
+        self.record(
+            NewActivity::new(ActivityKind::MicrophoneOff, "Microphone off").duration(duration_ms),
+        );
+    }
+
+    /// A spoken reply started playing. Returns whether the state now shows
+    /// Speaking; it never replaces work in progress, voice input or a
+    /// pending approval (the reply still plays; the more important state
+    /// stays visible).
+    pub fn begin_speaking(&mut self, notify: Notify<'_>) -> bool {
+        let state = self.machine.state();
+        let may_show =
+            state.is_transient() || matches!(state, AssistantState::Idle | AssistantState::Awake);
+        if !may_show {
+            return false;
+        }
+        self.transition(AssistantEvent::SpeechStarted, notify);
+        true
+    }
+
+    /// The spoken reply finished or was stopped.
+    pub fn end_speaking(&mut self, notify: Notify<'_>) -> bool {
+        if self.machine.state() != AssistantState::Speaking {
+            return false;
+        }
+        self.transition(AssistantEvent::SpeechEnded, notify);
+        true
+    }
+
     pub fn submit(&mut self, request: &CommandRequest, notify: Notify<'_>) -> CommandOutcome {
         let text = request.text.trim();
         if text.is_empty() {
@@ -130,7 +266,7 @@ impl AssistantService {
 
         let watermark = self.watermark();
         // A new request replaces any pending approval.
-        self.cancel_confirmations();
+        let replaced = self.cancel_confirmations();
         // The command text itself is deliberately not recorded.
         self.record(NewActivity::new(
             ActivityKind::CommandReceived,
@@ -164,6 +300,13 @@ impl AssistantService {
                         format!("{label} isn't available yet — it's planned for {milestone}."),
                     )
                 }
+            }
+            Intent::Cancel => {
+                self.transition(AssistantEvent::Dismiss, notify);
+                replaced.as_ref().map_or_else(
+                    || CommandOutcome::new(CommandStatus::Cancelled, "Nothing was waiting."),
+                    cancelled_outcome,
+                )
             }
             Intent::NotUnderstood => {
                 self.transition(AssistantEvent::AttentionNeeded, notify);

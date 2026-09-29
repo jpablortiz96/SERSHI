@@ -25,6 +25,7 @@ pub mod service;
 pub mod shortcut;
 pub mod system;
 pub mod tool;
+pub mod voice;
 
 #[cfg(all(test, feature = "ts"))]
 mod contract_fixtures;

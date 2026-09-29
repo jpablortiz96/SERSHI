@@ -4,4 +4,4 @@
  * What the assistant is doing. See `docs/MOTION_SYSTEM.md` for how each state
  * looks and moves.
  */
-export type AssistantState = "sleeping" | "idle" | "awake" | "listening" | "thinking" | "planning" | "executing" | "speaking" | "success" | "warning" | "awaitingConfirmation" | "error";
+export type AssistantState = "sleeping" | "idle" | "awake" | "listening" | "transcribing" | "thinking" | "planning" | "executing" | "speaking" | "success" | "warning" | "awaitingConfirmation" | "error";

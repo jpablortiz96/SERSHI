@@ -100,6 +100,8 @@ pub struct TrayLabels {
     pub open: String,
     pub hide: String,
     pub quit: String,
+    /// Tray tooltip while the microphone is capturing ("SERSHI — Listening").
+    pub listening: String,
 }
 
 /// Longest accepted tray label.
@@ -108,10 +110,12 @@ pub const MAX_TRAY_LABEL: usize = 48;
 impl TrayLabels {
     /// Labels must be short, printable text.
     pub fn is_valid(&self) -> bool {
-        [&self.open, &self.hide, &self.quit].iter().all(|l| {
-            let n = l.chars().count();
-            n > 0 && n <= MAX_TRAY_LABEL && !l.chars().any(char::is_control)
-        })
+        [&self.open, &self.hide, &self.quit, &self.listening]
+            .iter()
+            .all(|l| {
+                let n = l.chars().count();
+                n > 0 && n <= MAX_TRAY_LABEL && !l.chars().any(char::is_control)
+            })
     }
 }
 
@@ -135,6 +139,7 @@ mod tests {
             open: "Abrir SERSHI".into(),
             hide: "Ocultar SERSHI".into(),
             quit: "Salir de SERSHI".into(),
+            listening: "SERSHI — Escuchando".into(),
         };
         assert!(ok.is_valid());
         for bad in ["", "\u{202e}evil\n", &"x".repeat(MAX_TRAY_LABEL + 1)] {

@@ -534,3 +534,220 @@ fn nothing_to_close_is_reported_without_asking() {
     assert!(h.service.pending_confirmation().is_none());
     assert_eq!(outcome.data.unwrap_or(Value::Null)["kind"], "notRunning");
 }
+
+// ── Voice (Prompt 3): audio does not grant authority ──────────────────────
+
+/// Push-to-talk up to a recognised transcript, then submit it.
+fn say(h: &mut Harness, text: &str) -> (Option<CommandOutcome>, Vec<ServiceEvent>) {
+    let mut events = Vec::new();
+    h.service
+        .begin_listening(&mut |e| events.push(e))
+        .expect("listening");
+    assert!(h.service.end_listening(1_200, &mut |e| events.push(e)));
+    let outcome = h.service.submit_transcript(text, &mut |e| events.push(e));
+    (outcome, events)
+}
+
+#[test]
+fn a_voice_request_runs_exactly_the_typed_pipeline() {
+    let mut typed = windows();
+    let (typed_outcome, typed_events) = submit(&mut typed.service, "Abre Spotify");
+
+    let mut spoken = windows();
+    let (outcome, events) = say(&mut spoken, "Abre Spotify");
+    let outcome = outcome.expect("submitted");
+
+    assert_eq!(outcome, typed_outcome);
+    assert_eq!(
+        states(&events),
+        [
+            S::Listening,
+            S::Transcribing,
+            S::Thinking,
+            S::Planning,
+            S::Executing,
+            S::Success
+        ]
+    );
+    // After the microphone entries, the audit trail is the typed one.
+    let voice_kinds = kinds(&events);
+    assert_eq!(
+        voice_kinds[..2],
+        [ActivityKind::MicrophoneOn, ActivityKind::MicrophoneOff]
+    );
+    assert_eq!(voice_kinds[2..], kinds(&typed_events)[..]);
+    assert_eq!(spoken.apps.launches(), 1);
+}
+
+#[test]
+fn transcripts_are_only_accepted_while_transcribing() {
+    let mut h = windows();
+    assert!(h.service.submit_transcript("memory", &mut |_| {}).is_none());
+    h.service.begin_listening(&mut |_| {}).unwrap();
+    assert!(
+        h.service.submit_transcript("memory", &mut |_| {}).is_none(),
+        "not while the microphone is still open"
+    );
+    // A typed command supersedes the voice interaction.
+    h.service.cancel_voice(Some(300), &mut |_| {});
+    submit(&mut h.service, "memory");
+    assert!(
+        h.service
+            .submit_transcript("close spotify", &mut |_| {})
+            .is_none()
+    );
+    assert!(h.service.pending_confirmation().is_none());
+}
+
+#[test]
+fn speaking_yes_never_approves_a_sensitive_action() {
+    for answer in [
+        "Sí",
+        "sí.",
+        "Yes",
+        "yes!",
+        "Aprobar",
+        "Approve",
+        "Confirm",
+        "Confirmar",
+        "Sim",
+        "Aprovar",
+        "OK",
+        "Do it",
+        "SERSHI, yes, close it",
+    ] {
+        let mut h = windows();
+        let request = request_close(&mut h);
+        let (outcome, _) = say(&mut h, answer);
+        let outcome = outcome.expect("submitted like typed text");
+        assert_ne!(outcome.status, CommandStatus::Completed, "{answer}");
+        assert_eq!(h.apps.closes(), 0, "{answer}: nothing may close");
+        assert!(h.service.pending_confirmation().is_none(), "{answer}");
+        // Even the trusted surface can no longer approve the old request.
+        let (late, _) = decide(&mut h.service, &request, true);
+        assert_eq!(late.status, CommandStatus::Rejected, "{answer}");
+        assert_eq!(h.apps.closes(), 0, "{answer}");
+    }
+}
+
+#[test]
+fn the_microphone_never_overlaps_a_pending_approval() {
+    let mut h = windows();
+    request_close(&mut h);
+    let mut events = Vec::new();
+    let cancelled = h
+        .service
+        .begin_listening(&mut |e| events.push(e))
+        .unwrap()
+        .expect("the pending approval is reported as cancelled");
+    assert_eq!(cancelled.status, CommandStatus::Cancelled);
+    assert!(h.service.pending_confirmation().is_none());
+    assert_eq!(states(&events), [S::Idle, S::Listening]);
+    assert_eq!(
+        kinds(&events),
+        [
+            ActivityKind::ConfirmationCancelled,
+            ActivityKind::MicrophoneOn
+        ]
+    );
+    assert_eq!(h.apps.closes(), 0);
+}
+
+#[test]
+fn saying_cancel_withdraws_and_reduces_authority() {
+    // Typed or spoken, "cancel" withdraws a pending approval.
+    let mut h = windows();
+    request_close(&mut h);
+    let (outcome, events) = submit(&mut h.service, "Cancelar");
+    assert_eq!(outcome.status, CommandStatus::Cancelled);
+    assert_eq!(
+        outcome.tool_id.as_ref().map(ToolId::as_str),
+        Some("system.close_application")
+    );
+    assert_eq!(states(&events), [S::Thinking, S::Idle]);
+    assert!(h.service.pending_confirmation().is_none());
+    assert_eq!(h.apps.closes(), 0);
+
+    let (spoken, _) = say(&mut h, "Cancelar acción");
+    assert_eq!(spoken.expect("submitted").status, CommandStatus::Cancelled);
+    assert_eq!(h.apps.closes(), 0);
+}
+
+#[test]
+fn no_speech_runs_nothing() {
+    let mut h = windows();
+    let mut events = Vec::new();
+    h.service.begin_listening(&mut |e| events.push(e)).unwrap();
+    h.service.end_listening(8_000, &mut |e| events.push(e));
+    assert!(h.service.voice_unusable(&mut |e| events.push(e)));
+    assert_eq!(states(&events), [S::Listening, S::Transcribing, S::Warning]);
+    assert_eq!(
+        kinds(&events),
+        [ActivityKind::MicrophoneOn, ActivityKind::MicrophoneOff]
+    );
+    assert!(!kinds(&events).contains(&ActivityKind::CommandReceived));
+    assert_eq!(h.apps.launches(), 0);
+    // Only meaningful while transcribing.
+    assert!(!h.service.voice_unusable(&mut |_| {}));
+}
+
+#[test]
+fn push_to_talk_is_refused_while_busy_or_already_listening() {
+    let mut h = windows();
+    h.service.begin_listening(&mut |_| {}).unwrap();
+    assert_eq!(h.service.begin_listening(&mut |_| {}), Err(VoiceBusy));
+    h.service.end_listening(500, &mut |_| {});
+    assert_eq!(h.service.begin_listening(&mut |_| {}), Err(VoiceBusy));
+    h.service.cancel_voice(None, &mut |_| {});
+
+    submit(&mut h.service, "memory");
+    assert!(h.service.begin_speaking(&mut |_| {}));
+    assert_eq!(h.service.begin_listening(&mut |_| {}), Err(VoiceBusy));
+    assert!(h.service.end_speaking(&mut |_| {}));
+    assert!(h.service.begin_listening(&mut |_| {}).is_ok());
+}
+
+#[test]
+fn cancelling_or_failing_voice_closes_the_microphone_record() {
+    let mut h = windows();
+    h.service.begin_listening(&mut |_| {}).unwrap();
+    let mut events = Vec::new();
+    assert!(h.service.cancel_voice(Some(640), &mut |e| events.push(e)));
+    assert_eq!(states(&events), [S::Idle]);
+    let off = h.service.recent_activity(1).remove(0);
+    assert_eq!(off.kind, ActivityKind::MicrophoneOff);
+    assert_eq!(off.duration_ms, Some(640));
+    assert!(
+        !h.service.cancel_voice(None, &mut |_| {}),
+        "nothing to cancel"
+    );
+
+    h.service.begin_listening(&mut |_| {}).unwrap();
+    let mut events = Vec::new();
+    assert!(h.service.voice_failed(Some(100), &mut |e| events.push(e)));
+    assert_eq!(states(&events), [S::Error]);
+}
+
+#[test]
+fn speech_follows_outcomes_but_never_hides_an_approval() {
+    let mut h = windows();
+    submit(&mut h.service, "memory");
+    let mut events = Vec::new();
+    assert!(h.service.begin_speaking(&mut |e| events.push(e)));
+    assert!(h.service.end_speaking(&mut |e| events.push(e)));
+    assert_eq!(states(&events), [S::Speaking, S::Idle]);
+
+    request_close(&mut h);
+    assert!(!h.service.begin_speaking(&mut |_| {}));
+    assert_eq!(h.service.snapshot().state, S::AwaitingConfirmation);
+    assert!(!h.service.end_speaking(&mut |_| {}));
+}
+
+#[test]
+fn voice_never_writes_what_was_said_to_the_activity_log() {
+    let mut h = windows();
+    say(&mut h, "Abre Spotify por favor");
+    let log = serde_json::to_string(&h.service.recent_activity(50)).unwrap();
+    assert!(!log.contains("Abre"));
+    assert!(!log.contains("favor"));
+}

@@ -4,4 +4,8 @@
  * Localized tray menu labels supplied by the UI (presentation only: the
  * actions behind each item are fixed in Rust).
  */
-export type TrayLabels = { open: string, hide: string, quit: string, };
+export type TrayLabels = { open: string, hide: string, quit: string, 
+/**
+ * Tray tooltip while the microphone is capturing ("SERSHI — Listening").
+ */
+listening: string, };

@@ -3,4 +3,4 @@
 /**
  * Inputs that move the state machine.
  */
-export type AssistantEvent = "wake" | "sleep" | "activate" | "startListening" | "requestReceived" | "planStarted" | "executionStarted" | "speechStarted" | "completed" | "attentionNeeded" | "confirmationRequested" | "confirmationApproved" | "failed" | "settle" | "dismiss";
+export type AssistantEvent = "wake" | "sleep" | "activate" | "startListening" | "captureEnded" | "requestReceived" | "planStarted" | "executionStarted" | "speechStarted" | "speechEnded" | "completed" | "attentionNeeded" | "confirmationRequested" | "confirmationApproved" | "failed" | "settle" | "dismiss";
