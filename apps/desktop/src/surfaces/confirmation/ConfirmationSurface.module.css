@@ -233,8 +233,8 @@
 }
 
 .confirm {
-  background: var(--color-frost);
-  color: var(--text-inverse);
+  background: var(--action-primary);
+  color: var(--action-on-primary);
 }
 
 .confirm:hover {

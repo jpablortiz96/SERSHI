@@ -43,6 +43,8 @@ export const tokens = {
     active: "rgb(255 255 255 / 0.07)",
     /** Controlled translucency; the only glass in the system. */
     glass: "rgb(16 19 26 / 0.72)",
+    /** Barely-there fill for chips and quiet controls. */
+    tint: "rgb(255 255 255 / 0.02)",
   },
 
   text: {
@@ -60,6 +62,16 @@ export const tokens = {
     default: "rgb(255 255 255 / 0.12)",
     strong: "rgb(255 255 255 / 0.2)",
     focus: "#56d4f5",
+    /** Top-edge light on raised controls. */
+    highlight: "rgb(255 255 255 / 0.06)",
+    /** Bottom-edge shade on key caps and pressed controls. */
+    shade: "rgb(0 0 0 / 0.4)",
+  },
+
+  /** The primary action fill (send, approve) and the text on it. */
+  action: {
+    primary: "#eef3f8",
+    onPrimary: "#07080b",
   },
 
   /**
@@ -99,6 +111,10 @@ export const tokens = {
     floor: "#0b0d12",
     /** Edge darkening. */
     vignette: "rgb(0 0 0 / 0.55)",
+    /** Orbital guide rings around the stage. */
+    guide: "rgb(255 255 255 / 0.035)",
+    /** Film grain strength (opacity). */
+    grain: "0.05",
   },
 
   /**

@@ -70,7 +70,7 @@
   left: 0;
   top: 0;
   border-radius: 50%;
-  border: 1px solid rgb(255 255 255 / 0.035);
+  border: 1px solid var(--atmosphere-guide);
   translate: -50% -50%;
 }
 
@@ -81,17 +81,17 @@
 .guides i:nth-child(2) {
   width: 720px;
   height: 720px;
-  border-color: rgb(255 255 255 / 0.025);
+  border-color: color-mix(in oklab, var(--atmosphere-guide) 72%, transparent);
 }
 .guides i:nth-child(3) {
   width: 1100px;
   height: 1100px;
-  border-color: rgb(255 255 255 / 0.018);
+  border-color: color-mix(in oklab, var(--atmosphere-guide) 52%, transparent);
 }
 
 .grain {
   inset: 0;
-  opacity: 0.05;
+  opacity: var(--atmosphere-grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   mix-blend-mode: overlay;
 }

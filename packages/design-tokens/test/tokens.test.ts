@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { applyTheme, createTheme, toCssText, toCssVariables, tokens } from "../src";
+import {
+  applyTheme,
+  createTheme,
+  darkTheme,
+  lightTheme,
+  toCssText,
+  toCssVariables,
+  tokens,
+} from "../src";
 
 describe("design tokens", () => {
   const vars = toCssVariables(tokens);
@@ -111,12 +119,63 @@ describe("accessibility", () => {
     return (hi + 0.05) / (lo + 0.05);
   };
 
-  it.each(["primary", "secondary", "tertiary"] as const)(
-    "text.%s meets WCAG AA (4.5:1) on every opaque surface",
-    (role) => {
-      for (const surface of [tokens.surface.base, tokens.surface.raised, tokens.surface.overlay]) {
-        expect(contrast(tokens.text[role], surface)).toBeGreaterThanOrEqual(4.5);
+  const themes = [
+    ["SERSHI Dark", createTheme(darkTheme)],
+    ["SERSHI Light", createTheme(lightTheme)],
+  ] as const;
+
+  describe.each(themes)("%s", (_name, theme) => {
+    const surfaces = [theme.surface.base, theme.surface.raised, theme.surface.overlay];
+
+    it.each(["primary", "secondary", "tertiary"] as const)(
+      "text.%s meets WCAG AA (4.5:1) on every opaque surface",
+      (role) => {
+        for (const surface of surfaces) {
+          expect(contrast(theme.text[role], surface)).toBeGreaterThanOrEqual(4.5);
+        }
+      },
+    );
+
+    it("keeps the primary action readable", () => {
+      expect(contrast(theme.action.onPrimary, theme.action.primary)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it("keeps focus rings and state hues visible (3:1 for UI components)", () => {
+      for (const surface of surfaces) {
+        expect(contrast(theme.border.focus, surface)).toBeGreaterThanOrEqual(3);
+        for (const state of [
+          "idle",
+          "thinking",
+          "planning",
+          "executing",
+          "success",
+          "warning",
+          "awaitingConfirmation",
+          "error",
+        ] as const) {
+          expect(contrast(theme.state[state], surface), state).toBeGreaterThanOrEqual(3);
+        }
       }
-    },
-  );
+    });
+  });
+});
+
+describe("built-in themes", () => {
+  it("light is a complete, separate design, not an inversion of dark", () => {
+    const light = createTheme(lightTheme);
+    for (const group of ["surface", "text", "border", "action", "atmosphere", "state"] as const) {
+      const changed = Object.entries(light[group]).filter(
+        ([key, value]) => (tokens[group] as Record<string, string>)[key] !== value,
+      );
+      expect(changed.length, group).toBeGreaterThan(0);
+    }
+    // Off-white, never pure white, for the environment.
+    expect(light.surface.base.toLowerCase()).not.toBe("#ffffff");
+  });
+
+  it("light overrides only existing tokens", () => {
+    expect([...toCssVariables(createTheme(lightTheme)).keys()]).toEqual([
+      ...toCssVariables(tokens).keys(),
+    ]);
+  });
 });
