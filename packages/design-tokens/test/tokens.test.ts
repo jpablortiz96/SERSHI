@@ -40,12 +40,30 @@ describe("design tokens", () => {
 
   it("keep motion durations within the documented budget", () => {
     const ms = (v: string) => Number(v.replace("ms", ""));
-    const { breath, drift, ...interactive } = tokens.motion.duration;
+    const { breath, ambient, drift, ...interactive } = tokens.motion.duration;
     for (const [name, value] of Object.entries(interactive)) {
       expect(ms(value), name).toBeLessThanOrEqual(720);
     }
     expect(ms(breath)).toBeGreaterThan(ms(tokens.motion.duration.cinematic));
-    expect(ms(drift)).toBeGreaterThan(ms(breath));
+    expect(ms(ambient)).toBeGreaterThan(ms(breath));
+    expect(ms(drift)).toBeGreaterThan(ms(ambient));
+    // Window transitions stay snappy: SERSHI must never feel sluggish.
+    expect(ms(tokens.motion.duration.window)).toBeLessThanOrEqual(280);
+    expect(ms(tokens.motion.duration.windowExit)).toBeLessThan(ms(tokens.motion.duration.window));
+  });
+
+  it("expose themeable atmosphere and core materials", () => {
+    for (const name of [
+      "--atmosphere-primary",
+      "--atmosphere-secondary",
+      "--atmosphere-floor",
+      "--core-specular",
+      "--core-inner",
+      "--core-orbit",
+      "--core-halo",
+    ]) {
+      expect(vars.get(name), name).toBeTruthy();
+    }
   });
 
   it("render as CSS text", () => {

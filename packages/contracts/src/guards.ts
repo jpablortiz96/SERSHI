@@ -7,6 +7,7 @@ import type { ActivityEntry } from "./generated/ActivityEntry";
 import type { AssistantSnapshot } from "./generated/AssistantSnapshot";
 import type { AssistantState } from "./generated/AssistantState";
 import type { CommandOutcome } from "./generated/CommandOutcome";
+import type { PresenceUpdate } from "./generated/PresenceUpdate";
 import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { SystemSnapshot } from "./generated/SystemSnapshot";
 
@@ -99,6 +100,10 @@ export function isCommandOutcome(v: unknown): v is CommandOutcome {
     // The Command Center never receives confirmation authorization data.
     !("confirmation" in v)
   );
+}
+
+export function isPresenceUpdate(v: unknown): v is PresenceUpdate {
+  return isObj(v) && typeof v.commandCenterVisible === "boolean";
 }
 
 /** `null` payload (e.g. the focus-command event). */

@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { COMMAND_NAMES } from "../src/commands";
+import { COMMAND_NAMES, EVENTS } from "../src/commands";
 
 const tauriDir = resolve(import.meta.dirname, "../../../apps/desktop/src-tauri");
 
@@ -96,6 +96,52 @@ describe("IPC command surface", () => {
   it("no command resembles generic execution", () => {
     for (const name of COMMAND_NAMES) {
       expect(name).not.toMatch(/exec|shell|run_command|eval|spawn/);
+    }
+  });
+});
+
+/**
+ * Gate 1A invariants. Visual work (Prompt 2 and later) must never change
+ * these; if one fails, a change widened an authority boundary.
+ */
+describe("Gate 1A invariants survive visual work", () => {
+  it("the confirmation window still has exactly two commands", () => {
+    expect(grantedCommands("confirmation").sort()).toEqual(
+      ["decide_confirmation", "get_confirmation_context"].sort(),
+    );
+    expect(allPermissions("confirmation")).toHaveLength(2);
+  });
+
+  it("the Command Center still cannot approve or read confirmations", () => {
+    expect(grantedCommands("command-center")).not.toContain("decide_confirmation");
+    expect(grantedCommands("command-center")).not.toContain("get_confirmation_context");
+  });
+
+  it("the companion still has only state, summon and event listening", () => {
+    expect(allPermissions("companion").sort()).toEqual(
+      [
+        "allow-get-assistant-snapshot",
+        "allow-summon-command-center",
+        "core:event:allow-listen",
+        "core:event:allow-unlisten",
+        "core:window:allow-start-dragging",
+      ].sort(),
+    );
+  });
+
+  it("contextual presence is an event from Rust, not a command anyone can call", () => {
+    expect(EVENTS.presence).toBe("sershi://presence");
+    expect(COMMAND_NAMES.some((c) => c.includes("presence"))).toBe(false);
+  });
+
+  it("no command creates windows or executes anything generic", () => {
+    for (const name of COMMAND_NAMES) {
+      expect(name).not.toMatch(/exec|shell|spawn|eval|create_window|open_window|webview/);
+    }
+    for (const cap of ["command-center", "companion", "confirmation"]) {
+      for (const permission of allPermissions(cap)) {
+        expect(permission).not.toMatch(/webview|create|core:window:default|core:default/);
+      }
     }
   });
 });

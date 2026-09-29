@@ -7,6 +7,7 @@ import type { CommandRequest } from "./generated/CommandRequest";
 import type { ConfirmationDecision } from "./generated/ConfirmationDecision";
 import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { IntegrationStatus } from "./generated/IntegrationStatus";
+import type { PresenceUpdate } from "./generated/PresenceUpdate";
 import type { RuntimeInfo } from "./generated/RuntimeInfo";
 import type { SystemSnapshot } from "./generated/SystemSnapshot";
 import type { TrayLabels } from "./generated/TrayLabels";
@@ -71,6 +72,8 @@ export const EVENTS = {
    * (approved, cancelled or expired on the trusted surface).
    */
   commandOutcome: "sershi://command-outcome",
+  /** Companion only: whether the Command Center is on screen (presentation). */
+  presence: "sershi://presence",
 } as const;
 
 export interface EventMap {
@@ -78,6 +81,7 @@ export interface EventMap {
   [EVENTS.activity]: ActivityEntry;
   [EVENTS.focusCommand]: null;
   [EVENTS.commandOutcome]: CommandOutcome;
+  [EVENTS.presence]: PresenceUpdate;
 }
 
 export type EventName = keyof EventMap;

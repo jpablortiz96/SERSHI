@@ -85,6 +85,37 @@ export const tokens = {
     disabled: "#454c5a",
   },
 
+  /**
+   * Themeable atmosphere: the light around SERSHI. The Command Center's
+   * ambient field and the core's bloom read these, never the raw palette, so
+   * a theme can re-light SERSHI without touching components.
+   */
+  atmosphere: {
+    /** Slow off-centre glow in the background. */
+    primary: "#9a8cff",
+    /** Secondary cool light, used sparingly for depth. */
+    secondary: "#5aa9ff",
+    /** Observatory floor under the stage. */
+    floor: "#0b0d12",
+    /** Edge darkening. */
+    vignette: "rgb(0 0 0 / 0.55)",
+  },
+
+  /**
+   * Themeable core materials. State colour still comes from `state.*`; these
+   * define the light the core is made of.
+   */
+  core: {
+    /** Brightest point of the core. */
+    specular: "#ffffff",
+    /** Inner light the state colour mixes towards. */
+    inner: "#eef3f8",
+    /** Secondary orbit tint. */
+    orbit: "#9a8cff",
+    /** Halo strength (0–1) at normal intensity. */
+    halo: "0.34",
+  },
+
   radius: {
     xs: "4px",
     sm: "8px",
@@ -161,8 +192,14 @@ export const tokens = {
       default: "240ms",
       slow: "420ms",
       cinematic: "720ms",
+      /** Window arriving (summon, open). */
+      window: "260ms",
+      /** Window leaving before the native hide. */
+      windowExit: "160ms",
       /** Ambient loops: breathing, drift. */
       breath: "5600ms",
+      /** Idle life: very slow, barely noticeable. */
+      ambient: "9600ms",
       drift: "28000ms",
     },
     ease: {
@@ -193,6 +230,8 @@ export const tokens = {
   layout: {
     titlebar: "44px",
     rail: "264px",
+    /** Rails narrow on smaller windows (see Command Center breakpoints). */
+    railCompact: "224px",
     stageMax: "640px",
     readable: "68ch",
   },

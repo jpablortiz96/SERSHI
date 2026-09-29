@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useI18n, type I18n } from "../../i18n";
 import { applicationName, asApplicationResult, composeReply } from "../../i18n/domain";
 import { useConversation, type Message, type Reply } from "../../state/conversation";
+import { motionReduced } from "../../visual/appearance";
 import styles from "./Transcript.module.css";
 
 type Status = CommandStatus | "offline";
@@ -83,7 +84,7 @@ export function Transcript({ messages }: { messages: Message[] }) {
   const { t, format } = i18n;
 
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = motionReduced();
     end.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
   }, [messages.length]);
 

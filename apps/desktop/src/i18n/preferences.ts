@@ -1,5 +1,6 @@
 /**
- * Interface preferences, stored in the WebView's localStorage.
+ * Interface preferences (language, motion, companion size), stored in the
+ * WebView's localStorage.
  *
  * Why not the core: SERSHI has no persistent settings store yet (SQLite
  * arrives in v0.1, ADR 0004), and these values are presentation-only — no
@@ -13,15 +14,31 @@ import type { ConversationLanguage, LocalePreference } from "./types";
 
 export const PREFERENCES_KEY = "sershi.preferences.v1";
 
+/** "system" follows the operating system's reduced-motion setting. */
+export type MotionPreference = "system" | "reduced";
+export type CompanionSize = "small" | "medium" | "large";
+
+export const MOTION_PREFERENCES: readonly MotionPreference[] = ["system", "reduced"];
+export const COMPANION_SIZES: readonly CompanionSize[] = ["small", "medium", "large"];
+
 export interface Preferences {
   uiLocale: LocalePreference;
   conversationLanguage: ConversationLanguage;
+  motion: MotionPreference;
+  companionSize: CompanionSize;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   uiLocale: "auto",
   conversationLanguage: "automatic",
+  motion: "system",
+  companionSize: "medium",
 };
+
+const oneOf = <T extends string>(options: readonly T[], value: unknown, fallback: T): T =>
+  typeof value === "string" && (options as readonly string[]).includes(value)
+    ? (value as T)
+    : fallback;
 
 /** Parses stored preferences; anything unrecognised falls back to defaults. */
 export function parsePreferences(raw: string | null): Preferences {
@@ -33,6 +50,16 @@ export function parsePreferences(raw: string | null): Preferences {
     return {
       ...DEFAULT_PREFERENCES,
       uiLocale: isLocalePreference(uiLocale) ? uiLocale : DEFAULT_PREFERENCES.uiLocale,
+      motion: oneOf(
+        MOTION_PREFERENCES,
+        "motion" in value ? value.motion : undefined,
+        DEFAULT_PREFERENCES.motion,
+      ),
+      companionSize: oneOf(
+        COMPANION_SIZES,
+        "companionSize" in value ? value.companionSize : undefined,
+        DEFAULT_PREFERENCES.companionSize,
+      ),
     };
   } catch {
     return DEFAULT_PREFERENCES;

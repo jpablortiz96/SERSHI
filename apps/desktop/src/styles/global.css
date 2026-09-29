@@ -152,7 +152,23 @@ button:disabled {
 }
 
 /* Motion is never required to understand SERSHI; with reduced motion every
-   state is still distinguishable by color, shape and text. */
+   state is still distinguishable by color, shape and text.
+   html[data-motion="reduced"] is set from the Appearance setting or the
+   operating system (visual/appearance.ts); the media query is a fallback
+   for the instant before scripts run. */
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: var(--duration-instant) !important;
+}
+
+html[data-motion="reduced"] [data-state] {
+  transition-duration: var(--duration-fast) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-state] {
     transition-duration: var(--duration-fast);

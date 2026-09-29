@@ -30,6 +30,7 @@ export type { IpcError } from "./generated/IpcError";
 export type { OutcomeDetail } from "./generated/OutcomeDetail";
 export type { RejectionReason } from "./generated/RejectionReason";
 export type { Platform } from "./generated/Platform";
+export type { PresenceUpdate } from "./generated/PresenceUpdate";
 export type { PlatformCapability } from "./generated/PlatformCapability";
 export type { RiskLevel } from "./generated/RiskLevel";
 export type { RuntimeInfo } from "./generated/RuntimeInfo";
