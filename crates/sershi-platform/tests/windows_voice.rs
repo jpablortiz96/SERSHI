@@ -24,7 +24,9 @@ use sershi_platform::voice::{ModelStore, load_recognizer, microphone_access, voi
 
 /// Resident memory of this process, in MB (for the validation record).
 fn memory_mb() -> u64 {
-    let pid = sysinfo::get_current_pid().expect("pid");
+    let Ok(pid) = sysinfo::get_current_pid() else {
+        return 0;
+    };
     let mut system = sysinfo::System::new();
     system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
     system.process(pid).map_or(0, |p| p.memory() / 1_000_000)
