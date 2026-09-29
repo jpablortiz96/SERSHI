@@ -61,7 +61,7 @@ Layers, patterns and the full state motion language are documented in
 | compute (thinking) | two segmented rings, 3.6 s and 5.4 s, counter-rotating; shell compresses |
 | structure (planning) | four arcs assemble (3.2 s cycle, 80 ms stagger), nodes appear at lock, orbits pause |
 | drive (executing) | sweep arc 1.3 s; shell passes outward 1.3 s |
-| receive / resonate | rings gather 2.4 s / radiate 1.6 s (visual only until voice) |
+| receive / resonate | rings gather 2.4 s / radiate 1.6 s; shell scale follows the real audio level (≤ 7 %) |
 | bloom (success) | one ripple + 4 % shell expansion over `cinematic`, once |
 | caution (warning) | halo attention 2.4 s |
 | await (awaitingConfirmation) | halo attention 3.2 s; orbits and field pause |
@@ -163,9 +163,26 @@ misaligned orbits); window and command transitions are skipped. The glyph
 and label beside the core always name the state. A test scans every
 stylesheet: any looping animation must be neutralised under the switch.
 
-## Audio visualisation (v0.3)
+## Audio visualisation (Prompt 3)
 
-The pulse layer is the reserved place for voice. In v0.3 its amplitude will be
-driven by the real input/output level. It never animates unless the microphone or
-speech output is actually active; the Listening visuals seen today are reachable
-only through Developer Mode's labelled state preview.
+Listening and Speaking follow real audio. The core sends a bounded 0–1 level
+(`sershi://voice-level`):
+
+- **Listening:** the microphone RMS.
+- **Speaking:** the envelope of the samples SERSHI hands to the output
+  device.
+
+Levels arrive at most 25 times per second, with fast attack and slow release.
+`visual/voiceLevel.ts` writes the level to `--voice-level` once per frame.
+The Core's `receive` and `resonate` patterns scale the shell by at most 7 %
+and brighten the resonance rings. The mic button's ring follows the input
+level.
+
+Raw audio never reaches the UI. With reduced motion the level is ignored;
+colour, glyph and label carry the state.
+
+- **Transcribing** (new state) reuses the `compute` pattern with its own
+  colour (`state.transcribing`): the microphone is off and SERSHI is working
+  on what it heard.
+- Listening and Speaking are shown only while the microphone captures or
+  speech plays. Developer Mode's labelled preview is the only exception.

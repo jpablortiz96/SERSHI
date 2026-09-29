@@ -82,20 +82,32 @@ Loudness varies with device and driver, which is why volume is user-controlled.
   the approval window is identical with or without sound.
 - Reduced motion does not mute sound; they are independent preferences.
 
-## InterfaceAudio vs VoiceAudio
+## InterfaceAudio vs SpeechAudio
 
-Interface cues (`InterfaceAudio`, `src/audio/`) and future speech are
-separate systems.
+Interface cues (`InterfaceAudio`, `src/audio/`, Web Audio in the WebView)
+and speech (`SpeechAudio`, Prompt 3: native capture and playback in Rust,
+[VOICE.md](VOICE.md)) are separate systems:
 
-`VoiceAudio` (Prompt 3: microphone, speech-to-text, text-to-speech, spoken
-replies) will have its own:
+| | Interface sounds | Speech |
+| --- | --- | --- |
+| Setting | Appearance › Interface sounds (off by default) | Voice › Voice responses (on by default for spoken requests), Speak typed responses (off) |
+| Engine | Procedural Web Audio in the Command Center | Windows speech synthesis, played by SERSHI's WASAPI output |
+| Volume | Interface volume slider | Windows voice/system volume |
 
-- settings (enable, voice, rate, volume)
-- device routing
-- privacy indicators
+- Turning interface sounds off never silences speech, and turning speech
+  off never silences cues.
+- Speech does not reuse the cue mixer.
 
-Disabling interface sounds does not disable speech, and speech does not
-reuse the cue mixer.
+**Ducking rules** (`audio/connect.ts`):
+
+- No cue while SERSHI is Listening, Transcribing or Speaking; the summon cue
+  never plays over the microphone.
+- The success and error cues are skipped when a spoken reply is due. The
+  reply says it already.
+- The approval-request cue always plays: it asks for a human decision on
+  the trusted surface.
+- The start-up cue never triggers or reaches capture: the microphone is off
+  at start-up.
 
 ## Future sound packs
 

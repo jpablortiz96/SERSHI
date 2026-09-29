@@ -32,10 +32,11 @@ deliberately minimal.
 | Command Center (Home, Activity, Settings) and floating companion            | AI provider / natural language understanding (v0.1)            |
 | A living companion and core: a distinct, calm motion language for every assistant state, contextual presence, reduced-motion support | Files, battery, folders (v0.1) |
 | Typed command pipeline: intent → policy → tool → audit → response           | Persistent settings and remembered permissions (v0.1)          |
-| Safe tools: system info, memory, processor load                             | Voice (v0.3), e-mail/calendar (v0.4), skills (v0.5)            |
+| Safe tools: system info, memory, processor load                             | Wake word (Prompt 3B), e-mail/calendar (v0.4), skills (v0.5)   |
+| Voice: push-to-talk, local speech recognition (whisper.cpp) and spoken replies (Windows voices), offline after a one-time model download; voice can never approve | Cloud speech providers (later, opt-in) |
 | Windows: open and close installed applications by name ("Abre Spotify"), with a trusted confirmation before closing | Installer for end users (v0.9) |
-| Tray icon, global shortcut (Ctrl+Alt+Space), single instance, × hides       | Configurable shortcut, start with Windows (v0.1)               |
-| Live telemetry, activity log, developer state preview                       | Conversation language independent of the UI (v0.3)             |
+| Tray icon, configurable global shortcut, single instance, × hides           | Start with Windows (v0.1)                                       |
+| Live telemetry, activity log, developer state preview; conversation language independent of the UI | Persistent history (v0.1)            |
 | Interface in English, Español and Português, switchable live; Appearance settings (motion, companion size) | More themes (v0.8)                  |
 
 Anything SERSHI can't do yet, it says so. Windows-specific behaviour — window
@@ -95,7 +96,7 @@ docs/                    architecture, security, design, ADRs
 [Agent model](docs/AGENT_MODEL.md) · [Security](docs/SECURITY.md) ·
 [Design system](docs/DESIGN_SYSTEM.md) · [Motion](docs/MOTION_SYSTEM.md) ·
 [Brand](docs/BRAND.md) · [Localization](docs/LOCALIZATION.md) · [Windows](docs/WINDOWS_PLATFORM.md) ·
-[Applications](docs/APPLICATIONS.md) · [Visual experience](docs/VISUAL_EXPERIENCE.md) · [Testing](docs/TESTING.md) · [Skills](docs/SKILLS.md) · [Memory](docs/MEMORY.md) ·
+[Applications](docs/APPLICATIONS.md) · [Voice](docs/VOICE.md) · [Privacy](docs/PRIVACY.md) · [Visual experience](docs/VISUAL_EXPERIENCE.md) · [Sound](docs/SOUND_DESIGN.md) · [Testing](docs/TESTING.md) · [Skills](docs/SKILLS.md) · [Memory](docs/MEMORY.md) ·
 [Roadmap](docs/ROADMAP.md) · [Decisions](docs/adr/README.md)
 
 ## Roadmap

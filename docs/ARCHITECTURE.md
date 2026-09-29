@@ -236,6 +236,12 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
 | `dismiss_assistant`       | main               | `Awake`/`AwaitingConfirmation → Idle` (cancels pending approvals) |
 | `preview_assistant_state` | main               | Developer builds only: visual preview               |
 | `quit_app`                | main               | Exit                                                |
+| `get_voice_status`        | main               | Microphones, privacy switch, voices, speech models, capturing/speaking ([VOICE.md](VOICE.md)) |
+| `configure_voice`         | main               | Validated voice preferences (device, conversation language, voice, model ids) |
+| `start_voice_capture`     | main               | Push-to-talk: `started` or `refused { reason }`; cancels a pending approval first |
+| `stop_voice_capture` / `cancel_voice_capture` | main | Stop and transcribe / discard                     |
+| `speak_reply` / `stop_speaking` | main         | Speak an already-phrased reply (≤ 600 chars) / stop (output only) |
+| `download_voice_model` / `cancel_voice_model_download` | main | User-initiated, SHA-256-verified model download |
 
 | Event                      | Payload             | Target      |
 | -------------------------- | ------------------- | ----------- |
@@ -244,6 +250,9 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
 | `sershi://focus-command`   | none                | main        |
 | `sershi://command-outcome` | `CommandOutcome`    | main (outcome of a confirmation decided, cancelled or expired elsewhere) |
 | `sershi://presence`        | `PresenceUpdate`    | companion (whether the Command Center is on screen; presentation only) |
+| `sershi://voice`           | `VoiceUpdate`       | main (heard text, spoken command's outcome, no speech / unclear, failures) |
+| `sershi://voice-level`     | `VoiceLevel`        | main, companion (bounded 0–1 level, ≤ 25/s; never audio) |
+| `sershi://voice-model`     | `ModelProgress`     | main (model download progress) |
 
 **Telemetry vs tools.** `get_system_snapshot` is the user looking at their own
 machine; it bypasses the tool pipeline and is not recorded as activity (it is
@@ -262,8 +271,13 @@ stateDiagram-v2
     Sleeping --> Awake: Activate
     Idle --> Awake: Activate
     Idle --> Sleeping: Sleep
-    Idle --> Listening: StartListening
+    Idle --> Listening: StartListening (push-to-talk)
     Awake --> Listening: StartListening
+    Success --> Listening: StartListening
+    Listening --> Transcribing: CaptureEnded (microphone off)
+    Listening --> Idle: Dismiss (Escape, hide, typed command)
+    Transcribing --> Thinking: RequestReceived (submit_transcript = submit)
+    Transcribing --> Warning: AttentionNeeded (no speech / unclear)
     Idle --> Thinking: RequestReceived
     Awake --> Thinking: RequestReceived
     Listening --> Thinking: RequestReceived
@@ -275,6 +289,8 @@ stateDiagram-v2
     AwaitingConfirmation --> Idle: Dismiss (cancel, expiry)
     AwaitingConfirmation --> Thinking: RequestReceived
     Executing --> Speaking: SpeechStarted
+    Success --> Speaking: SpeechStarted (spoken reply)
+    Speaking --> Idle: SpeechEnded (playback ended or stopped)
     Thinking --> Success: Completed
     Executing --> Success: Completed
     Speaking --> Success: Completed
@@ -288,7 +304,12 @@ stateDiagram-v2
 ```
 
 (Abridged; `transition()` in `assistant.rs` is the authoritative, exhaustively
-tested definition. Any non-sleeping state can `Fail`; busy states cannot `Sleep`.)
+tested definition. Any non-sleeping state can `Fail`; busy and voice-input
+states cannot `Sleep`. Voice states are real: `Listening` means the
+microphone is capturing, `Transcribing` that captured speech is being
+recognised with the microphone off, `Speaking` that synthesized speech is
+playing. No voice state can lead to `ExecutionStarted` or
+`ConfirmationApproved`; see [VOICE.md](VOICE.md#states).)
 
 - **States vs conditions.** _Offline_ and _private_ are conditions layered on top of
   a state, not states — they describe the environment, not what SERSHI is doing.
@@ -341,8 +362,14 @@ All of it is REQUIRES_WINDOWS_VALIDATION; see
   `CompanionRenderer` registry (`companions.tsx`; Orbital today).
 - **`src/audio`** — `InterfaceAudio`: procedural cue data (`cues.ts`), a lazy
   Web Audio renderer (`interfaceAudio.ts`) and the event wiring
-  (`connect.ts`, Command Center only). Separate from future `VoiceAudio`
-  ([SOUND_DESIGN.md](SOUND_DESIGN.md)).
+  (`connect.ts`, Command Center only). Separate from speech
+  ([SOUND_DESIGN.md](SOUND_DESIGN.md#interfaceaudio-vs-speechaudio)).
+- **Voice** — `state/voice.ts` (push-to-talk, notices, preferences, events),
+  `state/speech.ts` (phrase and speak replies), `visual/voiceLevel.ts`
+  (bounded level → `--voice-level`), `components/command/VoicePanel.tsx`,
+  `surfaces/command-center/VoiceSettings.tsx`. Audio is captured, recognised
+  and played natively in Rust ([VOICE.md](VOICE.md)); the WebView never
+  touches the microphone.
 - **Presentation preferences** — language, theme, motion, companion
   appearance and size, sounds, volume and shortcut, in
   `localStorage["sershi.preferences.v1"]`, synced across windows by the

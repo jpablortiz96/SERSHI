@@ -68,6 +68,10 @@ jobs:
   windows:
     name: Windows build and tests
     runs-on: windows-latest
+    env:
+      # whisper.cpp (local speech recognition) is built with CMake (preinstalled)
+      # and bound with bindgen, which needs libclang from the preinstalled LLVM.
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
     steps:
       - uses: actions/checkout@v4
 
@@ -101,3 +105,9 @@ jobs:
       # launched or closed); prints the scan time for the validation record.
       - name: Windows application discovery (read-only)
         run: cargo test -p sershi-platform --test windows_applications --locked -- --nocapture
+
+      # Lists microphones, installed voices and the microphone privacy switch
+      # (read-only). Tests needing a model, a microphone or speakers are
+      # #[ignore]d and run on physical hardware (Gate 3A); CI does not fake them.
+      - name: Windows voice adapters (read-only)
+        run: cargo test -p sershi-platform --test windows_voice --locked -- --nocapture

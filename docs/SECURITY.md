@@ -213,9 +213,19 @@ typed tool → policy engine → permission model → risk classification →
 - **External content never approves.** Web pages, e-mails, documents, screen
   OCR and model output are data; only direct human interaction with the
   confirmation surface approves.
-- **Voice (v0.3).** Voice confirmation of sensitive actions is disabled unless
-  a future, explicitly designed secure mechanism exists. Voice may cancel;
-  approval remains an explicit UI interaction.
+- **Audio does not grant authority** (Prompt 3, [ADR 0014](adr/0014-local-voice-foundation.md)).
+  Speech can request the same actions as text; it can never approve
+  privileged execution.
+  - A transcript is untrusted text submitted through the typed-command path
+    (`submit_transcript` → `submit`).
+  - There is no approve intent, and voice code has no path to `decide` or to
+    a confirmation id.
+  - Opening the microphone cancels a pending approval, so the two never
+    overlap.
+  - "Cancel" (an exact utterance) only reduces authority.
+  - Tests: `speaking_yes_never_approves_a_sensitive_action`,
+    `approval_words_are_never_an_intent` and the contract tests "Gate 3A".
+  - Wake word ≠ authorization; voice ≠ identity; voice ≠ approval.
 
 ### Personalization is not privilege
 
@@ -299,15 +309,38 @@ kept out of activity and, in future diagnostics, redacted by default.
 SERSHI sends **no analytics**. Any future telemetry must be opt-in, documented and
 privacy-preserving.
 
-## Microphone and screen (v0.2–v0.3)
+## Microphone (Prompt 3) and screen (v0.2)
 
-- No hidden capture. Listening and screen capture always show a visible,
-  state-driven indicator on the companion; the Listening state exists for this.
-- Push-to-talk and "wake word disabled" modes; a hardware-style mute that the
-  voice pipeline cannot override.
-- Wake-word detection runs locally; audio is not retained after transcription
-  unless the user opts in.
-- Screen capture is per-request and user-initiated, never continuous.
+Details: [VOICE.md](VOICE.md).
+
+- **Explicit.** The microphone is off at start-up. It opens only on an
+  explicit push-to-talk click in the Command Center. There is no
+  background listening and no wake word; `WakeWordPort` is defined but has
+  no implementation.
+- **Visible.** While capturing, SERSHI shows it in:
+  - the mic button
+  - the Listening state on the Core and the companion
+  - the tray tooltip
+  - Activity ("Microphone on / off" with the duration)
+- **Bounded.** Capture closes on:
+  - endpoint, a second click, or Escape
+  - hiding the Command Center or a typed command
+  - quit
+  - a 30 s cap
+  The session thread owns the device handle, so release is deterministic.
+- **Memory only.** Audio never touches disk, logs, SQLite, localStorage or
+  activity. Raw audio never crosses IPC; the UI receives a bounded 0–1 level
+  and the transcript to display.
+- **Local models are data.** They are downloaded only on request, from a
+  pinned HTTPS URL, then size- and SHA-256-verified, atomically installed,
+  and re-verified before the first load. They are never executed. No
+  process is spawned.
+- **Least privilege.**
+  - Voice commands are granted to the Command Center only.
+  - The companion only receives the level event.
+  - The confirmation window's capability and bundle contain no voice code.
+- Screen capture (v0.2) will be per-request and user-initiated, never
+  continuous.
 
 ## Threats and mitigations
 

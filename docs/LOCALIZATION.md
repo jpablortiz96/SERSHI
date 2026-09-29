@@ -17,13 +17,23 @@ permissions, risk, confirmation or tool policy.
 | Concept                    | Meaning                                              | Today                         |
 | -------------------------- | ---------------------------------------------------- | ----------------------------- |
 | **`uiLocale`**             | The language SERSHI's interface is displayed in      | Automatic or a manual choice  |
-| **`conversationLanguage`** | The language SERSHI understands and answers in       | `automatic` (the only value)  |
+| **`conversationLanguage`** | The language SERSHI listens for (speech recognition) | `automatic`, `en`, `es` or `pt` (Settings › Voice) |
 
-They are independent on purpose: someone may keep the interface in English and
-speak Spanish. When voice (v0.3) and language models (v0.1) arrive, the
-conversation language will be detected per request, or set by the user, without
-touching the interface language. Model-generated replies will follow the
-conversation language; fixed product copy follows the interface language.
+They are independent on purpose: someone may keep the interface in Spanish and
+speak English.
+
+- **Automatic.** The recogniser detects the spoken language per utterance.
+- **A chosen language.** It is passed as a hint, which is about twice as
+  fast.
+- **Never switches the UI.** Speaking another language never changes the
+  interface locale.
+- **Representation.** The core stores a BCP-47 `LanguageTag` (`es`, `pt-BR`,
+  …). Adding a language is a new option, not a redesign. Whisper supports
+  far more languages than Settings offers.
+- **Replies.** SERSHI's fixed replies are phrased in the **interface**
+  language (the same `composeReply` as the transcript) and spoken with a
+  Windows voice for that language. Model-generated replies (v0.1) will
+  follow the conversation language.
 
 The rule-based intent resolver already recognises English, Spanish and
 Portuguese keywords (`crates/sershi-core/src/intent.rs`). This is vocabulary

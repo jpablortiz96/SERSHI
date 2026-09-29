@@ -36,8 +36,11 @@ steps to validate on a physical Windows machine.
 | Strict CSP with production build                   | `tauri.conf.json`                            | ✅ release binary ran under Xvfb (WebKitGTK) | —                     | REQUIRES_WINDOWS_VALIDATION      |
 | Interface language: automatic detection from the Windows display language | `i18n/detect.ts` (`navigator.languages`) | ⚠️ container has no pt_BR/es locales; validated in Chromium with a pt-BR locale | — | REQUIRES_WINDOWS_VALIDATION |
 | Interface language: persistence across restarts and sync between windows | `i18n/preferences.ts`, `i18n/store.ts` (localStorage) | ✅ Tauri app restarted under Xvfb kept Español | — | REQUIRES_WINDOWS_VALIDATION |
+| Voice: push-to-talk capture (WASAPI via `cpal`), endpointing, level visuals, tray tooltip | `sershi-platform/src/windows/voice/capture.rs`, `src-tauri/src/voice.rs` | ✅ portable DSP/endpoint/state tests; adapters are `cfg(windows)` | ✅ compiled + read-only device listing | ⚠️ developer machine: open 51 ms / release 9 ms / reopen OK (automated hardware test). Gate 3A pending |
+| Voice: local recognition (whisper.cpp, in process) and verified model download (WinHTTP) | `windows/voice/stt.rs`, `windows/voice/http.rs`, `voice/model_store.rs` | ✅ model store, catalog, transcript assessment | ✅ compiled | ⚠️ developer machine: offline TTS→STT round trip passes (Spanish; no EN/PT voices installed). Gate 3A pending |
+| Voice: speech output (Windows `SpeechSynthesizer`, WASAPI playback) | `windows/voice/tts.rs`, `windows/voice/output.rs` | ✅ WAV decoding | ✅ compiled | ⚠️ developer machine: plays to the end and stops. Gate 3A pending |
 | NSIS installer                                     | `bundle.targets`                             | —                                   | —                     | REQUIRES_WINDOWS_VALIDATION      |
-| Battery, notifications, credentials, microphone, screen capture, start with Windows | Not implemented | — | — | Planned (see ROADMAP) |
+| Battery, notifications, credentials, screen capture, start with Windows, wake word | Not implemented | — | — | Planned (see ROADMAP) |
 
 ## Prerequisites (development)
 
@@ -50,6 +53,13 @@ steps to validate on a physical Windows machine.
 5. **Node.js 22 LTS** (≥ 22.12): <https://nodejs.org>.
 6. **pnpm** via Corepack: `corepack enable` (the repo pins `pnpm@10.33.0`).
 7. **Git** for Windows.
+8. **CMake** and **libclang** (LLVM), for the local speech recogniser
+   (whisper.cpp). Build Tools includes CMake: add
+   `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin`
+   to `PATH`. Install LLVM with `winget install LLVM.LLVM`, or set
+   `LIBCLANG_PATH` to a folder containing `libclang.dll`. Keep the clone path
+   short: MSBuild fails on very long paths. See
+   [VOICE.md](VOICE.md#building).
 
 End users will need none of this — the target is a single `SERSHI-Setup.exe`
 (v0.9).
@@ -438,6 +448,137 @@ Run after Gate 2A, from `claude/gate-2b-personalization`. Record PASS / FAIL
     - changing theme, sounds or shortcut never approves or grants anything
     - the confirmation still works with sounds Off
 
+## Gate 3A — Local Voice Validation
+
+Run from `claude/prompt-3-local-voice-foundation` on physical Windows
+hardware. Record PASS / FAIL / NOT_TESTED per step, plus notes. Details and
+the privacy explanation: [VOICE.md](VOICE.md).
+
+Before starting:
+
+- Settings › Voice › Local speech model → **Download** (Whisper Small,
+  264 MB).
+- Note the Windows speech voices installed (Settings › Time & language ›
+  Speech).
+
+### V1 · Capture
+
+1. SERSHI starts with the microphone **off**: no Windows microphone
+   indicator, Activity has no "Microphone on".
+2. Settings › Voice lists the real microphones. "System default" is
+   selected.
+3. Press the microphone button → it fills, and the Core, the companion and
+   the tray tooltip say **Listening**. The Windows taskbar shows the
+   microphone in use. Activity says "Microphone on".
+4. Speak, then press again → **Transcribing** → result. Activity says
+   "Microphone off" with a duration.
+5. Speak and stop talking → it ends by itself about 1 s after you stop.
+   Short pauses between words do not end it.
+6. Press, say nothing → "No speech detected." after about 8 s, or when you
+   press again.
+7. Press, then **Escape** → cancelled, nothing runs, the microphone is off.
+8. Press, then hide the Command Center (×) → capture cancelled, the
+   microphone is off.
+9. Windows Settings › Privacy & security › Microphone › turn **off** "Let
+   desktop apps access your microphone" → press → a clear "Microphone
+   unavailable…" message with guidance, no crash, no repeated prompts. Turn
+   it back on.
+10. Unplug the microphone (or disable it in Sound settings) → press → "No
+    microphone was found" or "…disconnected". Choose a specific microphone,
+    unplug it, press → "system default" fallback notice.
+11. A 30 s monologue → stops at 30 s and transcribes.
+
+### V2 · Speech recognition
+
+12. Spanish: "Abre la calculadora" → You said "Abre la calculadora" →
+    Calculator opens.
+13. English: "Open Notepad" → Notepad opens.
+14. Portuguese: "Abra a calculadora" (if practical).
+15. Interface in Español, say an English command → it works; the interface
+    stays Spanish.
+16. Background noise (music, fan) → note accuracy, false stops and false
+    starts.
+17. Conversation language set to Español vs Automatic → note the latency
+    difference.
+
+### V3 · Actions
+
+18. "Abre Spotify" → Listening → You said → intent → Spotify opens → Done →
+    spoken reply.
+19. "Abre Calculadora" → opens.
+20. "Abre Zzyzx" → "I couldn't find…", spoken, and nothing else happens.
+
+### V4 · Security (mandatory)
+
+21. Say "Cierra Spotify" → You said → the **confirmation window** opens.
+    Spotify is still running.
+22. Press the microphone and say "**Sí**". Expected: the pending approval is
+    **cancelled** as soon as the microphone opens, the confirmation window
+    closes, "Sí" is not understood, and **Spotify stays open**.
+23. Repeat 21–22 with "**Yes**", "**Aprobar**", "**Confirm**", "Confirmar",
+    "Sim". **Nothing is approved**; Spotify stays open every time.
+24. Say "Cierra Spotify" again, and **click Close Spotify** in the
+    confirmation window → Spotify closes. That is the only way.
+25. Say "Cierra Spotify", then say "Cancelar" → cancelled, Spotify open.
+26. While the confirmation window is open, check that the companion and the
+    Command Center show no approve control.
+27. Play a video that says "Close Spotify" while the microphone is **off**
+    → nothing happens.
+
+### V5 · Speech output
+
+28. Replies to spoken requests are audible, in the interface language's
+    voice.
+29. **Speaking** shows while audio plays, and returns to Ready when it ends
+    (not on a timer).
+30. **Stop speaking** stops immediately. Pressing the microphone while
+    SERSHI speaks stops speech and starts listening.
+31. Settings › Voice › Voice: choose another installed voice → used for the
+    next reply.
+32. Voice responses **Off** → spoken requests get no audio (text only).
+    Speak typed responses **On** → typed requests are spoken.
+
+### V6 · Privacy
+
+33. After a session, search the disk for new audio files (e.g. `*.wav`,
+    `*.pcm` under `%LOCALAPPDATA%`, `%TEMP%`, the repo) → none.
+34. Run `pnpm dev` from a terminal → logs show durations, timings and
+    failure codes only, never transcripts.
+35. **Offline:** turn off Wi-Fi/Ethernet → microphone, recognition, "Abre
+    Calculadora" and the spoken reply all still work.
+
+### V7 · UX
+
+36. Listening, Transcribing and Speaking are real (not shown otherwise); the
+    companion reacts to your voice and to SERSHI's voice, restrained.
+37. Light and Dark themes: the mic button, the notices and Settings › Voice
+    are readable.
+38. Interface sounds On: no cue while listening; no success chime over a
+    spoken reply; the approval cue still plays.
+39. Reduced motion: no level-driven movement; the state is still clear from
+    colour, glyph and label.
+40. Keyboard only: Tab to the microphone, Space/Enter to start and stop,
+    Escape to cancel. Screen reader: the pressed state and the Listening
+    status are announced.
+41. Second launch of SERSHI while listening → brings SERSHI forward, and no
+    second capture starts.
+
+### V8 · Performance
+
+42. Task Manager, SERSHI process:
+    - idle with the microphone off (compare with Gate 2B)
+    - while listening
+    - during recognition
+    - while speaking
+    - memory before and after the first voice use
+43. Latency:
+    - click → Listening
+    - end of speech → transcript
+    - transcript → command accepted
+    - result → speech start
+
+Record the values in the validation record below.
+
 ## Windows validation record
 
 Copy this block for each validation session. Do not mark an item PASS without
@@ -452,8 +593,13 @@ Monitor setup:        (count — if single: MULTI_MONITOR_NOT_TESTED)
 Validation date:      (YYYY-MM-DD)
 Commit:               (git rev-parse HEAD)
 Catalog scan time:    (ms, first scan / refresh)
-Results:              Gate 2A G1–G8 (supersedes 1–20, A1–A29, C1–C17), Gate 2B 1–20: PASS / FAIL / NOT_TESTED each
+Results:              Gate 2A G1–G8 (supersedes 1–20, A1–A29, C1–C17), Gate 2B 1–20, Gate 3A V1–V8 (1–43): PASS / FAIL / NOT_TESTED each
 Idle CPU:             (companion only / Command Center visible / Thinking)
+Voice:                (microphone model; speech model; voices installed;
+                       CPU idle / listening / recognising / speaking;
+                       memory before / after first voice use;
+                       latency click→Listening, end of speech→transcript,
+                       transcript→accepted, result→speech)
 Notes:
 ```
 
@@ -501,5 +647,13 @@ Notes:
   as it is created; record it in Gate 2B step 8. If WebView2 does not report
   Windows' app-mode changes through `prefers-color-scheme`, the fallback is a
   Rust adapter reading `AppsUseLightTheme` (not implemented).
+- Voice ([VOICE.md](VOICE.md)): WASAPI shared mode through `cpal` (the same
+  `windows` 0.62 crate); each capture owns a thread and its device handle.
+  Audio callbacks only send over channels. Speech synthesis is WinRT
+  `SpeechSynthesizer` (plain text, in-memory WAV). Model downloads use
+  WinHTTP (system TLS and proxy, TLS 1.2+, no HTTPS→HTTP redirects). The
+  microphone privacy switch is read, never written, from
+  `CapabilityAccessManager\ConsentStore\microphone` (HKLM, HKCU and
+  `NonPackaged`).
 - Planned: click-through companion mode (`set_ignore_cursor_events`), start
   with Windows (opt-in).

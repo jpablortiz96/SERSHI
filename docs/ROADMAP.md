@@ -65,7 +65,29 @@ validation.
 - ✅ `CompanionRenderer` registry (Orbital); character companions and
   data-only packs documented ([ADR 0013](adr/0013-personalization-is-not-privilege.md))
 - ⏳ Physical pass: [Gate 2B checklist](WINDOWS_PLATFORM.md#gate-2b--experience-settings-and-personalization)
-- Not started: Prompt 3 (voice)
+
+### Prompt 3 — Local voice foundation (implemented, pending Gate 3A)
+
+- ✅ Push-to-talk with native WASAPI capture:
+  - memory only
+  - visible in the button, the Core, the companion, the tray and Activity
+  - endpointing, a 30 s cap and deterministic release
+- ✅ Local speech recognition (whisper.cpp in process):
+  - Automatic / English / Español / Português
+  - models downloaded on request and SHA-256-verified
+  - offline afterwards
+- ✅ Local speech output (Windows voices), with a real Speaking state and a
+  Stop button
+- ✅ Real Listening / Transcribing / Speaking states and audio-reactive
+  visuals
+- ✅ Security: voice uses the typed pipeline and cannot approve
+  ([ADR 0014](adr/0014-local-voice-foundation.md))
+- ⏳ Physical pass: [Gate 3A checklist](WINDOWS_PLATFORM.md#gate-3a--local-voice-validation)
+- Next, only if Gate 3A passes: **Prompt 3B — wake word and conversational
+  voice**. It covers:
+  - a local wake word, opt-in, with the same Listening indicator
+  - latency work: clang-cl ggml, GPU backends, streaming recognition
+  - barge-in, only with echo cancellation
 
 ## v0.1 — Operator
 
@@ -109,11 +131,13 @@ user-initiated, visible and audited.
 
 **Objective:** hands-free, private voice interaction.
 
-- Local wake word, VAD, STT (whisper.cpp / faster-whisper), TTS (Piper)
-- Conversation language independent of the interface language (detected per
-  request or chosen by the user; see LOCALIZATION.md)
-- Push-to-talk, mute, wake word off; real audio-driven visualisation
-- Optional cloud STT/TTS adapters (e.g. Deepgram, ElevenLabs)
+- ✅ Push-to-talk, VAD/endpointing, local STT (whisper.cpp), local TTS
+  (Windows voices), real audio-driven visualisation. Done in Prompt 3.
+- ✅ Conversation language independent of the interface language
+  (automatic or chosen; see LOCALIZATION.md)
+- Local wake word (Prompt 3B, after Gate 3A); neural local TTS (e.g. Piper)
+- Optional cloud STT/TTS adapters (e.g. OpenAI, ElevenLabs, Google, Azure)
+  through the Connector/Credential architecture
 
 **Excludes:** voice cloning. **Exit:** microphone state always visible; no audio
 retained by default; voice optional for every feature.

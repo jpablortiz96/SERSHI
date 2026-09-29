@@ -63,18 +63,22 @@ no eyes — a single bright point, never two.
 | Sleeping | dormant | dimmed, nothing moves | hollow ring |
 | Ready | rest | slow breath, motes, sub-pixel drift — noticeable only if you look | dot |
 | Attending | attend | core gathers, halo tightens, orbits align, shell closes in | focus |
-| Listening | receive | rings gather inward (visual only; no microphone exists) | waves |
+| Listening | receive | rings gather inward; the shell follows the real microphone level | waves |
+| Transcribing | compute | segmented rings, own colour: the microphone is off and SERSHI works on what it heard | segments |
 | Thinking | compute | two segmented rings counter-rotate, light compresses | segments |
 | Planning | structure | four arcs swing into square order, nodes appear, orbits hold still | nodes |
 | Working | drive | one sweep, energy passes outward through the shell | arrow |
-| Speaking | resonate | rings radiate outward (visual only; no TTS exists) | waves |
+| Speaking | resonate | rings radiate outward; the shell follows SERSHI's real voice | waves |
 | Done | bloom | 3–4 % expansion, one soft ring, settle | check |
 | Needs attention | caution | slow amber pulse | triangle |
 | Waiting for you | await | steady amber, nothing spins, shell closes | hourglass |
 | Couldn't complete | falter | contracts, orbits lose alignment, brief coral ring | cross |
 
-Listening and Speaking exist for the future voice layer and are shown only in
-the state preview; SERSHI never animates as if it were listening or watching.
+Listening, Transcribing and Speaking are real since Prompt 3: shown only
+while the microphone captures, speech is recognised, or a reply plays
+(Developer Mode's labelled preview is the only exception). Their intensity
+follows a bounded 0–1 audio level, never raw audio ([MOTION_SYSTEM.md](MOTION_SYSTEM.md#audio-visualisation-prompt-3)).
+SERSHI never animates as if it were listening or watching.
 
 ## Companion 2.0
 
