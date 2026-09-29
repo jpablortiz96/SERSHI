@@ -22,7 +22,8 @@ Motion: [MOTION_SYSTEM.md](MOTION_SYSTEM.md). Brand: [BRAND.md](BRAND.md).
 5. **Honesty.** Nothing looks active that is not. Unavailable features say so.
 
 **Mood:** a dark observatory at night — deep, calm, precise, with one intelligent
-light source.
+light source. SERSHI Light keeps the same mood in cool daylight: an
+instrument in a quiet, bright room, where the core is still the only light.
 
 ## How tokens reach CSS
 
@@ -44,7 +45,7 @@ element that derives from it. Derive tints with `color-mix(in oklab, var(--state
 
 ## Color
 
-### Surfaces (dark, blue-black undertone)
+### Surfaces (SERSHI Dark, blue-black undertone; see [Themes](#themes) for Light)
 
 | Token             | Value                     | Use                                  |
 | ----------------- | ------------------------- | ------------------------------------ |
@@ -226,19 +227,79 @@ Español, Português) so anyone can find their own.
 
 ## Themes
 
-Settings → Appearance lists the themes in `apps/desktop/src/visual/themes.ts`
-(today only **SERSHI Dark**). A theme is a partial token override (`createTheme({ state: { listening: … } })`)
-applied with `applyTheme()`. Themes can restyle but not invent tokens. Future
-package format ([ROADMAP](ROADMAP.md) v0.8):
+Settings → Appearance → Theme offers **System** (default), **Light** and
+**Dark**. The registry is in `apps/desktop/src/visual/themes.ts`, and the
+token overrides are in `packages/design-tokens/src/themes.ts`.
+
+- **SERSHI Dark** (`darkTheme = {}`) is the base token set: everything
+  documented above.
+- **SERSHI Light** is a complete, separate design, not an inversion.
+
+A theme is a partial token override (`createTheme(overrides)`) applied with
+`applyTheme()`. Themes can restyle but not invent tokens; a test checks that
+Light defines exactly the same keys as Dark. Components never branch on the
+theme. They read semantic variables, and a test fails if a component
+compares `theme === "dark"`.
+
+`connectAppearance()` (`src/visual/appearance.ts`) resolves the preference
+and rewrites the variables **only when the resolved theme changes**. It also
+sets `html[data-theme]` and `color-scheme`, so switching never recreates or
+re-renders the app.
+
+**System** follows `prefers-color-scheme` live. It never uses the clock.
+Every window follows the same preference, synchronised by the `storage`
+event; the confirmation window reads the stored preference and `matchMedia`,
+without any new permission.
+
+### SERSHI Light
+
+The Light theme uses soft cool daylight, not a white page.
+
+| Token                                          | Light value                  | Note                                   |
+| ---------------------------------------------- | ---------------------------- | -------------------------------------- |
+| `surface.base` / `raised` / `overlay`          | `#eceff4` / `#f3f5f8` / `#f8f9fb` | Off-white and cool grey, never `#fff` |
+| `text.primary`                                 | `#101827`                    | 15.4:1 on base (≥ 15.4:1 on every surface) |
+| `text.secondary`                               | `#3e4a5c`                    | 7.8:1                                  |
+| `text.tertiary`                                | `#586475`                    | 5.2:1                                  |
+| `text.accent`                                  | `#0a6d8f`                    | 5.1:1                                  |
+| `text.disabled`                                | `#9aa3b1`                    | Disabled only (WCAG-exempt)            |
+| `action.primary` / `onPrimary`                 | `#101827` / `#f8f9fb`        | Ink-dark primary button, 16.9:1        |
+| `border.focus`                                 | `#0a7aa6`                    | ≥ 3:1 on every surface                 |
+| `state.*`                                      | deeper hues (idle `#2b8fc2`, thinking `#6b5bdc`, success `#138f6b`, awaitingConfirmation `#a8792a`, error `#cf3f47` …) | Same meanings, ≥ 3:1 non-text contrast |
+| `atmosphere.*`, `core.*`                       | a quiet cool wash, soft vignette, white specular | The core stays the light source, with a controlled glow |
+| `shadow.*`                                     | softer, lower-opacity        |                                        |
+
+Tokens added in Gate 2B so that no component hard-codes a colour:
+
+| Token                 | Dark                     | Use                                     |
+| --------------------- | ------------------------ | --------------------------------------- |
+| `surface.tint`        | `rgb(255 255 255 / .02)` | Faint panel fill (title bar, transcript) |
+| `border.highlight`    | `rgb(255 255 255 / .06)` | Top highlight on raised glass           |
+| `border.shade`        | `rgb(0 0 0 / .4)`        | Bottom shade / inner edge               |
+| `action.primary`      | `#eef3f8`                | Primary button (send, confirm)          |
+| `action.onPrimary`    | `#07080b`                | Label on the primary button             |
+| `atmosphere.guide`    | `rgb(255 255 255 / .035)`| Orbital guide rings                     |
+| `atmosphere.grain`    | `0.05`                   | Film-grain opacity                      |
+
+Accessibility tests (`packages/design-tokens/test/tokens.test.ts`) run on
+**both** themes:
+
+- text ≥ 4.5:1 on every surface
+- the primary action ≥ 4.5:1
+- focus and state hues ≥ 3:1
+
+Future theme packages are **data only** ([ROADMAP](ROADMAP.md) v0.8, [ADR 0013](adr/0013-personalization-is-not-privilege.md)):
 
 ```text
 theme/
 ├── manifest.json      id, name, version, author, sershi compatibility
-├── tokens.json        partial token overrides
+├── tokens.json        partial token overrides (validated against the token keys)
 ├── preview.webp
 ├── background.webp    optional ambient layer image
 └── assets/
 ```
+
+No scripts, no CSS injection, no permissions.
 
 ## Do / Don't
 

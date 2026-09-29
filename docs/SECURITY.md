@@ -84,6 +84,8 @@ flowchart LR
 | Confirmation ids: 128 bits from the OS CSPRNG | `confirmation.rs` (`getrandom`)                            | `confirmation_ids_are_128_bit_random_values`         |
 | Accidental-input guard on Approve           | `surfaces/confirmation/ConfirmationSurface.tsx`              | `confirmation-surface.test.tsx`                      |
 | No paths in outcomes, activity or UI (`ApplicationSummary` only) | `apps/model.rs`, `apps/tools.rs`               | `commands.test.ts` ("no paths in outcomes"), `launch_errors_are_structured_without_internal_details` |
+| Global shortcut is invocation only: `set_global_shortcut` granted to the Command Center alone; Rust validates the accelerator (≤ 64 chars at IPC, ≤ 40 parsed, ≥ 2 modifiers, no Win); registers before releasing the old one; the shortcut only summons | `sershi-core::shortcut`, `integration.rs`, `commands.rs`, `capabilities/command-center.json` | `shortcut.rs` tests; `commands.test.ts` ("personalization is not privilege") |
+| No personalization commands or permissions: theme, sound, companion appearance live in presentation preferences; no command is named after them | `i18n/preferences.ts`, capabilities | `commands.test.ts` ("personalization is not privilege") |
 | Tray labels validated (≤ 48 chars, no control chars); actions fixed | `ipc.rs` `TrayLabels::is_valid`             | `ipc.rs` tests                                       |
 | Strict Content-Security-Policy              | `tauri.conf.json` (`script-src 'self'`, `style-src 'self'`, no remote origins) | Manual review                                |
 | Frozen JS prototypes                        | `tauri.conf.json` `freezePrototype`                          | Manual review                                        |
@@ -214,6 +216,41 @@ typed tool → policy engine → permission model → risk classification →
 - **Voice (v0.3).** Voice confirmation of sensitive actions is disabled unless
   a future, explicitly designed secure mechanism exists. Voice may cancel;
   approval remains an explicit UI interaction.
+
+### Personalization is not privilege
+
+Decision: [ADR 0013](adr/0013-personalization-is-not-privilege.md).
+Changing the theme, sounds, companion appearance or shortcut changes how
+SERSHI feels; it never changes what SERSHI is authorized to do.
+
+- **Presentation, not policy.** Theme, motion, companion appearance and
+  size, sounds, volume and the chosen shortcut are presentation preferences
+  in the WebView (`sershi.preferences.v1`). Tool policy, risk levels,
+  permissions and the confirmation lifecycle never read them.
+- **The shortcut summons and nothing more.** It shows the Command Center and
+  focuses input, exactly like the tray or the companion. With a confirmation
+  pending, it brings SERSHI forward; it never approves. Rust validates every
+  accelerator, and only the Command Center may change it.
+- **The confirmation window is unchanged.** It follows the theme through CSS
+  variables and the stored preference (no event listening, no new
+  permission, still exactly `get_confirmation_context` and
+  `decide_confirmation`). It imports no audio code; security never depends
+  on sound.
+- **Packs are data, never code.** Future companion, theme and sound packs
+  may contain:
+  - images, sprites, vector assets
+  - animation metadata
+  - token overrides
+  - procedural sound parameters or audio assets
+  - a manifest
+  Packs are parsed as untrusted input (schema-validated, size-limited) and
+  rendered by SERSHI's own renderers. There is never "download → execute
+  JavaScript", no CSS injection and no IPC access. Packs are **less
+  privileged than Skills**: a Skill can request permissions through the
+  policy engine, while a pack cannot request anything.
+- **CI enforces it.** Contract tests fail if any window other than the
+  Command Center gains `set_global_shortcut`, if a theme, sound, appearance
+  or pack command appears, or if the confirmation boundary changes.
 
 ### Future hardening (not implemented)
 

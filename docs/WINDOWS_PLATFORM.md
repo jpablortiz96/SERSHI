@@ -26,6 +26,9 @@ steps to validate on a physical Windows machine.
 | Close application (`WM_CLOSE` to matching top-level windows) | `windows/close.rs`                   | ✅ confirmation flow tested with fakes; dialog rendered under Xvfb | ✅ compiled | REQUIRES_WINDOWS_VALIDATION |
 | System tray (Open / Hide / Quit, localized labels, left-click summons) | `src-tauri/src/integration.rs` | ⚠️ created under Xvfb (reported Active); menu not exercisable without a panel | ✅ compiled | REQUIRES_WINDOWS_VALIDATION |
 | Global shortcut `Ctrl+Alt+Space` (summon + focus input) | `integration.rs`, `surfaces.rs::summon` | ⚠️ registered under X11 (reported Active); key press not exercised | ✅ compiled | REQUIRES_WINDOWS_VALIDATION |
+| Configurable global shortcut (Settings → Windows integration → Change; register-before-release; conflict keeps the previous one; persisted) | `sershi-core::shortcut`, `integration.rs::apply_shortcut`, `WindowsIntegration.tsx` | ✅ core rules tested with a fake registrar; recorder, conflict message and persistence tested in the frontend | ✅ compiled | REQUIRES_WINDOWS_VALIDATION (real conflicts with other apps) |
+| Themes System / Light / Dark (System follows Windows app mode via `prefers-color-scheme`) | `design-tokens/themes.ts`, `visual/appearance.ts` | ✅ Chromium preview in light and dark system modes; tokens, persistence and cross-window sync tested | ✅ frontend build + tests | REQUIRES_WINDOWS_VALIDATION (WebView2 reports app-mode changes live) |
+| Interface sounds (procedural Web Audio, off by default) | `apps/desktop/src/audio/` | ✅ scheduling and gating tested against a fake `AudioContext`; no audio device in the container | ✅ frontend build + tests | REQUIRES_WINDOWS_VALIDATION (audible output, autoplay, loudness) |
 | Focus when summoned (foreground-lock fallback: taskbar flash) | `surfaces.rs::show_command_center` | ⚠️ not observable without a window manager | — | REQUIRES_WINDOWS_VALIDATION |
 | Single instance (second launch shows the existing windows) | `tauri-plugin-single-instance`   | ⚠️ not exercised                     | ✅ compiled            | REQUIRES_WINDOWS_VALIDATION      |
 | Trusted confirmation window (created by Rust, 2-command capability, approve / cancel / × / OS close / expiry / hide / quit) | `src-tauri/src/confirmation.rs`, `surfaces/confirmation/` | ✅ exercised under Xvfb with a temporary, uncommitted fake application adapter: window opened centered and localized, context loaded through its capability, approve executed once and closed it, ×, WM close request, hiding the Command Center, expiry and quit all cancelled with nothing executed | ✅ compiled | REQUIRES_WINDOWS_VALIDATION (focus, always-on-top, Alt+F4, DPI) |
@@ -382,6 +385,59 @@ confirmation open), black rectangles behind the transparent companion,
 clipped glow, jagged orbit rendering, text overflow, blurry transforms during
 window transitions, scrollbar flashes, focus-ring glitches, window flicker.
 
+## Gate 2B — Experience settings and personalization
+
+Run after Gate 2A, from `claude/gate-2b-personalization`. Record PASS / FAIL
+/ NOT_TESTED per step.
+
+1. Start SERSHI.
+2. With the conflicting shortcut still taken by the other application,
+   Settings → Windows integration → Global shortcut shows **Unavailable**.
+   SERSHI still opens from the companion, the tray and a second launch.
+   Nothing else was registered in its place.
+3. **Change** → "Press a new shortcut…" → press a free combination (e.g.
+   **Ctrl+Shift+K**). Also try:
+   - a single key (**A**, **F1**, **Space**): rejected with a reason
+   - a **Win** combination: rejected
+   - the conflicting combination: "Shortcut unavailable", and the previous
+     shortcut still works
+   - Escape: cancels recording
+4. The new shortcut shows **Active** and summons SERSHI from another app.
+5. Quit from the tray and start SERSHI again.
+6. The chosen shortcut is still shown and still works; the old one does not.
+7. Settings → Appearance → Theme → **Light**.
+8. Check every surface in Light:
+   - Home: idle, and preview Thinking, Done and Couldn't complete
+   - Activity and Settings
+   - the companion
+   - a `Close Notepad` confirmation window (Cancel it)
+   Check readability, no pure-white glare and the focus rings (Tab). Record
+   whether a dark flash appears when a window opens (native backing colour).
+9. Theme → **Dark**: identical to Prompt 2.
+10. Theme → **System**: the detail line says which mode Windows is in.
+11. Windows Settings → Personalization → Colors → change the app mode.
+    With SERSHI open, every window follows without a restart. Change it
+    back.
+12. Settings → Appearance → Interface sounds → **On**; press **Play sample**;
+    try volume 0, 35 and 100.
+13. Quit and start SERSHI → the start-up cue plays once, about a second
+    long. If it is silent, record it: WebView2 autoplay may refuse audio
+    before interaction.
+14. Press the shortcut from another app → the summon cue plays.
+15. `Open Notepad` → the success cue plays.
+16. `Open Zzyzx` or another failing command → the error cue plays, restrained.
+17. `Close Notepad` → the confirmation cue plays and the window appears.
+    Cancel it.
+18. Interface sounds → **Off**.
+19. Repeat 14–17 → complete silence.
+20. Security unchanged:
+    - only the confirmation window can approve
+    - Escape, ×, Alt+F4 and expiry all cancel
+    - the new shortcut, while a confirmation is open, only brings SERSHI
+      forward
+    - changing theme, sounds or shortcut never approves or grants anything
+    - the confirmation still works with sounds Off
+
 ## Windows validation record
 
 Copy this block for each validation session. Do not mark an item PASS without
@@ -396,7 +452,7 @@ Monitor setup:        (count — if single: MULTI_MONITOR_NOT_TESTED)
 Validation date:      (YYYY-MM-DD)
 Commit:               (git rev-parse HEAD)
 Catalog scan time:    (ms, first scan / refresh)
-Results:              Gate 2A G1–G8 (supersedes 1–20, A1–A29, C1–C17): PASS / FAIL / NOT_TESTED each
+Results:              Gate 2A G1–G8 (supersedes 1–20, A1–A29, C1–C17), Gate 2B 1–20: PASS / FAIL / NOT_TESTED each
 Idle CPU:             (companion only / Command Center visible / Thinking)
 Notes:
 ```
@@ -425,9 +481,25 @@ Notes:
   (type-checks the `cfg(windows)` modules; linking needs Windows).
 - Credential storage: Windows Credential Manager (`CredWriteW`/`CredReadW`) behind
   a `CredentialStore` port.
-- Global shortcut: `Ctrl+Alt+Space`. Not `Alt+Space` (Windows window menu,
-  PowerToys Run) and not `Ctrl+Shift+Space` (VS Code parameter hints, Excel
-  select-all; a global registration would silently break them). Becomes
-  configurable with the v0.1 settings store.
+- Global shortcut: default `Ctrl+Alt+Space`, configurable since Gate 2B.
+  Not `Alt+Space` (Windows window menu, PowerToys Run) and not
+  `Ctrl+Shift+Space` (VS Code parameter hints, Excel select-all).
+  - **Accepted:** two or more modifiers including Ctrl or Alt, plus A–Z,
+    0–9, Space or F1–F12.
+  - **Rejected:** Win/Super combinations (reserved by Windows).
+  - **AltGr warning:** `Ctrl+Alt+letter/digit` without Shift can collide
+    with AltGr characters on some keyboard layouts (Windows treats AltGr as
+    Ctrl+Alt). Settings warns but does not block.
+  - **Registration order:** Rust registers the new shortcut before
+    unregistering the old one. On failure the old one stays active.
+  - **Start-up:** the stored choice (or the default) is applied at start-up.
+    If it is taken, the status is Unavailable and nothing else is chosen. The
+    default is applied after 4 s only if the Command Center never configured
+    one.
+- Themes: native window `backgroundColor` stays `#07080B` (set before the
+  WebView loads). In Light theme a window may briefly show that dark backing
+  as it is created; record it in Gate 2B step 8. If WebView2 does not report
+  Windows' app-mode changes through `prefers-color-scheme`, the fallback is a
+  Rust adapter reading `AppsUseLightTheme` (not implemented).
 - Planned: click-through companion mode (`set_ignore_cursor_events`), start
   with Windows (opt-in).

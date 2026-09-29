@@ -153,17 +153,78 @@ unchanged from Gate 1A.
 
 ## Appearance and themes
 
-- **Settings → Appearance** has only options that work: Theme (SERSHI Dark,
-  the only theme), Motion (System / Reduced) and Companion size. They are
-  presentation preferences stored with the language preference and shared
-  by every window.
+- **Settings → Appearance** shows only options that work:
+  - Theme (System / Light / Dark)
+  - Motion (System / Reduced)
+  - Companion (Orbital, read-only)
+  - Companion size
+  - Interface sounds (On / Off)
+  - Sound volume
+  These are presentation preferences, stored with the language preference
+  and shared by every window. They never change what SERSHI may do
+  ([ADR 0013](adr/0013-personalization-is-not-privilege.md)).
 - **Why no "Full" motion option:** it would have to override the operating
   system's reduced-motion accessibility setting; "System" already gives full
   motion when Windows allows it.
-- **Theme foundation:** semantic tokens (`atmosphere.*`, `core.*`, plus the
-  existing `surface`, `text`, `state`) and a registry (`visual/themes.ts`).
-  A future theme is a partial token override; no component changes.
-  No downloads, packs or marketplace.
+- **Themes (Gate 2B):** SERSHI Dark and SERSHI Light are both token sets
+  (`packages/design-tokens/src/themes.ts`). System follows Windows' app mode
+  live through `prefers-color-scheme`. The Command Center, companion and
+  confirmation window all follow the theme. The confirmation window stays
+  recognisable: same layout, approval mark and amber frame, with deeper
+  amber in Light. See [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md#themes).
+- **Interface sounds:** see [SOUND_DESIGN.md](SOUND_DESIGN.md).
+
+## Companion appearances
+
+```text
+AssistantState ──► CompanionRenderer (props only) ──► OrbitalRenderer   (today)
+                                                  └─► future renderers
+```
+
+- `src/visual/companions.tsx` is the registry. A `CompanionRenderer` is
+  `{ id, label, component }`, and the component receives
+  `{ state, size, intensity, pulseKey }`: nothing else, no IPC, no stores.
+- **Orbital** (the Core in its `companion` variant) is the only renderer
+  and the only option in Settings. An unknown stored appearance falls back
+  to Orbital. SERSHI shows no placeholder options such as "coming soon".
+- **Future renderers:** Aurora, Minimal, Holographic, Character2D. Each only
+  maps the assistant state to visuals.
+
+### Future character companions
+
+A character companion is another renderer. It might use frame sets per
+visual state or a skeletal/vector rig driven by animation metadata:
+
+- idle and attending
+- thinking and working
+- success and error
+- speaking
+
+The rule stays:
+
+```text
+AssistantState ──► companion visual state      (never the other way round)
+```
+
+A character has **no business logic of its own**. It cannot decide, speak,
+act, approve or request anything. It shows the state Rust already
+broadcast, and changing appearance never changes SERSHI's powers.
+
+### Companion packs (future, not built)
+
+A downloadable pack is **data, not code**:
+
+- images, sprites, vector assets
+- animation metadata (frame ranges per state, timings)
+- theme tokens
+- audio assets or procedural sound parameters
+- a manifest
+
+Never "download companion → execute JavaScript". Packs will be parsed as
+untrusted input (size-limited, schema-validated), rendered by SERSHI's own
+renderer, and granted no commands or permissions. They are less privileged
+than Skills (see [SECURITY.md](SECURITY.md#personalization-is-not-privilege)).
+There is no marketplace yet.
 
 ## Reduced motion
 
@@ -204,3 +265,7 @@ Portuguese, reduced motion), `p2-settings.webp`,
 Spanish), `companion-states.webp` (all 12 states), `p2-companion-desktop.webp`,
 `p2-confirmation-{en,es,pt}.webp`. Captured on Linux (Chromium preview and
 WebKitGTK under Xvfb); Windows rendering is pending Gate 2A.
+
+Gate 2B (Chromium preview, light system mode): `g2b-light-home.webp`,
+`g2b-light-thinking.webp`, `g2b-light-settings-appearance.webp`,
+`g2b-light-confirmation.webp`, `g2b-light-companion.webp`.

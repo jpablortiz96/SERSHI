@@ -18,5 +18,6 @@ such.
 | [0010](0010-trusted-confirmation-lifecycle.md)  | Rust-owned, one-time, expiring confirmations       | Accepted (amended by 0011) |
 | [0011](0011-dedicated-confirmation-surface.md)  | Dedicated minimal-authority confirmation window, CSPRNG ids | Accepted |
 | [0012](0012-state-driven-visual-system.md)      | State-driven visual system: one table, one renderer, one motion switch | Accepted |
+| [0013](0013-personalization-is-not-privilege.md) | Personalization is not privilege: shortcut, themes, sounds, companion packs | Accepted |
 
 Template: `Status · Context · Decision · Alternatives · Consequences`.

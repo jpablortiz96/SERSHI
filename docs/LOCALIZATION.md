@@ -148,12 +148,27 @@ translated.
 
 ### Appearance and visual copy
 
-Settings → Appearance (theme, motion, companion size), activity status words
-and the confirmation window's approval mark ("SERSHI approval" /
-"Aprobación de SERSHI" / "Aprovação do SERSHI") are localized like every
-other string. The theme name "SERSHI Dark" is a product name and is not
-translated. Navigation measures its tabs, so longer Spanish and Portuguese
-labels never clip.
+The following are localized like every other string:
+
+- Settings → Appearance: theme, motion, companion, companion size,
+  interface sounds and volume
+- Settings → Windows integration → Global shortcut: the recorder prompt,
+  rejection reasons, "Shortcut unavailable" and the AltGr warning
+- activity status words
+- the confirmation window's approval mark ("SERSHI approval" /
+  "Aprobación de SERSHI" / "Aprovação do SERSHI")
+
+Some names are product names and stay untranslated: the theme names
+"SERSHI Dark" and "SERSHI Light" and the companion name "Orbital".
+
+Other rules:
+
+- Key names in shortcuts (`Ctrl`, `Alt`, `Shift`) follow Windows'
+  keyboard labels in every language.
+- The volume value follows each locale's percent convention (`35%`,
+  `35 %`).
+- Navigation measures its tabs, so longer Spanish and Portuguese labels
+  never clip.
 
 ### What is not localized
 

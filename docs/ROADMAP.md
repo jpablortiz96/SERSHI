@@ -50,6 +50,23 @@ validation.
 - Deferred: companion edge awareness and edge magnetism (need physical
   feedback), a "Full motion" override of the OS accessibility setting
 
+### Gate 2B — Experience settings and personalization (implemented, pending Windows validation)
+
+- ✅ Configurable global shortcut (Settings → Windows integration → Change):
+  - Rust-validated modifier combinations
+  - register-before-release; a conflict keeps the previous shortcut
+  - never an automatic substitute
+  - persisted
+- ✅ Theme System / Light / Dark: a genuine SERSHI Light token set; System
+  follows Windows live; all three windows follow the theme
+- ✅ Interface sounds: an original procedural cue set (start-up, summon,
+  success, error, approval request), off by default, with volume
+  ([SOUND_DESIGN.md](SOUND_DESIGN.md))
+- ✅ `CompanionRenderer` registry (Orbital); character companions and
+  data-only packs documented ([ADR 0013](adr/0013-personalization-is-not-privilege.md))
+- ⏳ Physical pass: [Gate 2B checklist](WINDOWS_PLATFORM.md#gate-2b--experience-settings-and-personalization)
+- Not started: Prompt 3 (voice)
+
 ## v0.1 — Operator
 
 **Objective:** the v0.1 journey works on Windows: launch → companion → "Open
@@ -64,8 +81,9 @@ Spotify" → policy → Spotify opens → success.
 - First `LlmProvider` (Ollama, local) + model-backed `IntentResolver`; keyword
   resolver as fallback
 - ✅ Tray icon and global shortcut (Prompt 1; `Ctrl+Alt+Space`, since `Alt+Space`
-  belongs to Windows and PowerToys). Configurable shortcut, Quick Command,
-  companion click-through and size/position settings remain
+  belongs to Windows and PowerToys). ✅ Configurable shortcut and companion
+  size (Gate 2B / Prompt 2). Quick Command, companion click-through and
+  position settings remain
 - Per-category launch policy (e.g. confirm before opening shells or security
   tools when requests are model-proposed)
 - Async execution runtime with tool timeouts and cancellation
@@ -139,6 +157,10 @@ user did not approve (security tests).
 **Objective:** SERSHI can look and sound like its user wants.
 
 - Theme packages, companion visual packs, sound packs, voice packs
+  — all **data, not code** (assets, tokens, animation metadata, procedural
+  parameters), less privileged than Skills. Foundations exist since Gate 2B:
+  the Light/Dark token sets, `CompanionRenderer` and `SoundSet`.
+- Character companions (frame or rig based) as renderers of `AssistantState`
 
 ## v0.9 — Hardening
 

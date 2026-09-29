@@ -78,6 +78,18 @@ AssistantState  →  Companion renderer (props only)  →  active visual pack
 
 so assistant logic never depends on a particular avatar.
 
+Since Gate 2B this contract is the `CompanionRenderer` registry
+(`src/visual/companions.tsx`; Orbital today). See
+[VISUAL_EXPERIENCE.md](VISUAL_EXPERIENCE.md#companion-appearances).
+
+### Theme changes
+
+Switching theme (or Windows changing app mode under **System**) rewrites the
+token variables once. There is no animation, no re-render and no window
+recreation. Colours that already transition (`--state-color`) follow their
+normal durations. Theme never affects motion; reduced motion stays
+independent.
+
 ## State transitions
 
 Colors always cross-fade over `duration.cinematic` with `ease.standard`.

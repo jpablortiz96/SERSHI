@@ -230,6 +230,7 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
 | `get_application_catalog` | main               | Catalog status; names and sources in developer builds only |
 | `refresh_application_catalog` | main           | Re-scan installed applications                      |
 | `get_integration_status`  | main               | Tray, shortcut, single-instance status              |
+| `set_global_shortcut`     | main               | Register a validated accelerator (register-before-release); returns `ShortcutChange` |
 | `set_tray_labels`         | main               | Localized tray labels (≤ 48 chars, no control chars; actions are fixed) |
 | `hide_command_center`     | main               | × button: hide, keep running                        |
 | `dismiss_assistant`       | main               | `Awake`/`AwaitingConfirmation → Idle` (cancels pending approvals) |
@@ -305,10 +306,18 @@ tested definition. Any non-sleeping state can `Fail`; busy states cannot `Sleep`
   Settings → About).
 - **Tray** — Open / Hide / Quit (labels follow the UI language via
   `set_tray_labels`); left click summons.
-- **Global shortcut** — `Ctrl+Alt+Space` summons: show, restore, focus, then
-  emit `sershi://focus-command` so the input is focused. If Windows refuses
-  focus, `request_user_attention` flashes the taskbar button instead. If the
-  shortcut is taken, SERSHI keeps running and Settings says so.
+- **Global shortcut** — default `Ctrl+Alt+Space`, configurable in Settings →
+  Windows integration (Gate 2B). It summons: show, restore, focus, then emit
+  `sershi://focus-command` so the input is focused. If Windows refuses focus,
+  `request_user_attention` flashes the taskbar button instead.
+  - `sershi_core::shortcut` parses and validates accelerators.
+  - `ShortcutBinding` registers the new one through a `ShortcutRegistrar`
+    port (the plugin in the shell, a fake in tests) **before** releasing the
+    old one.
+  - The Command Center applies the stored choice at start-up through
+    `set_global_shortcut`. If a shortcut is taken, the previous one stays;
+    with none, Settings says Unavailable. SERSHI never picks another
+    combination.
 - **Summon semantics** — tray click, shortcut, second instance and the
   companion all call the same `surfaces::summon`.
 
@@ -326,6 +335,19 @@ All of it is REQUIRES_WINDOWS_VALIDATION; see
   or hold session-only UI state (conversation). See [ADR 0007](adr/0007-frontend-state-management.md).
 - **`src/components`** — presentational components; `Core` is a pure renderer of
   `AssistantState`, replaceable by future companion packs.
+- **`src/visual`** — the state → visual table, appearance store
+  (`connectAppearance`: theme, motion, companion size; applies token
+  variables only when the resolved theme changes) and the
+  `CompanionRenderer` registry (`companions.tsx`; Orbital today).
+- **`src/audio`** — `InterfaceAudio`: procedural cue data (`cues.ts`), a lazy
+  Web Audio renderer (`interfaceAudio.ts`) and the event wiring
+  (`connect.ts`, Command Center only). Separate from future `VoiceAudio`
+  ([SOUND_DESIGN.md](SOUND_DESIGN.md)).
+- **Presentation preferences** — language, theme, motion, companion
+  appearance and size, sounds, volume and shortcut, in
+  `localStorage["sershi.preferences.v1"]`, synced across windows by the
+  `storage` event. They are never authority
+  ([ADR 0013](adr/0013-personalization-is-not-privilege.md)).
 - **Styling** — CSS Modules + design tokens as CSS custom properties. No utility
   framework; no hard-coded visual values ([DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)).
 - **Visual system** — `src/visual`: the state → visual table
