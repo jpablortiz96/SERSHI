@@ -31,7 +31,24 @@ validation.
 - ✅ Tray (Open / Hide / Quit), global shortcut `Ctrl+Alt+Space`, single
   instance, × hides instead of quitting
 - ✅ Settings → Windows integration; Developer Mode catalog inspector
-- ⏳ Physical Windows validation ([checklist](WINDOWS_PLATFORM.md#manual-validation-checklist), items A1–A29)
+- ⏳ Physical Windows validation — combined into Gate 2A below
+
+### Prompt 2 — Visual Experience 2.0 (implemented, pending Windows validation)
+
+- ✅ State-driven visual system: one state → visual table, one CSS renderer
+  with hero / companion / compact / preview variants ([ADR 0012](adr/0012-state-driven-visual-system.md))
+- ✅ Companion 2.0: distinct motion per state, hover / press / drag
+  behaviour, contextual presence, companion size setting
+- ✅ Command Center 2.0: core as light source, icon navigation, state glyphs,
+  command acceptance, response hierarchy, activity status shapes, window
+  enter / exit transitions, responsive sizing
+- ✅ Appearance settings (motion, companion size), theme foundation
+- ✅ Confirmation window visual polish (approval mark, amber frame and focus);
+  Gate 1A behaviour unchanged
+- ⏳ **Gate 2A — Windows Integrated Validation** (Prompt 1 + Gate 1A +
+  Prompt 2): [checklist](WINDOWS_PLATFORM.md#gate-2a--windows-integrated-validation)
+- Deferred: companion edge awareness and edge magnetism (need physical
+  feedback), a "Full motion" override of the OS accessibility setting
 
 ## v0.1 — Operator
 

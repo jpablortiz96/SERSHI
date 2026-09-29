@@ -31,6 +31,16 @@ working identity.
 
 - Wordmark: Geist, weight ~560, tracking 0.32em, uppercase.
 - The mark takes the current state color inside the product.
+- **The core is the strongest brand signature.** It stays abstract: no face,
+  no eyes, no mascot or robot — one bright point, orbits and light. Two
+  bright points that could read as eyes are a defect.
+- **Approval mark:** inside the confirmation window only, a small shield
+  around the core with the words "SERSHI approval" and an amber hairline
+  frame. It signals "this is SERSHI's decision window"; it is not an
+  operating-system security indicator and must never imitate one.
+- One icon family: 16 px line icons, 1.5 px stroke, round caps
+  (`components/shell/icons.tsx`), and 12 px status glyphs
+  (`components/core/StateGlyph.tsx`). No emoji or mixed symbol sets.
 
 ## Color identity
 

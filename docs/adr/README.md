@@ -17,5 +17,6 @@ such.
 | [0009](0009-windows-application-discovery.md)   | Discovered apps, native launch, graceful close     | Accepted |
 | [0010](0010-trusted-confirmation-lifecycle.md)  | Rust-owned, one-time, expiring confirmations       | Accepted (amended by 0011) |
 | [0011](0011-dedicated-confirmation-surface.md)  | Dedicated minimal-authority confirmation window, CSPRNG ids | Accepted |
+| [0012](0012-state-driven-visual-system.md)      | State-driven visual system: one table, one renderer, one motion switch | Accepted |
 
 Template: `Status · Context · Decision · Alternatives · Consequences`.

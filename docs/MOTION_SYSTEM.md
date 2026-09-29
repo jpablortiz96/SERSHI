@@ -28,10 +28,15 @@ calm, meaningful and cheap enough to run all day.
 | `duration.default`    | 240 ms  | Most UI transitions, focus bloom                     |
 | `duration.slow`       | 420 ms  | View changes, message arrival, layer fades           |
 | `duration.cinematic`  | 720 ms  | State re-tint, core resize, success ripple           |
+| `duration.window`     | 260 ms  | Command Center appearing (every summon origin)       |
+| `duration.windowExit` | 160 ms  | Command Center retreating before the native hide     |
 | `duration.breath`     | 5600 ms | Ambient breathing loop                               |
+| `duration.ambient`    | 9600 ms | Idle life: the resting halo, sub-pixel drift          |
 | `duration.drift`      | 28 s    | Ambient drift, field ring rotation                   |
 
-Interactive durations never exceed 720 ms (enforced by a unit test).
+Interactive durations never exceed 720 ms and window transitions 280 ms
+(enforced by a unit test). Components never hard-code durations except the
+few documented pattern loops above.
 
 | Easing           | Curve                          | Use                                            |
 | ---------------- | ------------------------------ | ---------------------------------------------- |
@@ -43,25 +48,28 @@ Interactive durations never exceed 720 ms (enforced by a unit test).
 
 ## The Intelligent Core
 
-A layered, procedural renderer (`components/core/Core.tsx`) driven only by
-`data-state`:
+A layered, procedural renderer (`components/core/Core.tsx`) driven by the
+state → visual table (`visual/stateVisuals.ts`, [ADR 0012](adr/0012-state-driven-visual-system.md)).
+Layers, patterns and the full state motion language are documented in
+[VISUAL_EXPERIENCE.md](VISUAL_EXPERIENCE.md#the-core-renderer-20). Summary:
 
-| Layer       | Geometry                                | Motion                                          |
-| ----------- | --------------------------------------- | ----------------------------------------------- |
-| `halo`      | Radial light, 168% of core              | Breath: scale 0.94↔1.04, opacity 0.72↔0.92     |
-| `field`     | 1 px ring, 230° visible arc             | Rotation, 28 s                                  |
-| orbit A     | Ring tilted rotateX 72° / rotateY −16°  | Rotation, 16 s, with a bright satellite         |
-| orbit B     | Violet ring tilted 66° / 42°            | Reverse rotation, 23 s                          |
-| `cognition` | Segmented ring (dashes × 150° arc)      | Visible when thinking/planning; 3.6 s           |
-| `drive`     | Bright 100° comet arc                   | Visible when executing; 1.15 s                  |
-| `pulses`    | Three concentric rings                  | Listening: gather inward 2.4 s · Speaking: radiate outward 1.6 s |
-| `body`      | Luminous sphere, frost → state hue      | Breath: scale 1↔1.035                           |
-| `nucleus`   | White point                             | Static                                          |
-| `flash`     | One-shot ring, re-keyed per revision    | Success/warning/error ripple                    |
+| Pattern (states) | Motion |
+| ---------------- | ------ |
+| dormant (sleeping) | nothing moves, 42 % opacity |
+| rest (idle) | halo breath over `ambient` (9.6 s), motes drift over `drift`, body sub-pixel drift over 2 × `ambient` |
+| attend (awake) | orbit planes re-tilt into alignment over `cinematic`; halo tightens; shell closes in |
+| compute (thinking) | two segmented rings, 3.6 s and 5.4 s, counter-rotating; shell compresses |
+| structure (planning) | four arcs assemble (3.2 s cycle, 80 ms stagger), nodes appear at lock, orbits pause |
+| drive (executing) | sweep arc 1.3 s; shell passes outward 1.3 s |
+| receive / resonate | rings gather 2.4 s / radiate 1.6 s (visual only until voice) |
+| bloom (success) | one ripple + 4 % shell expansion over `cinematic`, once |
+| caution (warning) | halo attention 2.4 s |
+| await (awaitingConfirmation) | halo attention 3.2 s; orbits and field pause |
+| falter (error) | body contracts to 0.9 then 0.97, orbit planes misalign, one coral ripple |
 
 ### Companion renderers
 
-`Core` takes `{ state, size, pulseKey }` and holds no state. Any future visual pack
+`Core` takes `{ state, variant, size, intensity, pulseKey }` and holds no state. Any future visual pack
 (Rive, Lottie, sprite, 3D) implements the same props:
 
 ```text
@@ -100,7 +108,11 @@ settle on a timer; it ends with the user's decision or the confirmation's expiry
 
 | Moment                        | Spec                                                                        |
 | ----------------------------- | --------------------------------------------------------------------------- |
-| Window open (v0.1)            | Content fades/rises 6 px over `slow`, `enter`                               |
+| Window appears                | opacity 0 → 1, scale 0.985 → 1 over `window` (260 ms), `enter`; one entrance for every summon origin; not replayed within 1.2 s |
+| Window hides (×)              | opacity → 0, scale 0.99, 4 px down over `windowExit` (160 ms), `exit`; then the native hide |
+| Navigation                    | Selection indicator slides to the active tab over `slow`, `enter`           |
+| Command accepted              | Sent text lifts 18 px and fades over 520 ms while the input clears          |
+| Busy command bar              | A thin light travels along the bar's lower edge, 1.4 s                      |
 | View change                   | Keyed view fades and rises 6 px over `slow`, `enter`                        |
 | Conversation starts           | Core slot 300 → 168 px and core scale 0.6 over `cinematic`, `enter`         |
 | Message arrives               | Opacity 0 → 1, translateY 8 → 0 over `slow`, `enter`                        |
@@ -122,16 +134,22 @@ settle on a timer; it ends with the user's decision or the confirmation's expiry
 - Budget targets for v0.9 hardening: companion idle < 1% CPU on a mid-range laptop
   with WebView2; no long tasks > 50 ms during state transitions.
 
+Measured under the Linux virtual display (software rendering): no idle CPU
+regression versus Gate 1A — see [VISUAL_EXPERIENCE.md](VISUAL_EXPERIENCE.md#performance).
+
 REQUIRES_WINDOWS_VALIDATION: WebView2 GPU compositing of the transparent companion
 and its idle CPU cost have not been measured on Windows yet.
 
 ## Reduced motion
 
-With `prefers-reduced-motion: reduce`: all loops stop; ripples and contractions are
-removed; state-specific geometry (dashed ring, drive arc, a single pulse ring)
-remains visible statically; color changes shorten to `duration.fast`; view and
-message transitions become near-instant. The state label beside the core always
-names the state.
+One switch, `<html data-motion="reduced">`, set from Settings → Appearance →
+Motion or, with "System", from the operating system (`visual/appearance.ts`).
+Under it: every animation and transition is cut to near-zero (global rule);
+the Core shows a distinct static shape per pattern (segmented rings, four
+arcs with nodes, the sweep arc, one resonance ring, a closed shell,
+misaligned orbits); window and command transitions are skipped. The glyph
+and label beside the core always name the state. A test scans every
+stylesheet: any looping animation must be neutralised under the switch.
 
 ## Audio visualisation (v0.3)
 

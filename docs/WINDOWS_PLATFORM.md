@@ -29,6 +29,7 @@ steps to validate on a physical Windows machine.
 | Focus when summoned (foreground-lock fallback: taskbar flash) | `surfaces.rs::show_command_center` | ⚠️ not observable without a window manager | — | REQUIRES_WINDOWS_VALIDATION |
 | Single instance (second launch shows the existing windows) | `tauri-plugin-single-instance`   | ⚠️ not exercised                     | ✅ compiled            | REQUIRES_WINDOWS_VALIDATION      |
 | Trusted confirmation window (created by Rust, 2-command capability, approve / cancel / × / OS close / expiry / hide / quit) | `src-tauri/src/confirmation.rs`, `surfaces/confirmation/` | ✅ exercised under Xvfb with a temporary, uncommitted fake application adapter: window opened centered and localized, context loaded through its capability, approve executed once and closed it, ×, WM close request, hiding the Command Center, expiry and quit all cancelled with nothing executed | ✅ compiled | REQUIRES_WINDOWS_VALIDATION (focus, always-on-top, Alt+F4, DPI) |
+| Visual Experience 2.0: Core renderer 2.0, companion hover / press / drag / presence, window enter & exit transitions, Appearance settings | `apps/desktop/src/visual`, `components/core`, `surfaces/*` | ✅ Chromium preview and WebKitGTK under Xvfb: all 12 states, three languages, 960×640 to 1600×1000, reduced motion; idle CPU unchanged vs Gate 1A (software rendering) | ✅ frontend build + tests | REQUIRES_WINDOWS_VALIDATION (GPU compositing, transparency, DPI, transitions, idle CPU) |
 | Strict CSP with production build                   | `tauri.conf.json`                            | ✅ release binary ran under Xvfb (WebKitGTK) | —                     | REQUIRES_WINDOWS_VALIDATION      |
 | Interface language: automatic detection from the Windows display language | `i18n/detect.ts` (`navigator.languages`) | ⚠️ container has no pt_BR/es locales; validated in Chromium with a pt-BR locale | — | REQUIRES_WINDOWS_VALIDATION |
 | Interface language: persistence across restarts and sync between windows | `i18n/preferences.ts`, `i18n/store.ts` (localStorage) | ✅ Tauri app restarted under Xvfb kept Español | — | REQUIRES_WINDOWS_VALIDATION |
@@ -55,7 +56,7 @@ End users will need none of this — the target is a single `SERSHI-Setup.exe`
 ```powershell
 git clone https://github.com/jpablortiz96/SERSHI.git
 cd SERSHI
-git checkout claude/prompt-1-windows-operator  # until merged into main
+git checkout claude/prompt-2-visual-experience  # until merged into main
 
 corepack enable
 pnpm install
@@ -277,6 +278,110 @@ C17. At 150% display scaling the window is fully visible and nothing clips.
     styles).
 20. Uninstall removes the app cleanly.
 
+## Gate 2A — Windows Integrated Validation
+
+One combined physical pass covering **Prompt 1** (application operation),
+**Gate 1A** (trusted confirmations) and **Prompt 2** (visual experience).
+Nothing here has been run on Windows yet. Record results in the table at the
+end (PASS / FAIL / NOT_TESTED per item, with notes).
+
+**Setup.** Build from `claude/prompt-2-visual-experience` (see "Clone, check
+and run"), install or run `pnpm dev`, and have Spotify (or another
+third-party app — note which), Notepad and Calculator available.
+
+### G1 · Functional (real launches)
+
+1. `Open Spotify` → Spotify opens; core Thinking → Planning → Working → Done;
+   reply "Opened Spotify."; Activity row with ✓.
+2. Español: `Abre Spotify` → "Abrí Spotify.".
+3. Português: `Abra o Spotify` → "Abri Spotify.".
+4. `Open Calculator` → Calculator opens.
+5. `Open Notepad` → Notepad opens.
+6. Unknown app (`Open Zzyzx`) → honest "couldn't find" reply; nothing launches.
+7. Ambiguous (`Open Visual Studio` with Code and VS installed, or `Open
+   Google`) → candidate buttons; nothing launches until one is chosen.
+
+### G2 · Trusted confirmation (nothing may bypass explicit approval)
+
+1. `Close Spotify` → a **separate** confirmation window appears (approval
+   mark, amber frame); the Command Center shows only "waiting…"; no approve
+   button in it; the companion turns amber (Waiting for you).
+2. **Cancel** → Spotify stays open; window disappears.
+3. Repeat, **Close Spotify** (approve) → graceful close or honest
+   "can't close safely yet".
+4. Repeat, **Escape** → cancelled.
+5. Repeat, the window's **×** → cancelled.
+6. Repeat, **Alt+F4** on the confirmation window → cancelled.
+7. Repeat, wait **60 s** → window closes by itself; "request expired".
+8. Hold **Enter** while submitting `Close Spotify` so it is still held when
+   the window appears → never approved.
+9. **Double-click** where the approve button will appear → never approved.
+10. With the window open, press **Ctrl+Alt+Space** → SERSHI comes forward,
+    the confirmation stays pending and focused; nothing approved.
+11. With the window open, **click the companion** → Command Center comes
+    forward; nothing approved.
+12. With the window open, **quit from the tray** → nothing executes; Spotify
+    stays open.
+13. **Restart** SERSHI → no confirmation reappears.
+
+### G3 · Windows integration
+
+1. Tray: Open / Hide / Quit work; labels follow the language.
+2. **Ctrl+Alt+Space** from another app → SERSHI appears, command bar focused
+   (or taskbar flash if Windows refuses focus — record which), core Attending.
+3. Command Center **×** → short retreat, window hides, SERSHI stays in tray
+   and companion.
+4. Second launch → no second tray icon; existing windows come forward.
+5. Companion **click** → Command Center restores and the command bar has focus.
+6. Companion **drag** → moves smoothly, shrinks slightly while dragging,
+   settles on release; never opens the Command Center.
+7. Minimized Command Center restores on summon.
+
+### G4 · Visual states (Settings → Developer · State preview)
+
+Preview each: Ready, Attending, Thinking, Planning, Working, Done, Couldn't
+complete, Waiting for you (plus Listening, Speaking, Needs attention,
+Sleeping). For each, in the Command Center **and** the companion:
+
+1. States are clearly distinct (motion, shape, colour, glyph + label).
+2. Motion is smooth, calm, no stutter; Ready is almost still.
+3. Text stays readable; hierarchy clear.
+4. Settings → Appearance → Motion → **Reduced**: loops stop; every state is
+   still recognisable by shape, colour and label. Back to **System**.
+5. Companion size Small / Medium / Large → glow never clips into a square.
+
+### G5 · Languages
+
+English, Español, Português — check the Command Center, companion
+screen-reader label, confirmation window, Settings (incl. Appearance),
+Activity (status words), tray menu and application replies. No clipped or
+overflowing text (navigation, confirmation, Appearance choices).
+
+### G6 · Display
+
+1. Record: Windows version, GPU, resolution, display scale, monitor count.
+2. At 100 %, 125 % and 150 % (where practical): companion fully visible above
+   the taskbar, confirmation window fully visible, Command Center at its
+   minimum size (960 × 640) and maximized.
+3. Only one monitor available → record `MULTI_MONITOR_NOT_TESTED`.
+
+### G7 · Performance (obvious regressions only)
+
+Task Manager → Details (`sershi-desktop.exe` + `msedgewebview2.exe`):
+
+1. Idle, Command Center hidden, 30 s: companion CPU (target < 1 %).
+2. Idle, Command Center visible: CPU.
+3. Thinking preview running: CPU.
+4. Memory (working set) after 5 minutes.
+5. Startup: time from launch to an interactive Command Center (rough).
+
+### G8 · Visual defects
+
+Look specifically for: white flashes (startup, Command Center open,
+confirmation open), black rectangles behind the transparent companion,
+clipped glow, jagged orbit rendering, text overflow, blurry transforms during
+window transitions, scrollbar flashes, focus-ring glitches, window flicker.
+
 ## Windows validation record
 
 Copy this block for each validation session. Do not mark an item PASS without
@@ -284,12 +389,15 @@ running it on Windows hardware.
 
 ```text
 Windows version:      (e.g. Windows 11 Pro 24H2, build 26100.xxxx)
+GPU:                  (e.g. Intel Iris Xe)
+Resolution:           (e.g. 2560×1440)
 Display scale:        (e.g. 150%)
-Monitor setup:        (single / multiple — if single: NOT_TESTED_MULTI_MONITOR)
+Monitor setup:        (count — if single: MULTI_MONITOR_NOT_TESTED)
 Validation date:      (YYYY-MM-DD)
 Commit:               (git rev-parse HEAD)
 Catalog scan time:    (ms, first scan / refresh)
-Results:              1–20, 19a–19f, A1–A29, C1–C17: PASS / FAIL / NOT_TESTED each
+Results:              Gate 2A G1–G8 (supersedes 1–20, A1–A29, C1–C17): PASS / FAIL / NOT_TESTED each
+Idle CPU:             (companion only / Command Center visible / Thinking)
 Notes:
 ```
 

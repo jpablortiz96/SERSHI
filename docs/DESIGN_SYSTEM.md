@@ -89,7 +89,16 @@ reserved for attention and failure so they never lose meaning.
 ### Borders
 
 `border.faint` (.05) separates regions, `subtle` (.08) outlines controls, `default`
-(.12) for emphasis, `strong` (.20) sparingly, `focus` = signal cyan.
+(.12) for emphasis, `strong` (.20) sparingly, `focus` = signal cyan (amber
+`state.awaitingConfirmation` inside the confirmation window).
+
+### Atmosphere and core materials
+
+Themeable semantic tokens so a theme can re-light SERSHI without touching
+components: `atmosphere.primary` (slow background glow, aura violet),
+`atmosphere.secondary` (cool floor light), `atmosphere.floor`,
+`atmosphere.vignette`; `core.specular`, `core.inner`, `core.orbit`,
+`core.halo` (halo strength). State colour still comes from `state.*`.
 
 ## Typography
 
@@ -131,12 +140,12 @@ reading. Never use letter-spaced uppercase for more than a few words.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ ◉ SERSHI  Pre-alpha        ( Home · Activity · Settings )   ● Local core – □ × │  44 px title bar
+│ ◉ SERSHI  Pre-alpha   ( ⌂ Home · ∿ Activity · ⚙ Settings )  ● Local core – □ × │  44 px title bar
 ├───────────────┬──────────────────────────────────────────┬───────────────┤
 │ THIS COMPUTER │                ◯  core                   │ RECENT ACTIVITY│
 │ OS · arch     │              READY                       │ ● event        │
 │ PROCESSOR 18% │         Ready when you are.              │ │ time         │
-│ ~~~sparkline  │                                          │ ● event        │
+│ ~~~sparkline  │                                          │ ✓ event        │
 │ MEMORY 9.2/16 │          How can I help?                 │               │
 │ ▬▬▬▬───────   │   ( suggestion ) ( suggestion )          │               │
 │               │   ╭──────────────────────────────╮       │               │
@@ -145,6 +154,11 @@ reading. Never use letter-spaced uppercase for more than a few words.
 └───────────────┴──────────────────────────────────────────┴───────────────┘
 ```
 
+- The **core is the light source**: the ambient light and orbital guides follow
+  its measured position (`--core-y`).
+- **Responsive:** below 1120 px wide the rails narrow to 224 px; below 720 px
+  high the core scales to 80 % and the greeting to display size; at 900 px and
+  taller the stage is capped at 860 px and centred. Minimum window 960 × 640.
 - The **stage** (centre, ≤ 640 px content) holds presence → dialogue → input.
   When a conversation starts the core shrinks (scale 0.6) and the transcript takes
   the space; the greeting disappears.
@@ -157,14 +171,22 @@ reading. Never use letter-spaced uppercase for more than a few words.
 
 ## Ambient layer
 
-Behind everything: state-tinted radial light at the core's position, one large
-violet glow drifting over 28 s, orbital guides, 5% SVG grain, and a vignette. One
+Behind everything: state-tinted light centred on the core (local — it never
+repaints the whole window), one large `atmosphere.primary` glow drifting over
+28 s, a faint cool floor, orbital guides, 5% SVG grain and a vignette. One
 composited transform loop in total.
 
 ## Iconography
 
 16 px grid, 1.5 px stroke, round caps and joins, `currentColor`, no fills except
-the mark. Icons label actions; they never replace text for important meaning.
+the mark (`components/shell/icons.tsx`: navigation, window controls, send,
+voice, refresh, approval mark). Icons label actions; they never replace text
+for important meaning.
+
+**State and status glyphs** (12 px, `components/core/StateGlyph.tsx`): one
+shape per assistant state (dot, focus, segments, nodes, arrow, check,
+triangle, hourglass, cross, waves, hollow) and per activity tone. They sit
+beside a text label so meaning never depends on colour (colour blindness).
 
 ## Interaction patterns
 
@@ -173,10 +195,12 @@ the mark. Icons label actions; they never replace text for important meaning.
 | Hover                 | `surface.hover` wash or text brighten, `duration.fast`                               |
 | Focus (keyboard)      | 2 px `border.focus` outline, 2 px offset — always visible                            |
 | Command focus bloom   | Bar ring + 4 px halo + soft shadow in `--state-color`                                |
-| Press                 | scale 0.94–0.97, `duration.instant`; release with `ease.spring`                      |
+| Press                 | scale 0.94–0.98, `duration.instant`; release with `ease.spring` (the companion releases without overshoot) |
+| Navigation            | Icon + label; the selected backdrop slides between tabs; active icon takes the state tint |
+| Radio choices         | Language, motion and companion size share one pattern: bordered options, selected ring, keyboard arrows |
 | Tooltip               | CSS `data-tip`, fade + 4 px rise, `duration.fast` / `ease.enter`                    |
 | Disabled              | `text.disabled`, `not-allowed` cursor, and a reason (tooltip or label)               |
-| Confirmation window   | Its own compact 440×320 window (not a browser alert, message box or in-page modal): overlay surface with a faint state-colored glow, SERSHI mark and wordmark, "Confirmation required" label, the question as the title ("Close Notepad?"), plain-words body and risk, reason, countdown (tabular numerals) and shrinking meter. Primary button names the action ("Close Notepad"), never "OK" / "Allow action?". **Cancel is focused first**; Escape and × cancel. Approve fades in over a 600 ms arming delay. Risk colour: sensitive = amber, high risk = stronger coral accent on the caution line; red is not used for ordinary confirmations. Nothing in it comes from request text or a model |
+| Confirmation window   | Approval mark ("SERSHI approval" + shield), amber hairline frame and amber focus ring. Its own compact 440×320 window (not a browser alert, message box or in-page modal): overlay surface with a faint state-colored glow, SERSHI mark and wordmark, "Confirmation required" label, the question as the title ("Close Notepad?"), plain-words body and risk, reason, countdown (tabular numerals) and shrinking meter. Primary button names the action ("Close Notepad"), never "OK" / "Allow action?". **Cancel is focused first**; Escape and × cancel. Approve fades in over a 600 ms arming delay. Risk colour: sensitive = amber, high risk = stronger coral accent on the caution line; red is not used for ordinary confirmations. Nothing in it comes from request text or a model |
 | Candidate choices     | When a name is ambiguous, the reply lists candidates as secondary buttons; choosing one re-asks with the exact name |
 
 ## Accessibility
@@ -202,7 +226,8 @@ Español, Português) so anyone can find their own.
 
 ## Themes
 
-A theme is a partial token override (`createTheme({ state: { listening: … } })`)
+Settings → Appearance lists the themes in `apps/desktop/src/visual/themes.ts`
+(today only **SERSHI Dark**). A theme is a partial token override (`createTheme({ state: { listening: … } })`)
 applied with `applyTheme()`. Themes can restyle but not invent tokens. Future
 package format ([ROADMAP](ROADMAP.md) v0.8):
 

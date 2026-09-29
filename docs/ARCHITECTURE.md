@@ -242,6 +242,7 @@ IPC is a trust boundary (see [SECURITY.md](SECURITY.md)). Rules:
 | `sershi://activity`        | `ActivityEntry`     | all windows |
 | `sershi://focus-command`   | none                | main        |
 | `sershi://command-outcome` | `CommandOutcome`    | main (outcome of a confirmation decided, cancelled or expired elsewhere) |
+| `sershi://presence`        | `PresenceUpdate`    | companion (whether the Command Center is on screen; presentation only) |
 
 **Telemetry vs tools.** `get_system_snapshot` is the user looking at their own
 machine; it bypasses the tool pipeline and is not recorded as activity (it is
@@ -327,6 +328,12 @@ All of it is REQUIRES_WINDOWS_VALIDATION; see
   `AssistantState`, replaceable by future companion packs.
 - **Styling** — CSS Modules + design tokens as CSS custom properties. No utility
   framework; no hard-coded visual values ([DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)).
+- **Visual system** — `src/visual`: the state → visual table
+  (`stateVisuals.ts`), appearance preferences and the single motion switch
+  (`appearance.ts`), window enter/exit transitions (`windowPresence.ts`) and
+  the theme registry (`themes.ts`). The Core renders any state in four
+  variants. See [VISUAL_EXPERIENCE.md](VISUAL_EXPERIENCE.md) and
+  [ADR 0012](adr/0012-state-driven-visual-system.md).
 - **Localization** — `src/i18n` owns every user-facing string (en-US, es-419,
   pt-BR). The core returns structured outcomes; the UI phrases them in the
   interface language. See [LOCALIZATION.md](LOCALIZATION.md).

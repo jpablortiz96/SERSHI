@@ -146,6 +146,15 @@ translated.
   part of authorization. It never shows free text from the request, a tool or
   a model. Built-in application names are localized by id.
 
+### Appearance and visual copy
+
+Settings → Appearance (theme, motion, companion size), activity status words
+and the confirmation window's approval mark ("SERSHI approval" /
+"Aprobación de SERSHI" / "Aprovação do SERSHI") are localized like every
+other string. The theme name "SERSHI Dark" is a product name and is not
+translated. Navigation measures its tabs, so longer Spanish and Portuguese
+labels never clip.
+
 ### What is not localized
 
 Tool ids (`system.get_memory`), permission ids, capability ids, Rust enum values,
