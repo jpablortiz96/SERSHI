@@ -81,6 +81,16 @@ pub struct IntegrationStatus {
     pub start_with_windows: FeatureStatus,
 }
 
+/// Whether the Command Center is on screen. Sent to the companion so it can
+/// be calmer while the Command Center carries the conversation (presentation
+/// only; no authority).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct PresenceUpdate {
+    pub command_center_visible: bool,
+}
+
 /// Localized tray menu labels supplied by the UI (presentation only: the
 /// actions behind each item are fixed in Rust).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]

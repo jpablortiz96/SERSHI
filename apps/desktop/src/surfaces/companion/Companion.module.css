@@ -1,3 +1,9 @@
+/*
+ * The floating companion. The window is transparent; only the core is
+ * visible. Hover, press and drag change the core's light and scale a
+ * little — never a conventional button bounce.
+ */
+
 .stage {
   display: grid;
   place-items: center;
@@ -10,36 +16,48 @@
   background: radial-gradient(circle, var(--surface-raised), var(--surface-base));
 }
 
+/* The hit target is larger than the visible core. */
 .companion {
   display: grid;
   place-items: center;
+  width: 136px;
+  height: 136px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
   cursor: pointer;
-  transition: transform var(--duration-default) var(--ease-spring);
+  transition: transform var(--duration-default) var(--ease-standard);
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Hover: the halo strengthens (read by the core through --hover). */
 .companion:hover {
-  transform: scale(1.04);
+  --hover: 1;
 }
 
-.companion:active {
-  transform: scale(0.97);
+/* Press: a small compression, released without overshoot. */
+.stage[data-pressed] .companion {
+  transform: scale(0.96);
   transition-duration: var(--duration-instant);
 }
 
-.companion:focus-visible {
-  outline: 1px solid color-mix(in oklab, var(--state-color) 70%, transparent);
-  outline-offset: -6px;
+/* Drag: slightly smaller, tighter light, simpler motion. On release the
+   transform eases back (a small settle, no spring that could move the
+   window). */
+.stage[data-dragging] .companion {
+  --hover: 0;
+  transform: scale(0.93);
+}
+.stage[data-dragging] .companion * {
+  animation-play-state: paused;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .companion,
-  .companion:hover,
-  .companion:active {
-    transform: none;
-  }
+.companion:focus-visible {
+  outline: 1.5px solid color-mix(in oklab, var(--state-color) 70%, transparent);
+  outline-offset: -4px;
+}
+
+:global(html[data-motion="reduced"]) .companion {
+  transform: none !important;
 }

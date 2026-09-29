@@ -8,7 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 use sershi_core::assistant::{AssistantEvent, AssistantState};
-use sershi_core::ipc::IpcError;
+use sershi_core::ipc::{IpcError, PresenceUpdate};
 use sershi_core::service::ServiceEvent;
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, UserAttentionType, Window,
@@ -20,6 +20,9 @@ use crate::runtime::{Runtime, broadcast, schedule_settle};
 
 /// Asks the Command Center to focus its command input.
 pub const FOCUS_COMMAND_EVENT: &str = "sershi://focus-command";
+/// Tells the companion whether the Command Center is on screen (contextual
+/// presence; carries no authority).
+pub const PRESENCE_EVENT: &str = "sershi://presence";
 
 pub const MAIN: &str = "main";
 pub const COMPANION: &str = "companion";
@@ -66,12 +69,24 @@ pub fn show_command_center(app: &AppHandle) {
         let _ = window.unminimize();
     }
     let _ = window.set_focus();
+    announce_presence(app, true);
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(250));
         if !window.is_focused().unwrap_or(true) {
             let _ = window.request_user_attention(Some(UserAttentionType::Informational));
         }
     });
+}
+
+/// Lets the companion adapt its presence to the Command Center's visibility.
+pub fn announce_presence(app: &AppHandle, command_center_visible: bool) {
+    let _ = app.emit_to(
+        COMPANION,
+        PRESENCE_EVENT,
+        PresenceUpdate {
+            command_center_visible,
+        },
+    );
 }
 
 /// Summon: show the Command Center, focus the command input, and mark the
@@ -120,6 +135,7 @@ pub fn hide_command_center(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN) {
         let _ = window.hide();
     }
+    announce_presence(app, false);
     let _ = dismiss(app, &app.state::<Runtime>());
 }
 

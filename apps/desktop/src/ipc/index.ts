@@ -4,11 +4,13 @@ import {
   isAssistantSnapshot,
   isCommandOutcome,
   isNullPayload,
+  isPresenceUpdate,
   isSystemSnapshot,
   type ActivityEntry,
   type AssistantSnapshot,
   type AssistantState,
   type CommandOutcome,
+  type PresenceUpdate,
   type TrayLabels,
 } from "@sershi/contracts";
 
@@ -43,6 +45,9 @@ export const sershi = {
   onActivity: (handler: (entry: ActivityEntry) => void) =>
     subscribe(EVENTS.activity, isActivityEntry, handler),
   onFocusCommand: (handler: () => void) => subscribe(EVENTS.focusCommand, isNullPayload, handler),
+  /** Companion: whether the Command Center is on screen (presentation only). */
+  onPresence: (handler: (update: PresenceUpdate) => void) =>
+    subscribe(EVENTS.presence, isPresenceUpdate, handler),
   /** Outcomes of confirmations decided on the trusted surface (or expired). */
   onCommandOutcome: (handler: (outcome: CommandOutcome) => void) =>
     subscribe(EVENTS.commandOutcome, isCommandOutcome, handler),
