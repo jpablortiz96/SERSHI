@@ -9,6 +9,7 @@ import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { IntegrationStatus } from "./generated/IntegrationStatus";
 import type { PresenceUpdate } from "./generated/PresenceUpdate";
 import type { RuntimeInfo } from "./generated/RuntimeInfo";
+import type { ShortcutChange } from "./generated/ShortcutChange";
 import type { SystemSnapshot } from "./generated/SystemSnapshot";
 import type { TrayLabels } from "./generated/TrayLabels";
 
@@ -33,6 +34,8 @@ export interface CommandMap {
   refresh_application_catalog: { args: NoArgs; result: ApplicationCatalogInfo };
   get_integration_status: { args: NoArgs; result: IntegrationStatus };
   set_tray_labels: { args: { labels: TrayLabels }; result: null };
+  /** Command Center only. Invocation, never authority. */
+  set_global_shortcut: { args: { accelerator: string }; result: ShortcutChange };
   summon_command_center: { args: NoArgs; result: null };
   hide_command_center: { args: NoArgs; result: null };
   dismiss_assistant: { args: NoArgs; result: null };
@@ -54,6 +57,7 @@ export const COMMAND_NAMES = [
   "refresh_application_catalog",
   "get_integration_status",
   "set_tray_labels",
+  "set_global_shortcut",
   "summon_command_center",
   "hide_command_center",
   "dismiss_assistant",

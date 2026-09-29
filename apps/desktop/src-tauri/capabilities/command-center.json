@@ -18,6 +18,7 @@
     "allow-refresh-application-catalog",
     "allow-get-integration-status",
     "allow-set-tray-labels",
+    "allow-set-global-shortcut",
     "allow-hide-command-center",
     "allow-dismiss-assistant",
     "allow-preview-assistant-state",

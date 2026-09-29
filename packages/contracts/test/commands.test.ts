@@ -145,3 +145,32 @@ describe("Gate 1A invariants survive visual work", () => {
     }
   });
 });
+
+/**
+ * Gate 2B: personalization never becomes privilege. Theme, sound, companion
+ * appearance and shortcut are presentation or invocation only.
+ */
+describe("Gate 2B: personalization is not privilege", () => {
+  it("only the Command Center can change the global shortcut", () => {
+    const owners = ["command-center", "companion", "confirmation"].filter((cap) =>
+      grantedCommands(cap).includes("set_global_shortcut"),
+    );
+    expect(owners).toEqual(["command-center"]);
+  });
+
+  it("theme, sound and appearance need no IPC at all", () => {
+    for (const name of COMMAND_NAMES) {
+      expect(name).not.toMatch(/theme|sound|audio|appearance|companion_pack|skin/);
+    }
+  });
+
+  it("the approval boundary is unchanged", () => {
+    expect(grantedCommands("confirmation").sort()).toEqual(
+      ["decide_confirmation", "get_confirmation_context"].sort(),
+    );
+    for (const cap of ["command-center", "companion"]) {
+      expect(grantedCommands(cap)).not.toContain("decide_confirmation");
+      expect(grantedCommands(cap)).not.toContain("get_confirmation_context");
+    }
+  });
+});

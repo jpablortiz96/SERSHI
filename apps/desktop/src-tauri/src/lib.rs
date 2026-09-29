@@ -28,6 +28,7 @@ pub fn run() {
             app.manage(confirmation::ConfirmationSurface::default());
             let integration = integration::setup(app.handle());
             app.manage(integration);
+            integration::schedule_default_shortcut(app.handle());
             surfaces::place_companion(app.handle());
             runtime::announce_ready(app.handle());
             runtime::warm_up_catalog(app.handle());
@@ -46,6 +47,7 @@ pub fn run() {
             commands::refresh_application_catalog,
             commands::get_integration_status,
             commands::set_tray_labels,
+            commands::set_global_shortcut,
             commands::summon_command_center,
             commands::hide_command_center,
             commands::dismiss_assistant,

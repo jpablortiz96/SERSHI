@@ -4,8 +4,13 @@
 //! registration and conflict behaviour have only been compiled for Windows.
 
 use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
 
-use sershi_core::ipc::{FeatureStatus, IntegrationStatus, ShortcutStatus, TrayLabels};
+use sershi_core::ipc::{FeatureStatus, IntegrationStatus, TrayLabels};
+use sershi_core::shortcut::{
+    Accelerator, DEFAULT_SHORTCUT, ShortcutBinding, ShortcutChange, ShortcutRegistrar, Unavailable,
+};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -14,16 +19,9 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use crate::surfaces;
 
-/// The shortcut that summons SERSHI from anywhere.
-///
-/// Ctrl+Alt+Space rather than the more obvious alternatives:
-/// - Alt+Space opens the Windows window menu (and PowerToys Run).
-/// - Ctrl+Shift+Space is taken by VS Code (parameter hints) and Excel
-///   (select all); a global registration would silently break both.
-///
-/// Kept as a typed setting so it can become user-configurable with the
-/// settings store (v0.1).
-pub const DEFAULT_SUMMON_SHORTCUT: &str = "Ctrl+Alt+Space";
+/// If the Command Center never configures a shortcut (e.g. its WebView
+/// failed to load), SERSHI registers its default after this delay.
+const DEFAULT_SHORTCUT_GRACE: Duration = Duration::from_secs(4);
 
 const TRAY_ID: &str = "sershi";
 
@@ -37,7 +35,7 @@ struct TrayItems {
 /// What actually got enabled at start-up (managed state).
 pub struct Integration {
     tray: Mutex<Option<TrayItems>>,
-    shortcut: Mutex<FeatureStatus>,
+    shortcut: Mutex<ShortcutBinding>,
 }
 
 impl Integration {
@@ -49,14 +47,11 @@ impl Integration {
         let shortcut = self
             .shortcut
             .lock()
-            .map(|s| *s)
-            .unwrap_or(FeatureStatus::Unavailable);
+            .map(|b| b.status())
+            .unwrap_or_else(|_| ShortcutBinding::default().status());
         IntegrationStatus {
             tray,
-            shortcut: ShortcutStatus {
-                accelerator: DEFAULT_SUMMON_SHORTCUT.to_owned(),
-                status: shortcut,
-            },
+            shortcut,
             single_instance: FeatureStatus::Active,
             start_with_windows: FeatureStatus::Planned,
         }
@@ -74,7 +69,9 @@ impl Integration {
     }
 }
 
-/// Sets up the tray and the global shortcut. Failures leave SERSHI running
+/// Sets up the tray. The global shortcut is configured by the Command
+/// Center with the user's stored choice (or SERSHI's default) right after it
+/// loads; see [`schedule_default_shortcut`]. Failures leave SERSHI running
 /// and are reported through [`Integration::status`].
 pub fn setup(app: &AppHandle) -> Integration {
     let tray = match create_tray(app) {
@@ -84,10 +81,68 @@ pub fn setup(app: &AppHandle) -> Integration {
             None
         }
     };
-    let shortcut = register_shortcut(app);
     Integration {
         tray: Mutex::new(tray),
-        shortcut: Mutex::new(shortcut),
+        shortcut: Mutex::new(ShortcutBinding::default()),
+    }
+}
+
+/// Registers SERSHI's default shortcut if the Command Center has not
+/// configured one shortly after start-up. This is the documented default,
+/// not a substitute for an unavailable choice: if the user's shortcut was
+/// requested and refused, nothing else is registered in its place.
+pub fn schedule_default_shortcut(app: &AppHandle) {
+    let app = app.clone();
+    thread::spawn(move || {
+        thread::sleep(DEFAULT_SHORTCUT_GRACE);
+        let configured = state(&app)
+            .and_then(|i| i.shortcut.lock().ok().map(|b| b.is_configured()))
+            .unwrap_or(true);
+        if !configured {
+            apply_shortcut(&app, DEFAULT_SHORTCUT);
+        }
+    });
+}
+
+/// Tries to make `requested` the summon shortcut. The previous shortcut is
+/// released only if the new one registered, so a conflict never leaves
+/// SERSHI without its working shortcut. Invocation only: no capability,
+/// permission or approval is attached to a shortcut.
+pub fn apply_shortcut(app: &AppHandle, requested: &str) -> Option<ShortcutChange> {
+    let integration = state(app)?;
+    let mut binding = integration.shortcut.lock().ok()?;
+    let change = binding.apply(requested, &mut PluginRegistrar { app });
+    if change.result == sershi_core::shortcut::ShortcutResult::Unavailable {
+        eprintln!(
+            "SERSHI: global shortcut {} unavailable (another application owns it)",
+            change.requested.as_deref().unwrap_or("?")
+        );
+    }
+    Some(change)
+}
+
+/// Registers accelerators with the global-shortcut plugin.
+struct PluginRegistrar<'a> {
+    app: &'a AppHandle,
+}
+
+impl ShortcutRegistrar for PluginRegistrar<'_> {
+    fn register(&mut self, accelerator: &Accelerator) -> Result<(), Unavailable> {
+        let shortcut: Shortcut = accelerator.canonical().parse().map_err(|_| Unavailable)?;
+        self.app
+            .global_shortcut()
+            .on_shortcut(shortcut, |app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    surfaces::summon(app);
+                }
+            })
+            .map_err(|_| Unavailable)
+    }
+
+    fn unregister(&mut self, accelerator: &Accelerator) {
+        if let Ok(shortcut) = accelerator.canonical().parse::<Shortcut>() {
+            let _ = self.app.global_shortcut().unregister(shortcut);
+        }
     }
 }
 
@@ -123,27 +178,6 @@ fn create_tray(app: &AppHandle) -> tauri::Result<TrayItems> {
         })
         .build(app)?;
     Ok(TrayItems { open, hide, quit })
-}
-
-fn register_shortcut(app: &AppHandle) -> FeatureStatus {
-    let Ok(shortcut) = DEFAULT_SUMMON_SHORTCUT.parse::<Shortcut>() else {
-        return FeatureStatus::Unavailable;
-    };
-    let result = app
-        .global_shortcut()
-        .on_shortcut(shortcut, |app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                surfaces::summon(app);
-            }
-        });
-    match result {
-        Ok(()) => FeatureStatus::Active,
-        Err(error) => {
-            // Usually another application owns the combination.
-            eprintln!("SERSHI: global shortcut {DEFAULT_SUMMON_SHORTCUT} unavailable: {error}");
-            FeatureStatus::Unavailable
-        }
-    }
 }
 
 /// The managed integration state, if set up.

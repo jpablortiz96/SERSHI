@@ -22,6 +22,7 @@ pub mod platform;
 pub mod policy;
 pub mod ports;
 pub mod service;
+pub mod shortcut;
 pub mod system;
 pub mod tool;
 

@@ -14,6 +14,7 @@ const COMMANDS: &[&str] = &[
     "refresh_application_catalog",
     "get_integration_status",
     "set_tray_labels",
+    "set_global_shortcut",
     "summon_command_center",
     "hide_command_center",
     "dismiss_assistant",

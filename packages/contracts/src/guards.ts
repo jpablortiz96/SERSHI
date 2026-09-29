@@ -8,6 +8,7 @@ import type { AssistantSnapshot } from "./generated/AssistantSnapshot";
 import type { AssistantState } from "./generated/AssistantState";
 import type { CommandOutcome } from "./generated/CommandOutcome";
 import type { PresenceUpdate } from "./generated/PresenceUpdate";
+import type { ShortcutChange } from "./generated/ShortcutChange";
 import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { SystemSnapshot } from "./generated/SystemSnapshot";
 
@@ -99,6 +100,17 @@ export function isCommandOutcome(v: unknown): v is CommandOutcome {
     isNullable(v.toolId, isStr) &&
     // The Command Center never receives confirmation authorization data.
     !("confirmation" in v)
+  );
+}
+
+export function isShortcutChange(v: unknown): v is ShortcutChange {
+  return (
+    isObj(v) &&
+    isStr(v.result) &&
+    typeof v.altgrWarning === "boolean" &&
+    isObj(v.shortcut) &&
+    isStr(v.shortcut.accelerator) &&
+    isStr(v.shortcut.status)
   );
 }
 

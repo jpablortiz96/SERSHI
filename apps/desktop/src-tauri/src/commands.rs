@@ -10,6 +10,7 @@ use sershi_core::ipc::{
 use sershi_core::platform::Platform;
 use sershi_core::ports::SystemInfoProvider;
 use sershi_core::service::{CommandOutcome, CommandRequest, ServiceEvent};
+use sershi_core::shortcut::ShortcutChange;
 use sershi_core::system::SystemSnapshot;
 use tauri::{AppHandle, State};
 
@@ -113,6 +114,21 @@ pub fn refresh_application_catalog(
 pub fn get_integration_status(app: AppHandle) -> Result<IntegrationStatus, IpcError> {
     integration::state(&app)
         .map(|i| i.status())
+        .ok_or_else(|| IpcError::new(IpcErrorCode::Unavailable, "Not ready yet."))
+}
+
+/// Changes the global summon shortcut (Command Center only). Registration
+/// is attempted before anything is replaced; see `integration::apply_shortcut`.
+/// Invocation only: a shortcut never carries authority.
+#[tauri::command(async)]
+pub fn set_global_shortcut(
+    app: AppHandle,
+    accelerator: String,
+) -> Result<ShortcutChange, IpcError> {
+    if accelerator.len() > 64 {
+        return Err(IpcError::new(IpcErrorCode::NotAllowed, "Invalid shortcut."));
+    }
+    integration::apply_shortcut(&app, &accelerator)
         .ok_or_else(|| IpcError::new(IpcErrorCode::Unavailable, "Not ready yet."))
 }
 
