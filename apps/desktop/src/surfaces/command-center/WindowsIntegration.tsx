@@ -1,9 +1,16 @@
-import type { ApplicationCatalogInfo, FeatureStatus, IntegrationStatus } from "@sershi/contracts";
-import { useEffect, useState } from "react";
+import type {
+  ApplicationCatalogInfo,
+  FeatureStatus,
+  IntegrationStatus,
+  ShortcutProblem,
+  ShortcutStatus,
+} from "@sershi/contracts";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { useI18n } from "../../i18n";
 import { applicationName } from "../../i18n/domain";
 import { desktopRuntime, sershi } from "../../ipc";
+import { recordKey, useShortcut } from "../../state/shortcut";
 import styles from "./Page.module.css";
 import { Pill, Row, Section } from "./SettingsParts";
 
@@ -91,26 +98,7 @@ export function WindowsIntegration() {
               </Pill>
             }
           />
-          <Row
-            label={t("settings.windows.shortcut")}
-            detail={
-              integration.shortcut.status === "unavailable"
-                ? t("settings.windows.shortcutUnavailable")
-                : t("settings.windows.shortcutDetail")
-            }
-            value={
-              <span className={styles.pills}>
-                <span className={styles.keys}>
-                  {integration.shortcut.accelerator.split("+").map((key) => (
-                    <kbd key={key}>{key}</kbd>
-                  ))}
-                </span>
-                <Pill tone={TONE[integration.shortcut.status]}>
-                  {t(`settings.featureStatus.${integration.shortcut.status}`)}
-                </Pill>
-              </span>
-            }
-          />
+          <ShortcutSetting initial={integration.shortcut} />
           <Row
             label={t("settings.windows.startup")}
             value={
@@ -175,5 +163,151 @@ export function CatalogInspector() {
         </p>
       )}
     </Section>
+  );
+}
+
+function Keys({ accelerator }: { accelerator: string }) {
+  return (
+    <span className={styles.keys}>
+      {accelerator.split("+").map((key) => (
+        <kbd key={key}>{key}</kbd>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Global shortcut: shows the current combination and records a new one.
+ * The recorder is a focused button: the next key combination is captured,
+ * Escape cancels, Tab still moves focus. Windows decides whether it is
+ * available; a refused shortcut never replaces the working one.
+ */
+function ShortcutSetting({ initial }: { initial: ShortcutStatus }) {
+  const { t } = useI18n();
+  const status = useShortcut((s) => s.status) ?? initial;
+  const lastChange = useShortcut((s) => s.lastChange);
+  const applying = useShortcut((s) => s.applying);
+  const change = useShortcut((s) => s.change);
+  const clearFeedback = useShortcut((s) => s.clearFeedback);
+  const [recording, setRecording] = useState(false);
+  const [held, setHeld] = useState<string[]>([]);
+  const [problem, setProblem] = useState<ShortcutProblem | null>(null);
+  const recorder = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (recording) recorder.current?.focus();
+  }, [recording]);
+
+  const stop = () => {
+    setRecording(false);
+    setHeld([]);
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (!recording || e.key === "Tab") return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      stop();
+      return;
+    }
+    const recorded = recordKey(e.nativeEvent);
+    if (recorded.kind === "modifiers") {
+      setHeld(recorded.held);
+      setProblem(null);
+    } else if (recorded.kind === "invalid") {
+      setProblem(recorded.problem);
+    } else {
+      stop();
+      setProblem(null);
+      void change(recorded.accelerator);
+    }
+  };
+
+  const feedback = problem
+    ? { tone: "warning" as const, text: t(`settings.windows.shortcutProblems.${problem}`) }
+    : lastChange?.result === "unavailable"
+      ? {
+          tone: "warning" as const,
+          title: t("settings.windows.shortcutUnavailableTitle"),
+          text: t("settings.windows.shortcutUnavailableBody"),
+        }
+      : lastChange?.result === "invalid" && lastChange.problem
+        ? {
+            tone: "warning" as const,
+            text: t(`settings.windows.shortcutProblems.${lastChange.problem}`),
+          }
+        : lastChange?.result === "registered" || lastChange?.result === "unchanged"
+          ? {
+              tone: "success" as const,
+              text: t("settings.windows.shortcutSaved", {
+                keys: lastChange.shortcut.accelerator,
+              }),
+            }
+          : null;
+
+  return (
+    <div className={styles.shortcut}>
+      <Row
+        label={t("settings.windows.shortcut")}
+        detail={
+          status.status === "unavailable"
+            ? t("settings.windows.shortcutUnavailable")
+            : t("settings.windows.shortcutDetail")
+        }
+        value={
+          <span className={styles.pills}>
+            <Keys accelerator={status.accelerator} />
+            <Pill tone={TONE[status.status]}>{t(`settings.featureStatus.${status.status}`)}</Pill>
+            {recording ? (
+              <button
+                ref={recorder}
+                type="button"
+                className={styles.recorder}
+                aria-describedby="shortcut-recording-hint"
+                onKeyDown={onKeyDown}
+                onBlur={stop}
+                onClick={stop}
+              >
+                {held.length > 0 ? <Keys accelerator={`${held.join("+")}+…`} /> : null}
+                <span>{t("settings.windows.shortcutRecording")}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={applying}
+                onClick={() => {
+                  clearFeedback();
+                  setProblem(null);
+                  setRecording(true);
+                }}
+              >
+                {t("settings.windows.shortcutChange")}
+              </button>
+            )}
+          </span>
+        }
+      />
+      <div className={styles.shortcutFeedback} role="status" aria-live="polite">
+        {recording && (
+          <p id="shortcut-recording-hint" className={styles.rowDetail}>
+            {t("settings.windows.shortcutRecordingHint")}
+          </p>
+        )}
+        {recording && problem && (
+          <p data-tone="warning">{t(`settings.windows.shortcutProblems.${problem}`)}</p>
+        )}
+        {!recording && feedback && (
+          <p data-tone={feedback.tone}>
+            {"title" in feedback && feedback.title && <strong>{feedback.title}. </strong>}
+            {feedback.text}
+          </p>
+        )}
+        {!recording && lastChange?.altgrWarning && lastChange.result !== "invalid" && (
+          <p data-tone="warning">{t("settings.windows.shortcutAltGr")}</p>
+        )}
+      </div>
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   isCommandOutcome,
   isNullPayload,
   isPresenceUpdate,
+  isShortcutChange,
   isSystemSnapshot,
   type ActivityEntry,
   type AssistantSnapshot,
@@ -33,6 +34,9 @@ export const sershi = {
   refreshApplicationCatalog: () => call("refresh_application_catalog", {}),
   getIntegrationStatus: () => call("get_integration_status", {}),
   setTrayLabels: (labels: TrayLabels) => call("set_tray_labels", { labels }),
+  /** Invocation only: registers the summon shortcut, never grants authority. */
+  setGlobalShortcut: (accelerator: string) =>
+    call("set_global_shortcut", { accelerator }, isShortcutChange),
   summonCommandCenter: () => call("summon_command_center", {}),
   hideCommandCenter: () => call("hide_command_center", {}),
   dismissAssistant: () => call("dismiss_assistant", {}),

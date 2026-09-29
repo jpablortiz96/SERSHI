@@ -1,33 +1,43 @@
 /**
- * Theme registry — the foundation for future visual customisation (v0.8
- * theme packs). A theme is a partial override of the semantic design tokens
- * (`surface`, `text`, `state`, `atmosphere`, `core`, …); components only read
- * tokens, so a theme re-lights SERSHI without touching component logic.
+ * Theme registry — SERSHI Dark and SERSHI Light, each a partial override of
+ * the semantic design tokens (`surface`, `text`, `border`, `action`, `state`,
+ * `atmosphere`, `core`, `shadow`). Components only read tokens, so switching
+ * theme re-lights SERSHI without any component knowing which theme is active.
  *
- * Today there is exactly one theme. There is no downloading, no marketplace
- * and no user-supplied theme files; `createTheme` already ignores unknown or
- * malformed keys so future packs cannot change the token tree's shape.
+ * Future theme packs will be data (token overrides, images), never code:
+ * `createTheme` ignores unknown or malformed keys so a pack cannot change the
+ * token tree's shape. See docs/VISUAL_EXPERIENCE.md#themes-and-packs.
  */
-import { createTheme, type ThemeOverrides, type Tokens } from "@sershi/design-tokens";
+import {
+  createTheme,
+  darkTheme,
+  lightTheme,
+  type ThemeOverrides,
+  type Tokens,
+} from "@sershi/design-tokens";
 
 import type { MessageKey } from "../i18n";
+import type { ThemePreference } from "../i18n/preferences";
+
+export type ThemeId = "dark" | "light";
 
 export interface ThemeDefinition {
-  id: string;
-  label: MessageKey;
+  id: ThemeId;
+  label: MessageKey & `settings.appearance.themes.${ThemeId}`;
   overrides: ThemeOverrides;
 }
 
-export const THEMES = [
-  { id: "sershi-dark", label: "settings.appearance.themes.sershiDark", overrides: {} },
-] as const satisfies readonly ThemeDefinition[];
+export const THEMES: Record<ThemeId, ThemeDefinition> = {
+  dark: { id: "dark", label: "settings.appearance.themes.dark", overrides: darkTheme },
+  light: { id: "light", label: "settings.appearance.themes.light", overrides: lightTheme },
+};
 
-export type ThemeId = (typeof THEMES)[number]["id"];
+/** Which theme a preference shows, given the system's light/dark mode. */
+export function resolveTheme(preference: ThemePreference, systemDark: boolean): ThemeId {
+  if (preference === "system") return systemDark ? "dark" : "light";
+  return preference;
+}
 
-export const DEFAULT_THEME: ThemeId = "sershi-dark";
-
-export function themeTokens(id: ThemeId = DEFAULT_THEME): Tokens {
-  const themes: readonly ThemeDefinition[] = THEMES;
-  const theme = themes.find((t) => t.id === id) ?? THEMES[0];
-  return createTheme(theme.overrides);
+export function themeTokens(id: ThemeId = "dark"): Tokens {
+  return createTheme(THEMES[id].overrides);
 }

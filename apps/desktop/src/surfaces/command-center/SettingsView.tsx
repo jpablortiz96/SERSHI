@@ -22,11 +22,14 @@ import { StateGlyph } from "../../components/core/StateGlyph";
 import {
   COMPANION_SIZES,
   MOTION_PREFERENCES,
+  THEME_PREFERENCES,
   useAppearance,
   type CompanionSize,
   type MotionPreference,
+  type ThemePreference,
 } from "../../visual/appearance";
-import { THEMES } from "../../visual/themes";
+import { companionRenderer } from "../../visual/companions";
+import { playCue } from "../../audio/interfaceAudio";
 import styles from "./Page.module.css";
 import { Pill, Row, Section } from "./SettingsParts";
 import { CatalogInspector, WindowsIntegration } from "./WindowsIntegration";
@@ -255,18 +258,39 @@ function StatePreview() {
  */
 function Appearance() {
   const { t } = useI18n();
+  const theme = useAppearance((s) => s.theme);
+  const systemDark = useAppearance((s) => s.systemDark);
   const motion = useAppearance((s) => s.motion);
   const systemReduced = useAppearance((s) => s.systemReduced);
+  const companionAppearance = useAppearance((s) => s.companionAppearance);
   const companionSize = useAppearance((s) => s.companionSize);
+  const interfaceSounds = useAppearance((s) => s.interfaceSounds);
+  const soundVolume = useAppearance((s) => s.soundVolume);
+  const setTheme = useAppearance((s) => s.setTheme);
   const setMotion = useAppearance((s) => s.setMotion);
   const setCompanionSize = useAppearance((s) => s.setCompanionSize);
+  const setInterfaceSounds = useAppearance((s) => s.setInterfaceSounds);
+  const setSoundVolume = useAppearance((s) => s.setSoundVolume);
 
   return (
     <Section title={t("settings.sections.appearance")}>
-      <Row
+      <Choices<ThemePreference>
+        name="theme"
         label={t("settings.appearance.theme")}
         detail={t("settings.appearance.themeDetail")}
-        value={t(THEMES[0].label)}
+        options={THEME_PREFERENCES}
+        value={theme}
+        onChange={setTheme}
+        optionLabel={(option) => t(`settings.appearance.themeOptions.${option}`)}
+        optionDetail={(option) =>
+          option === "system"
+            ? t(
+                systemDark
+                  ? "settings.appearance.themeSystemDark"
+                  : "settings.appearance.themeSystemLight",
+              )
+            : undefined
+        }
       />
       <Choices<MotionPreference>
         name="motion"
@@ -286,6 +310,12 @@ function Appearance() {
             : undefined
         }
       />
+      {/* Only real renderers are listed; Orbital is the only one today. */}
+      <Row
+        label={t("settings.appearance.companion")}
+        detail={t("settings.appearance.companionDetail")}
+        value={t(companionRenderer(companionAppearance).label)}
+      />
       <Choices<CompanionSize>
         name="companion-size"
         label={t("settings.appearance.companionSize")}
@@ -295,6 +325,53 @@ function Appearance() {
         onChange={setCompanionSize}
         optionLabel={(size) => t(`settings.appearance.sizes.${size}`)}
       />
+      <Choices<"on" | "off">
+        name="interface-sounds"
+        label={t("settings.appearance.sounds")}
+        detail={t("settings.appearance.soundsDetail")}
+        options={["on", "off"]}
+        value={interfaceSounds ? "on" : "off"}
+        onChange={(value) => {
+          setInterfaceSounds(value === "on");
+        }}
+        optionLabel={(value) => t(`settings.appearance.soundOptions.${value}`)}
+      />
+      <div className={styles.rowStacked}>
+        <div>
+          <label className={styles.rowLabel} htmlFor="sound-volume">
+            {t("settings.appearance.volume")}
+          </label>
+          <p className={styles.rowDetail}>{t("settings.appearance.volumeDetail")}</p>
+        </div>
+        <div className={styles.volume}>
+          <input
+            id="sound-volume"
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={soundVolume}
+            disabled={!interfaceSounds}
+            aria-valuetext={t("settings.appearance.volumeValue", { value: soundVolume })}
+            onChange={(e) => {
+              setSoundVolume(Number(e.target.value));
+            }}
+          />
+          <output htmlFor="sound-volume" className="t-mono">
+            {t("settings.appearance.volumeValue", { value: soundVolume })}
+          </output>
+          <button
+            type="button"
+            className={styles.secondary}
+            disabled={!interfaceSounds || soundVolume === 0}
+            onClick={() => {
+              playCue("summon");
+            }}
+          >
+            {t("settings.appearance.soundSample")}
+          </button>
+        </div>
+      </div>
     </Section>
   );
 }

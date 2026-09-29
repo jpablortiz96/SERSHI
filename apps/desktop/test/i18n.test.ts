@@ -54,10 +54,13 @@ describe("locale resources", () => {
           "platforms.linux",
           "platforms.macos",
           "platforms.windows",
-          // Theme name (a product name, like "SERSHI").
-          "settings.appearance.themes.sershiDark",
+          // Product names (like "SERSHI"): themes and the Orbital companion.
+          "settings.appearance.themes.dark",
+          "settings.appearance.themes.light",
+          "settings.appearance.companions.orbital",
           "system.memoryTotal",
-          ...(locale === "pt-BR" ? ["system.threads"] : []),
+          // A number-and-percent pattern; pt-BR writes it like English.
+          ...(locale === "pt-BR" ? ["system.threads", "settings.appearance.volumeValue"] : []),
           ...(locale === "es-419" ? ["settings.sections.general"] : []),
         ].sort(),
       );

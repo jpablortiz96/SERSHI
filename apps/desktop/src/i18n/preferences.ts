@@ -1,6 +1,8 @@
 /**
- * Interface preferences (language, motion, companion size), stored in the
- * WebView's localStorage.
+ * Interface preferences (language, theme, motion, companion, sounds, global
+ * shortcut), stored in the WebView's localStorage. Every value is
+ * presentation or invocation only: nothing here is read by policy,
+ * permissions or tools, so no preference can grant authority.
  *
  * Why not the core: SERSHI has no persistent settings store yet (SQLite
  * arrives in v0.1, ADR 0004), and these values are presentation-only — no
@@ -18,14 +20,35 @@ export const PREFERENCES_KEY = "sershi.preferences.v1";
 export type MotionPreference = "system" | "reduced";
 export type CompanionSize = "small" | "medium" | "large";
 
+/** "system" follows the Windows light/dark app mode. */
+export type ThemePreference = "system" | "light" | "dark";
+/** Registered companion renderers (see visual/companions.ts). */
+export type CompanionAppearance = "orbital";
+
 export const MOTION_PREFERENCES: readonly MotionPreference[] = ["system", "reduced"];
 export const COMPANION_SIZES: readonly CompanionSize[] = ["small", "medium", "large"];
+export const THEME_PREFERENCES: readonly ThemePreference[] = ["system", "light", "dark"];
+export const COMPANION_APPEARANCES: readonly CompanionAppearance[] = ["orbital"];
+
+/** Default interface-sound volume (0–100): deliberately quiet. */
+export const DEFAULT_SOUND_VOLUME = 35;
 
 export interface Preferences {
   uiLocale: LocalePreference;
   conversationLanguage: ConversationLanguage;
   motion: MotionPreference;
   companionSize: CompanionSize;
+  theme: ThemePreference;
+  companionAppearance: CompanionAppearance;
+  /** Non-voice interface sounds. Off until the user turns them on. */
+  interfaceSounds: boolean;
+  /** 0–100. */
+  soundVolume: number;
+  /**
+   * The global shortcut the user chose, or null for SERSHI's default.
+   * Invocation only — it never grants any capability.
+   */
+  shortcut: string | null;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -33,7 +56,23 @@ export const DEFAULT_PREFERENCES: Preferences = {
   conversationLanguage: "automatic",
   motion: "system",
   companionSize: "medium",
+  theme: "system",
+  companionAppearance: "orbital",
+  interfaceSounds: false,
+  soundVolume: DEFAULT_SOUND_VOLUME,
+  shortcut: null,
 };
+
+/** Clamps a volume to 0–100; anything else becomes the default. */
+export function clampVolume(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_SOUND_VOLUME;
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+/** Accelerator strings are short, printable and made of +-joined tokens. */
+function parseShortcut(value: unknown): string | null {
+  return typeof value === "string" && /^[A-Za-z0-9+]{3,40}$/.test(value) ? value : null;
+}
 
 const oneOf = <T extends string>(options: readonly T[], value: unknown, fallback: T): T =>
   typeof value === "string" && (options as readonly string[]).includes(value)
@@ -60,6 +99,20 @@ export function parsePreferences(raw: string | null): Preferences {
         "companionSize" in value ? value.companionSize : undefined,
         DEFAULT_PREFERENCES.companionSize,
       ),
+      theme: oneOf(
+        THEME_PREFERENCES,
+        "theme" in value ? value.theme : undefined,
+        DEFAULT_PREFERENCES.theme,
+      ),
+      // An unknown renderer (e.g. from a newer version) falls back to Orbital.
+      companionAppearance: oneOf(
+        COMPANION_APPEARANCES,
+        "companionAppearance" in value ? value.companionAppearance : undefined,
+        DEFAULT_PREFERENCES.companionAppearance,
+      ),
+      interfaceSounds: "interfaceSounds" in value && value.interfaceSounds === true,
+      soundVolume: clampVolume("soundVolume" in value ? value.soundVolume : undefined),
+      shortcut: parseShortcut("shortcut" in value ? value.shortcut : undefined),
     };
   } catch {
     return DEFAULT_PREFERENCES;

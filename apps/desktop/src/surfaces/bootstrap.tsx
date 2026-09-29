@@ -9,12 +9,13 @@ import { createRoot } from "react-dom/client";
 import { connectLocale } from "../i18n";
 import { desktopRuntime } from "../ipc";
 import { connectAppearance } from "../visual/appearance";
-import { themeTokens } from "../visual/themes";
 
 /** Shared start-up for every SERSHI window: tokens first, then React. */
 export function mount(app: ReactNode): void {
   const html = document.documentElement;
-  applyTheme(html, themeTokens());
+  // Base tokens first so nothing renders unstyled; connectAppearance then
+  // applies the chosen theme.
+  applyTheme(html);
   if (!desktopRuntime) html.dataset.runtime = "browser";
   // Live for the whole window lifetime; no cleanup needed.
   connectLocale();

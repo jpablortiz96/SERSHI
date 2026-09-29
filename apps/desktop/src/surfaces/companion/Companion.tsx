@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 
-import { Core } from "../../components/core/Core";
 import { useI18n } from "../../i18n";
 import { stateLabel } from "../../i18n/domain";
 import { currentWindow, sershi } from "../../ipc";
 import { connectAssistant, useAssistantStore, useDisplayState } from "../../state/assistant";
 import { COMPANION_CORE_SIZE, useAppearance } from "../../visual/appearance";
+import { companionRenderer } from "../../visual/companions";
 import { companionIntensity } from "../../visual/stateVisuals";
 import styles from "./Companion.module.css";
 
@@ -29,6 +29,9 @@ export function Companion() {
   const state = useDisplayState();
   const revision = useAssistantStore((s) => s.snapshot.revision);
   const size = useAppearance((s) => COMPANION_CORE_SIZE[s.companionSize]);
+  // The appearance only changes pixels: the shell below (click, drag,
+  // capability) is the same for every renderer.
+  const Renderer = companionRenderer(useAppearance((s) => s.companionAppearance)).component;
   // The Command Center opens with SERSHI, so it starts visible.
   const [commandCenterVisible, setCommandCenterVisible] = useState(true);
   const [pressed, setPressed] = useState(false);
@@ -124,14 +127,7 @@ export function Companion() {
           if (e.key === "Enter" || e.key === " ") summon();
         }}
       >
-        <Core
-          state={state}
-          variant="companion"
-          size={size}
-          intensity={intensity}
-          pulseKey={revision}
-          decorative
-        />
+        <Renderer state={state} size={size} intensity={intensity} pulseKey={revision} />
       </button>
     </main>
   );

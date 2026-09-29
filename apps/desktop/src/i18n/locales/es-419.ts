@@ -270,9 +270,23 @@ export const es419: Messages = {
     },
     appearance: {
       theme: "Tema",
-      themeDetail: "Más temas estarán disponibles más adelante.",
+      themeDetail: "Sistema sigue el modo claro u oscuro de Windows.",
+      themeOptions: {
+        system: "Sistema",
+        light: "Claro",
+        dark: "Oscuro",
+      },
+      themeSystemDark: "Windows está en modo oscuro",
+      themeSystemLight: "Windows está en modo claro",
       themes: {
-        sershiDark: "SERSHI Dark",
+        dark: "SERSHI Dark",
+        light: "SERSHI Light",
+      },
+      companion: "Compañero",
+      companionDetail:
+        "Cómo aparece SERSHI en tu escritorio. Su aspecto nunca cambia lo que puede hacer.",
+      companions: {
+        orbital: "Orbital",
       },
       motion: "Movimiento",
       motionDetail:
@@ -290,6 +304,17 @@ export const es419: Messages = {
         medium: "Mediano",
         large: "Grande",
       },
+      sounds: "Sonidos de la interfaz",
+      soundsDetail:
+        "Señales breves y suaves al iniciar, al invocar a SERSHI, al completar acciones, ante errores y cuando se necesita tu aprobación. Las respuestas habladas tendrán su propio ajuste.",
+      soundOptions: {
+        on: "Activados",
+        off: "Desactivados",
+      },
+      volume: "Volumen",
+      volumeDetail: "Solo los sonidos de la interfaz.",
+      volumeValue: "{value} %",
+      soundSample: "Escuchar muestra",
     },
     windows: {
       appControl: "Control de aplicaciones",
@@ -298,7 +323,24 @@ export const es419: Messages = {
       trayDetail: "SERSHI sigue disponible cuando cierras el Centro de control.",
       shortcut: "Atajo global",
       shortcutDetail: "Llama a SERSHI desde cualquier aplicación.",
-      shortcutUnavailable: "Otra aplicación está usando este atajo.",
+      shortcutUnavailable:
+        "Otra aplicación usa este atajo. Elige otro; SERSHI sigue disponible desde el compañero y la bandeja del sistema.",
+      shortcutChange: "Cambiar",
+      shortcutRecording: "Presiona un nuevo atajo…",
+      shortcutRecordingHint:
+        "Usa Ctrl o Alt con otro modificador, más una letra, un número, Espacio o F1–F12. Esc cancela.",
+      shortcutSaved: "Atajo guardado: {keys}",
+      shortcutUnavailableTitle: "Atajo no disponible",
+      shortcutUnavailableBody: "Otra aplicación ya usa ese atajo. Elige otro.",
+      shortcutAltGr:
+        "En algunas distribuciones de teclado, Ctrl+Alt con una letra o un número escribe un carácter (AltGr). Si deja de funcionar un carácter, elige una combinación con Mayús.",
+      shortcutProblems: {
+        malformed: "Ese no es un atajo válido. Inténtalo de nuevo.",
+        needsModifiers:
+          "Usa Ctrl o Alt junto con otro modificador (por ejemplo Ctrl+Alt o Ctrl+Mayús).",
+        unsupportedKey: "Usa una letra, un número, Espacio o F1–F12 como tecla principal.",
+        reserved: "Las combinaciones con la tecla Windows están reservadas para Windows.",
+      },
       startup: "Iniciar con Windows",
       catalog: "Aplicaciones instaladas",
       catalogCount: "{count} encontradas",

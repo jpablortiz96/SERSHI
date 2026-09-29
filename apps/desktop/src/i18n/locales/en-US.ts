@@ -266,9 +266,22 @@ export const enUS = {
     },
     appearance: {
       theme: "Theme",
-      themeDetail: "More themes will be available later.",
+      themeDetail: "System follows the Windows light or dark app mode.",
+      themeOptions: {
+        system: "System",
+        light: "Light",
+        dark: "Dark",
+      },
+      themeSystemDark: "Windows is in dark mode",
+      themeSystemLight: "Windows is in light mode",
       themes: {
-        sershiDark: "SERSHI Dark",
+        dark: "SERSHI Dark",
+        light: "SERSHI Light",
+      },
+      companion: "Companion",
+      companionDetail: "How SERSHI appears on your desktop. Its look never changes what it can do.",
+      companions: {
+        orbital: "Orbital",
       },
       motion: "Motion",
       motionDetail:
@@ -286,6 +299,17 @@ export const enUS = {
         medium: "Medium",
         large: "Large",
       },
+      sounds: "Interface sounds",
+      soundsDetail:
+        "Short, quiet cues for start-up, summon, completed actions, errors and approval requests. Spoken replies will have their own setting.",
+      soundOptions: {
+        on: "On",
+        off: "Off",
+      },
+      volume: "Sound volume",
+      volumeDetail: "Interface sounds only.",
+      volumeValue: "{value}%",
+      soundSample: "Play sample",
     },
     windows: {
       appControl: "Application control",
@@ -294,7 +318,25 @@ export const enUS = {
       trayDetail: "SERSHI stays available when the Command Center is closed.",
       shortcut: "Global shortcut",
       shortcutDetail: "Summons SERSHI from any application.",
-      shortcutUnavailable: "Another application is using this shortcut.",
+      shortcutUnavailable:
+        "Another application is using this shortcut. Choose another one — SERSHI is still available from the companion and the tray.",
+      shortcutChange: "Change",
+      shortcutRecording: "Press a new shortcut…",
+      shortcutRecordingHint:
+        "Use Ctrl or Alt with another modifier, plus a letter, number, Space or F1–F12. Esc cancels.",
+      shortcutSaved: "Shortcut saved: {keys}",
+      shortcutUnavailableTitle: "Shortcut unavailable",
+      shortcutUnavailableBody:
+        "That shortcut is already being used by another application. Choose another shortcut.",
+      shortcutAltGr:
+        "On some keyboard layouts, Ctrl+Alt with a letter or number types a character (AltGr). If a character stops working, choose a combination with Shift.",
+      shortcutProblems: {
+        malformed: "That isn't a valid shortcut. Try again.",
+        needsModifiers:
+          "Use Ctrl or Alt together with another modifier (for example Ctrl+Alt or Ctrl+Shift).",
+        unsupportedKey: "Use a letter, a number, Space or F1–F12 as the main key.",
+        reserved: "Windows-key combinations are reserved by Windows.",
+      },
       startup: "Start with Windows",
       catalog: "Installed applications",
       catalogCount: "{count} found",

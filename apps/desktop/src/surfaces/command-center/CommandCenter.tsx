@@ -7,6 +7,8 @@ import { desktopRuntime, sershi } from "../../ipc";
 import { connectActivity } from "../../state/activity";
 import { connectAssistant, useDisplayState } from "../../state/assistant";
 import { useConversation } from "../../state/conversation";
+import { connectInterfaceSounds } from "../../audio/connect";
+import { applyStoredShortcut } from "../../state/shortcut";
 import { useWindowPresence } from "../../visual/windowPresence";
 import { ActivityView } from "./ActivityView";
 import styles from "./CommandCenter.module.css";
@@ -22,6 +24,9 @@ export function CommandCenter() {
   useEffect(() => {
     const disconnectAssistant = connectAssistant();
     const disconnectActivity = connectActivity();
+    const disconnectSounds = connectInterfaceSounds();
+    // The Command Center configures the global shortcut at start-up.
+    applyStoredShortcut();
     // Approvals happen in the trusted confirmation window; their outcomes
     // (approved, cancelled, expired) arrive here for the transcript.
     const stopOutcomes = sershi.onCommandOutcome((outcome) => {
@@ -34,6 +39,7 @@ export function CommandCenter() {
     return () => {
       disconnectAssistant();
       disconnectActivity();
+      disconnectSounds();
       stopFocus();
       stopOutcomes();
     };

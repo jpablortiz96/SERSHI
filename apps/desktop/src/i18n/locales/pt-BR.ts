@@ -270,9 +270,23 @@ export const ptBR: Messages = {
     },
     appearance: {
       theme: "Tema",
-      themeDetail: "Mais temas estarão disponíveis no futuro.",
+      themeDetail: "Sistema acompanha o modo claro ou escuro do Windows.",
+      themeOptions: {
+        system: "Sistema",
+        light: "Claro",
+        dark: "Escuro",
+      },
+      themeSystemDark: "O Windows está no modo escuro",
+      themeSystemLight: "O Windows está no modo claro",
       themes: {
-        sershiDark: "SERSHI Dark",
+        dark: "SERSHI Dark",
+        light: "SERSHI Light",
+      },
+      companion: "Companheiro",
+      companionDetail:
+        "Como o SERSHI aparece na sua área de trabalho. A aparência nunca muda o que ele pode fazer.",
+      companions: {
+        orbital: "Orbital",
       },
       motion: "Movimento",
       motionDetail:
@@ -290,6 +304,17 @@ export const ptBR: Messages = {
         medium: "Médio",
         large: "Grande",
       },
+      sounds: "Sons da interface",
+      soundsDetail:
+        "Sinais curtos e suaves ao iniciar, ao chamar o SERSHI, ao concluir ações, em erros e quando sua aprovação é necessária. As respostas faladas terão uma configuração própria.",
+      soundOptions: {
+        on: "Ativados",
+        off: "Desativados",
+      },
+      volume: "Volume",
+      volumeDetail: "Somente os sons da interface.",
+      volumeValue: "{value}%",
+      soundSample: "Ouvir amostra",
     },
     windows: {
       appControl: "Controle de aplicativos",
@@ -298,7 +323,24 @@ export const ptBR: Messages = {
       trayDetail: "O SERSHI continua disponível quando você fecha a Central de comando.",
       shortcut: "Atalho global",
       shortcutDetail: "Chama o SERSHI a partir de qualquer aplicativo.",
-      shortcutUnavailable: "Outro aplicativo está usando este atalho.",
+      shortcutUnavailable:
+        "Outro aplicativo está usando este atalho. Escolha outro — o SERSHI continua disponível pelo companheiro e pela bandeja do sistema.",
+      shortcutChange: "Alterar",
+      shortcutRecording: "Pressione um novo atalho…",
+      shortcutRecordingHint:
+        "Use Ctrl ou Alt com outro modificador, mais uma letra, um número, Espaço ou F1–F12. Esc cancela.",
+      shortcutSaved: "Atalho salvo: {keys}",
+      shortcutUnavailableTitle: "Atalho indisponível",
+      shortcutUnavailableBody: "Outro aplicativo já usa esse atalho. Escolha outro.",
+      shortcutAltGr:
+        "Em alguns layouts de teclado, Ctrl+Alt com uma letra ou um número digita um caractere (AltGr). Se um caractere parar de funcionar, escolha uma combinação com Shift.",
+      shortcutProblems: {
+        malformed: "Esse não é um atalho válido. Tente de novo.",
+        needsModifiers:
+          "Use Ctrl ou Alt junto com outro modificador (por exemplo Ctrl+Alt ou Ctrl+Shift).",
+        unsupportedKey: "Use uma letra, um número, Espaço ou F1–F12 como tecla principal.",
+        reserved: "Combinações com a tecla Windows são reservadas ao Windows.",
+      },
       startup: "Iniciar com o Windows",
       catalog: "Aplicativos instalados",
       catalogCount: "{count} encontrados",
