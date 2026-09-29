@@ -199,7 +199,7 @@
 
 .stateGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
@@ -208,7 +208,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
   border: 0;
   border-radius: var(--radius-md);
   background: rgb(255 255 255 / 0.02);
@@ -216,14 +216,20 @@
   font-size: var(--type-small-size);
   color: var(--text-secondary);
   text-align: left;
-  transition: box-shadow var(--duration-fast) var(--ease-standard);
+  transition:
+    box-shadow var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
 }
 
-.stateGrid button i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--state-color);
+.stateGrid button:hover {
+  background: var(--surface-hover);
+}
+
+.stateName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .stateGrid button[aria-pressed="true"] {
@@ -267,28 +273,37 @@
   padding-right: 0 !important;
 }
 
-.tone {
+/* Status: shape + word, tinted by tone (never colour alone). */
+.status {
   --tone: var(--text-tertiary);
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: var(--space-3);
-  border-radius: 50%;
-  background: var(--tone);
-  vertical-align: middle;
+  white-space: nowrap;
+  color: color-mix(in oklab, var(--tone) 70%, var(--text-secondary)) !important;
 }
 
-tr[data-tone="success"] .tone {
+.status svg {
+  margin-right: var(--space-2);
+  vertical-align: -1px;
+}
+
+tr[data-tone="success"] {
   --tone: var(--state-success);
 }
-tr[data-tone="warning"] .tone {
+tr[data-tone="warning"] {
   --tone: var(--state-warning);
 }
-tr[data-tone="error"] .tone {
+tr[data-tone="error"] {
   --tone: var(--state-error);
 }
-tr[data-tone="signal"] .tone {
+tr[data-tone="signal"] {
   --tone: var(--color-signal);
+}
+
+.table tbody tr {
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.table tbody tr:hover {
+  background: var(--surface-hover);
 }
 
 /* ─── Windows integration ───────────────────────────────────────────── */

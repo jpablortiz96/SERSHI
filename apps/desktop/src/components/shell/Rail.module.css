@@ -24,3 +24,10 @@
 .footer {
   margin-top: auto;
 }
+
+@media (max-width: 1120px) {
+  .rail {
+    gap: var(--space-6);
+    padding: var(--space-6) var(--space-5);
+  }
+}

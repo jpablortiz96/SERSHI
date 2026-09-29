@@ -1,4 +1,5 @@
-import { KIND_TONE } from "../../components/activity/ActivityItem";
+import { KIND_TONE, TONE_GLYPH } from "../../components/activity/ActivityItem";
+import { Glyph } from "../../components/core/StateGlyph";
 import { useI18n } from "../../i18n";
 import { describeActivity, toolName } from "../../i18n/domain";
 import { useActivity } from "../../state/activity";
@@ -22,6 +23,7 @@ export function ActivityView() {
           <thead>
             <tr>
               <th scope="col">{t("activity.columns.time")}</th>
+              <th scope="col">{t("activity.columns.status")}</th>
               <th scope="col">{t("activity.columns.event")}</th>
               <th scope="col">{t("activity.columns.tool")}</th>
               <th scope="col" className={styles.num}>
@@ -33,10 +35,11 @@ export function ActivityView() {
             {entries.map((e) => (
               <tr key={e.id} data-tone={KIND_TONE[e.kind]}>
                 <td className="t-mono">{format.time(e.atMs)}</td>
-                <td>
-                  <i className={styles.tone} aria-hidden="true" />
-                  {describeActivity(t, e)}
+                <td className={styles.status}>
+                  <Glyph shape={TONE_GLYPH[KIND_TONE[e.kind]]} />
+                  {t(`activity.tones.${KIND_TONE[e.kind]}`)}
                 </td>
+                <td>{describeActivity(t, e)}</td>
                 <td className="t-mono" title={e.toolId ? toolName(t, e.toolId) : undefined}>
                   {e.toolId ?? "—"}
                 </td>

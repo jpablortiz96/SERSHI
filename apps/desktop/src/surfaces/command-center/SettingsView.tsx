@@ -17,6 +17,16 @@ import {
 import { desktopRuntime, sershi } from "../../ipc";
 import { useAssistantStore } from "../../state/assistant";
 import { useRuntimeInfo } from "../../state/runtime";
+import { Core } from "../../components/core/Core";
+import { StateGlyph } from "../../components/core/StateGlyph";
+import {
+  COMPANION_SIZES,
+  MOTION_PREFERENCES,
+  useAppearance,
+  type CompanionSize,
+  type MotionPreference,
+} from "../../visual/appearance";
+import { THEMES } from "../../visual/themes";
 import styles from "./Page.module.css";
 import { Pill, Row, Section } from "./SettingsParts";
 import { CatalogInspector, WindowsIntegration } from "./WindowsIntegration";
@@ -42,6 +52,8 @@ export function SettingsView() {
           value={t("settings.conversation.value")}
         />
       </Section>
+
+      <Appearance />
 
       <WindowsIntegration />
 
@@ -225,11 +237,120 @@ function StatePreview() {
               preview(s);
             }}
           >
-            <i aria-hidden="true" />
-            {stateLabel(t, s)}
+            <Core state={s} variant="preview" size={28} decorative />
+            <span className={styles.stateName}>
+              <StateGlyph state={s} />
+              {stateLabel(t, s)}
+            </span>
           </button>
         ))}
       </div>
     </Section>
+  );
+}
+
+/**
+ * Appearance: only options that really work. Presentation only — stored with
+ * the other interface preferences and applied in every SERSHI window.
+ */
+function Appearance() {
+  const { t } = useI18n();
+  const motion = useAppearance((s) => s.motion);
+  const systemReduced = useAppearance((s) => s.systemReduced);
+  const companionSize = useAppearance((s) => s.companionSize);
+  const setMotion = useAppearance((s) => s.setMotion);
+  const setCompanionSize = useAppearance((s) => s.setCompanionSize);
+
+  return (
+    <Section title={t("settings.sections.appearance")}>
+      <Row
+        label={t("settings.appearance.theme")}
+        detail={t("settings.appearance.themeDetail")}
+        value={t(THEMES[0].label)}
+      />
+      <Choices<MotionPreference>
+        name="motion"
+        label={t("settings.appearance.motion")}
+        detail={t("settings.appearance.motionDetail")}
+        options={MOTION_PREFERENCES}
+        value={motion}
+        onChange={setMotion}
+        optionLabel={(m) => t(`settings.appearance.motionOptions.${m}`)}
+        optionDetail={(m) =>
+          m === "system"
+            ? t(
+                systemReduced
+                  ? "settings.appearance.motionSystemReduced"
+                  : "settings.appearance.motionSystemFull",
+              )
+            : undefined
+        }
+      />
+      <Choices<CompanionSize>
+        name="companion-size"
+        label={t("settings.appearance.companionSize")}
+        detail={t("settings.appearance.companionSizeDetail")}
+        options={COMPANION_SIZES}
+        value={companionSize}
+        onChange={setCompanionSize}
+        optionLabel={(size) => t(`settings.appearance.sizes.${size}`)}
+      />
+    </Section>
+  );
+}
+
+interface ChoicesProps<T extends string> {
+  name: string;
+  label: string;
+  detail: string;
+  options: readonly T[];
+  value: T;
+  onChange: (value: T) => void;
+  optionLabel: (value: T) => string;
+  optionDetail?: (value: T) => string | undefined;
+}
+
+function Choices<T extends string>({
+  name,
+  label,
+  detail,
+  options,
+  value,
+  onChange,
+  optionLabel,
+  optionDetail,
+}: ChoicesProps<T>) {
+  const labelId = `${name}-label`;
+  return (
+    <div className={styles.rowStacked}>
+      <div>
+        <p className={styles.rowLabel} id={labelId}>
+          {label}
+        </p>
+        <p className={styles.rowDetail}>{detail}</p>
+      </div>
+      <div className={styles.choices} role="radiogroup" aria-labelledby={labelId}>
+        {options.map((option) => {
+          const extra = optionDetail?.(option);
+          return (
+            <label key={option} className={styles.choice}>
+              <input
+                type="radio"
+                name={name}
+                value={option}
+                checked={value === option}
+                onChange={() => {
+                  onChange(option);
+                }}
+              />
+              <span className={styles.choiceText}>
+                <span>{optionLabel(option)}</span>
+                {extra && <span className={styles.choiceDetail}>{extra}</span>}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }

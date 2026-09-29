@@ -55,6 +55,9 @@
 }
 
 .statusLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
   font-weight: var(--type-label-weight);
@@ -122,7 +125,12 @@
   transition:
     color var(--duration-fast) var(--ease-standard),
     box-shadow var(--duration-default) var(--ease-standard),
-    background-color var(--duration-default) var(--ease-standard);
+    background-color var(--duration-default) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.suggestions button:active {
+  transform: scale(0.98);
 }
 
 .suggestions button:hover {
@@ -138,12 +146,50 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .welcome {
-    animation: none;
+:global(html[data-motion="reduced"]) .welcome {
+  animation: none;
+}
+:global(html[data-motion="reduced"]) .coreSlot,
+:global(html[data-motion="reduced"]) .core {
+  transition-duration: var(--duration-instant);
+}
+
+/* ─── Responsive: smaller windows keep the core dominant but compact ── */
+
+@media (max-width: 1120px) {
+  .home {
+    grid-template-columns: var(--layout-rail-compact) minmax(0, 1fr) var(--layout-rail-compact);
   }
-  .coreSlot,
+}
+
+@media (max-height: 720px) {
+  .coreSlot {
+    height: 236px;
+  }
   .core {
-    transition-duration: var(--duration-instant);
+    transform: scale(0.8);
+  }
+  .stage[data-conversing] .coreSlot {
+    height: 140px;
+  }
+  .stage[data-conversing] .core {
+    transform: scale(0.5);
+  }
+  .greeting {
+    font-size: var(--type-display-size);
+    line-height: var(--type-display-line);
+  }
+}
+
+/* Tall windows: keep presence, dialogue and command bar one composition
+   instead of letting them drift apart. */
+@media (min-height: 900px) {
+  .stage {
+    align-self: center;
+    height: 100%;
+    max-height: 860px;
+  }
+  .coreSlot {
+    height: 340px;
   }
 }

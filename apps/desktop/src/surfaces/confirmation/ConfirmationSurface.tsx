@@ -27,6 +27,7 @@ import {
 } from "react";
 
 import { Core } from "../../components/core/Core";
+import { ApprovalMark, CloseIcon } from "../../components/shell/icons";
 import { useI18n, type Translate } from "../../i18n";
 import { applicationName, riskLabel, toolName } from "../../i18n/domain";
 import { confirmationSurface, desktopRuntime } from "../../ipc/confirmation";
@@ -255,9 +256,15 @@ function Prompt({ request, busy, onDecide, onExpire }: PromptProps) {
     >
       <div className={styles.header}>
         <span className={styles.mark} aria-hidden="true">
-          <Core state="awaitingConfirmation" size={20} />
+          <Core state="awaitingConfirmation" variant="compact" decorative />
         </span>
         <span className={styles.brand}>SERSHI</span>
+        {/* SERSHI's approval surface marker (visual consistency only; not an
+            OS-level identity or security claim). */}
+        <span className={styles.trust}>
+          <ApprovalMark />
+          {t("confirm.trust")}
+        </span>
         <span className={styles.risk} data-risk={request.risk}>
           {riskLabel(t, request.risk)}
         </span>
@@ -271,9 +278,7 @@ function Prompt({ request, busy, onDecide, onExpire }: PromptProps) {
             onDecide("cancel");
           }}
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M4 4l8 8M12 4l-8 8" />
-          </svg>
+          <CloseIcon />
         </button>
       </div>
 

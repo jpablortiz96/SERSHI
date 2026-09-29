@@ -1,7 +1,10 @@
+import { useLayoutEffect, useRef } from "react";
+
 import { ActivityRail } from "../../components/activity/ActivityRail";
 import { CommandBar } from "../../components/command/CommandBar";
 import { Transcript } from "../../components/conversation/Transcript";
 import { Core } from "../../components/core/Core";
+import { StateGlyph } from "../../components/core/StateGlyph";
 import { SystemRail } from "../../components/telemetry/SystemRail";
 import { useI18n } from "../../i18n";
 import { stateLabel, stateLine } from "../../i18n/domain";
@@ -22,6 +25,29 @@ export function HomeView({ onViewActivity }: { onViewActivity: () => void }) {
   const { messages, submit } = useConversation();
   const conversing = messages.length > 0;
   const { t } = useI18n();
+  const coreSlot = useRef<HTMLDivElement>(null);
+
+  // The core is the room's light source: tell the ambient field where it is
+  // (it moves with window size and when the conversation starts).
+  useLayoutEffect(() => {
+    const slot = coreSlot.current;
+    if (!slot) return;
+    const place = () => {
+      const rect = slot.getBoundingClientRect();
+      document.documentElement.style.setProperty(
+        "--core-y",
+        `${Math.round(rect.top + rect.height / 2)}px`,
+      );
+    };
+    place();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    observer?.observe(slot);
+    window.addEventListener("resize", place);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, []);
 
   return (
     <div className={styles.home}>
@@ -29,11 +55,14 @@ export function HomeView({ onViewActivity }: { onViewActivity: () => void }) {
 
       <section className={styles.stage} data-conversing={conversing || undefined}>
         <div className={styles.presence}>
-          <div className={styles.coreSlot}>
-            <Core state={state} size={232} pulseKey={revision} className={styles.core} />
+          <div ref={coreSlot} className={styles.coreSlot}>
+            <Core state={state} variant="hero" pulseKey={revision} className={styles.core} />
           </div>
           <p className={styles.status} role="status">
-            <span className={styles.statusLabel}>{stateLabel(t, state)}</span>
+            <span className={styles.statusLabel}>
+              <StateGlyph state={state} />
+              {stateLabel(t, state)}
+            </span>
             <span className={styles.statusLine}>{stateLine(t, state)}</span>
           </p>
         </div>

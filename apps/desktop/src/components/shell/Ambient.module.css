@@ -11,14 +11,22 @@
   position: absolute;
 }
 
-/* Light cast by the core, centred on the stage. */
+/* Light cast by the core, centred on it. Local: state colour tints the
+   space around the core, never the whole window. */
 .light {
   inset: 0;
-  background: radial-gradient(
-    ellipse 46% 42% at 50% 30%,
-    color-mix(in oklab, var(--state-color) 13%, transparent),
-    transparent 70%
-  );
+  background:
+    radial-gradient(
+      circle 240px at 50% var(--core-y, calc(var(--layout-titlebar) + 174px)),
+      color-mix(in oklab, var(--state-color) 11%, transparent),
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 46% 42% at 50% 30%,
+      color-mix(in oklab, var(--state-color) 7%, transparent),
+      transparent 70%
+    );
+  transition: opacity var(--duration-cinematic) var(--ease-standard);
 }
 
 /* A large, soft, off-centre glow that wanders very slowly. */
@@ -30,17 +38,31 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    color-mix(in oklab, var(--color-aura) 7%, transparent),
+    color-mix(in oklab, var(--atmosphere-primary) 7%, transparent),
     transparent 62%
   );
   animation: drift var(--duration-drift) var(--ease-breathe) infinite alternate;
   will-change: transform;
 }
 
+/* A faint cool floor under the stage: depth without a box. */
+.floor {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42vh;
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 100%,
+    color-mix(in oklab, var(--atmosphere-secondary) 5%, transparent),
+    transparent 70%
+  );
+}
+
 /* Orbital guides: fixed concentric rings around the core position. */
 .guides {
   left: 50%;
-  top: calc(var(--layout-titlebar) + 190px);
+  top: var(--core-y, calc(var(--layout-titlebar) + 174px));
+  transition: top var(--duration-cinematic) var(--ease-enter);
 }
 
 .guides i {
@@ -76,7 +98,11 @@
 
 .vignette {
   inset: 0;
-  background: radial-gradient(ellipse 80% 70% at 50% 45%, transparent 55%, rgb(0 0 0 / 0.55));
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 45%,
+    transparent 55%,
+    var(--atmosphere-vignette)
+  );
 }
 
 @keyframes drift {
@@ -88,8 +114,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .drift {
-    animation: none;
-  }
+:global(html[data-motion="reduced"]) .drift {
+  animation: none;
 }

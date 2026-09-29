@@ -42,36 +42,75 @@
 /* ─── Navigation ────────────────────────────────────────────────────── */
 
 .nav {
+  position: relative;
   display: flex;
   gap: var(--space-1);
   padding: 3px;
   border-radius: var(--radius-pill);
-  background: rgb(255 255 255 / 0.025);
+  background: rgb(255 255 255 / 0.02);
   box-shadow: inset 0 0 0 1px var(--border-faint);
+}
+
+/* The selected tab's backdrop slides between tabs. */
+.indicator {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: var(--indicator-w, 0);
+  border-radius: var(--radius-pill);
+  background: var(--surface-active);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 0 0 1px var(--border-faint);
+  transform: translateX(var(--indicator-x, 0));
+  transition:
+    transform var(--duration-slow) var(--ease-enter),
+    width var(--duration-slow) var(--ease-enter);
+  pointer-events: none;
 }
 
 .tab {
   position: relative;
-  padding: 5px var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-4) 5px var(--space-3);
   border: 0;
   border-radius: var(--radius-pill);
   background: transparent;
   font-size: var(--type-small-size);
   font-weight: 480;
   color: var(--text-tertiary);
-  transition:
-    color var(--duration-fast) var(--ease-standard),
-    background-color var(--duration-default) var(--ease-standard);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.tab svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+  transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
 .tab:hover {
   color: var(--text-secondary);
 }
 
+.tab:active {
+  transform: scale(0.97);
+}
+
 .tab[aria-current="page"] {
   color: var(--text-primary);
-  background: var(--surface-active);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+.tab[aria-current="page"] svg {
+  opacity: 1;
+  color: color-mix(in oklab, var(--state-color) 70%, var(--text-primary));
+}
+
+.tab:focus-visible {
+  outline-offset: 0;
 }
 
 /* ─── End cluster ───────────────────────────────────────────────────── */
@@ -130,6 +169,10 @@
 .controls button:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
+}
+
+.controls button:active {
+  background: var(--surface-active);
 }
 
 .controls button[data-variant="close"]:hover {

@@ -182,10 +182,18 @@ export const ptBR: Messages = {
     footnote:
       "A atividade fica na memória durante esta sessão. O histórico persistente e exportável chega com o armazenamento local na v0.1.",
     columns: {
+      status: "Situação",
       time: "Hora",
       event: "Evento",
       tool: "Ferramenta",
       duration: "Duração",
+    },
+    tones: {
+      neutral: "Informação",
+      success: "Concluído",
+      warning: "Atenção",
+      error: "Falhou",
+      signal: "Sistema",
     },
     withSubject: "{event} · {subject}",
     events: {
@@ -211,6 +219,7 @@ export const ptBR: Messages = {
     lede: "O que o SERSHI pode fazer, o que tem permissão para fazer e o que ele guarda. Mais preferências chegam com as configurações persistentes na v0.1.",
     sections: {
       general: "Geral",
+      appearance: "Aparência",
       windows: "Integração com o Windows",
       privacy: "Privacidade",
       tools: "Ferramentas e permissões",
@@ -258,6 +267,29 @@ export const ptBR: Messages = {
       active: "Disponível",
       unavailable: "Indisponível",
       planned: "Planejado",
+    },
+    appearance: {
+      theme: "Tema",
+      themeDetail: "Mais temas estarão disponíveis no futuro.",
+      themes: {
+        sershiDark: "SERSHI Dark",
+      },
+      motion: "Movimento",
+      motionDetail:
+        "O movimento reduzido interrompe loops e transições. Os estados continuam reconhecíveis por cor, forma e rótulo.",
+      motionOptions: {
+        system: "Sistema",
+        reduced: "Reduzido",
+      },
+      motionSystemFull: "O Windows permite animações",
+      motionSystemReduced: "O Windows pede menos movimento",
+      companionSize: "Tamanho do companheiro",
+      companionSizeDetail: "O tamanho com que o SERSHI aparece na sua área de trabalho.",
+      sizes: {
+        small: "Pequeno",
+        medium: "Médio",
+        large: "Grande",
+      },
     },
     windows: {
       appControl: "Controle de aplicativos",
@@ -324,6 +356,7 @@ export const ptBR: Messages = {
 
   confirm: {
     label: "Confirmação necessária",
+    trust: "Aprovação do SERSHI",
     closeApplication: {
       title: "Fechar {app}?",
       body: "O SERSHI vai pedir para {app} fechar as janelas.",

@@ -178,10 +178,18 @@ export const enUS = {
     footnote:
       "Activity is kept in memory for this session. Persistent, exportable history arrives with local storage in v0.1.",
     columns: {
+      status: "Status",
       time: "Time",
       event: "Event",
       tool: "Tool",
       duration: "Duration",
+    },
+    tones: {
+      neutral: "Info",
+      success: "Done",
+      warning: "Attention",
+      error: "Failed",
+      signal: "System",
     },
     withSubject: "{event} · {subject}",
     events: {
@@ -207,6 +215,7 @@ export const enUS = {
     lede: "What SERSHI can do, what it is allowed to do, and what it keeps. More preferences arrive with persistent settings in v0.1.",
     sections: {
       general: "General",
+      appearance: "Appearance",
       windows: "Windows integration",
       privacy: "Privacy",
       tools: "Tools & permissions",
@@ -254,6 +263,29 @@ export const enUS = {
       active: "Active",
       unavailable: "Unavailable",
       planned: "Planned",
+    },
+    appearance: {
+      theme: "Theme",
+      themeDetail: "More themes will be available later.",
+      themes: {
+        sershiDark: "SERSHI Dark",
+      },
+      motion: "Motion",
+      motionDetail:
+        "Reduced motion stops loops and transitions. States stay recognisable by colour, shape and label.",
+      motionOptions: {
+        system: "System",
+        reduced: "Reduced",
+      },
+      motionSystemFull: "Windows allows animations",
+      motionSystemReduced: "Windows asks for reduced motion",
+      companionSize: "Companion size",
+      companionSizeDetail: "How large SERSHI appears on your desktop.",
+      sizes: {
+        small: "Small",
+        medium: "Medium",
+        large: "Large",
+      },
     },
     windows: {
       appControl: "Application control",
@@ -320,6 +352,7 @@ export const enUS = {
 
   confirm: {
     label: "Confirmation required",
+    trust: "SERSHI approval",
     closeApplication: {
       title: "Close {app}?",
       body: "SERSHI will ask {app} to close its windows.",

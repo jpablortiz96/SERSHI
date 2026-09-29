@@ -4,11 +4,37 @@
   grid-template-rows: var(--layout-titlebar) minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
+  transform-origin: 50% 40%;
+}
+
+/* Window appears: a short fade-and-settle; the ambient light wakes with it. */
+.app[data-presence="entering"] {
+  animation: window-in var(--duration-window) var(--ease-enter) both;
+}
+
+/* × pressed: a quick retreat, then Rust hides the native window. */
+.app[data-presence="leaving"] {
+  animation: window-out var(--duration-window-exit) var(--ease-exit) both;
+  pointer-events: none;
 }
 
 .view {
   min-height: 0;
   animation: view-in var(--duration-slow) var(--ease-enter) both;
+}
+
+@keyframes window-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes window-out {
+  to {
+    opacity: 0;
+    transform: scale(0.99) translateY(4px);
+  }
 }
 
 @keyframes view-in {
@@ -18,8 +44,7 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .view {
-    animation-duration: var(--duration-instant);
-  }
+:global(html[data-motion="reduced"]) .app,
+:global(html[data-motion="reduced"]) .view {
+  animation: none !important;
 }

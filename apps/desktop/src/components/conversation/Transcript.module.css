@@ -20,6 +20,23 @@
 
 .message {
   animation: arrive var(--duration-slow) var(--ease-enter) both;
+  transition: opacity var(--duration-slow) var(--ease-standard);
+}
+
+/* SERSHI is not a messenger: the latest exchange is the response; earlier
+   ones recede into quiet history (and come back on hover or focus). */
+.message:not(:nth-last-child(-n + 2)) {
+  opacity: 0.5;
+}
+.message:not(:nth-last-child(-n + 2)):hover,
+.message:not(:nth-last-child(-n + 2)):focus-within {
+  opacity: 1;
+}
+
+.message[data-role="sershi"]:last-child .reply {
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--text-primary);
 }
 
 .message[data-role="user"] {
@@ -123,8 +140,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .message {
-    animation-duration: var(--duration-instant);
-  }
+:global(html[data-motion="reduced"]) .message {
+  animation-duration: var(--duration-instant);
 }

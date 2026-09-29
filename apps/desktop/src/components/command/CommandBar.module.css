@@ -36,8 +36,46 @@
   box-shadow: 0 0 10px var(--state-color);
 }
 
+.bar[data-typing] .signal {
+  box-shadow:
+    0 0 12px var(--state-color),
+    0 0 0 3px color-mix(in oklab, var(--state-color) 18%, transparent);
+}
+
 .bar[data-pending] .signal {
   animation: pending 1s var(--ease-breathe) infinite;
+}
+
+/* Busy: a thin light travels along the bar's lower edge while SERSHI works. */
+.bar[data-pending]::after {
+  content: "";
+  position: absolute;
+  left: var(--space-8);
+  right: var(--space-8);
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--state-color) 80%, transparent),
+    transparent
+  );
+  transform-origin: left;
+  animation: working 1.4s var(--ease-standard) infinite;
+}
+
+/* The accepted command lifts away from the input towards the stage. */
+.accepted {
+  position: absolute;
+  left: calc(var(--space-5) + 15px);
+  right: 96px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  color: var(--text-primary);
+  pointer-events: none;
+  animation: accepted 520ms var(--ease-enter) both;
 }
 
 .input {
@@ -154,6 +192,31 @@
   color: var(--text-disabled);
 }
 
+@keyframes accepted {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+
+@keyframes working {
+  0% {
+    transform: scaleX(0.1) translateX(0);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(0.4) translateX(250%);
+    opacity: 0;
+  }
+}
+
 @keyframes pending {
   50% {
     opacity: 0.35;
@@ -161,9 +224,12 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .bar[data-pending] .signal {
-    animation: none;
-    opacity: 0.5;
-  }
+:global(html[data-motion="reduced"]) .accepted,
+:global(html[data-motion="reduced"]) .bar[data-pending]::after {
+  display: none;
+}
+
+:global(html[data-motion="reduced"]) .bar[data-pending] .signal {
+  animation: none;
+  opacity: 0.5;
 }

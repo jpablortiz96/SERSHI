@@ -182,10 +182,18 @@ export const es419: Messages = {
     footnote:
       "La actividad se guarda en memoria durante esta sesión. El historial persistente y exportable llegará con el almacenamiento local en v0.1.",
     columns: {
+      status: "Estado",
       time: "Hora",
       event: "Evento",
       tool: "Herramienta",
       duration: "Duración",
+    },
+    tones: {
+      neutral: "Información",
+      success: "Hecho",
+      warning: "Atención",
+      error: "Falló",
+      signal: "Sistema",
     },
     withSubject: "{event} · {subject}",
     events: {
@@ -211,6 +219,7 @@ export const es419: Messages = {
     lede: "Lo que SERSHI puede hacer, lo que tiene permitido hacer y lo que guarda. Más preferencias llegarán con la configuración persistente en v0.1.",
     sections: {
       general: "General",
+      appearance: "Apariencia",
       windows: "Integración con Windows",
       privacy: "Privacidad",
       tools: "Herramientas y permisos",
@@ -258,6 +267,29 @@ export const es419: Messages = {
       active: "Disponible",
       unavailable: "No disponible",
       planned: "Planificado",
+    },
+    appearance: {
+      theme: "Tema",
+      themeDetail: "Más temas estarán disponibles más adelante.",
+      themes: {
+        sershiDark: "SERSHI Dark",
+      },
+      motion: "Movimiento",
+      motionDetail:
+        "El movimiento reducido detiene los bucles y las transiciones. Los estados siguen reconociéndose por color, forma y etiqueta.",
+      motionOptions: {
+        system: "Sistema",
+        reduced: "Reducido",
+      },
+      motionSystemFull: "Windows permite animaciones",
+      motionSystemReduced: "Windows pide menos movimiento",
+      companionSize: "Tamaño del compañero",
+      companionSizeDetail: "Qué tan grande aparece SERSHI en tu escritorio.",
+      sizes: {
+        small: "Pequeño",
+        medium: "Mediano",
+        large: "Grande",
+      },
     },
     windows: {
       appControl: "Control de aplicaciones",
@@ -324,6 +356,7 @@ export const es419: Messages = {
 
   confirm: {
     label: "Se requiere confirmación",
+    trust: "Aprobación de SERSHI",
     closeApplication: {
       title: "¿Cerrar {app}?",
       body: "SERSHI le pedirá a {app} que cierre sus ventanas.",

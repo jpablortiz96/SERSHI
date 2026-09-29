@@ -2,12 +2,22 @@ import type { ActivityEntry, ActivityKind } from "@sershi/contracts";
 
 import { useI18n } from "../../i18n";
 import { describeActivity } from "../../i18n/domain";
+import type { StateGlyph } from "../../visual/stateVisuals";
+import { Glyph } from "../core/StateGlyph";
 import styles from "./Activity.module.css";
 
-export const KIND_TONE: Record<
-  ActivityKind,
-  "neutral" | "success" | "warning" | "error" | "signal"
-> = {
+export type Tone = "neutral" | "success" | "warning" | "error" | "signal";
+
+/** Shape per tone, so an entry's meaning never depends on colour alone. */
+export const TONE_GLYPH: Record<Tone, StateGlyph> = {
+  neutral: "hollow",
+  success: "check",
+  warning: "triangle",
+  error: "cross",
+  signal: "dot",
+};
+
+export const KIND_TONE: Record<ActivityKind, Tone> = {
   systemReady: "signal",
   commandReceived: "neutral",
   toolRequested: "neutral",
@@ -26,7 +36,7 @@ export function ActivityItem({ entry }: { entry: ActivityEntry }) {
   const { t, format } = useI18n();
   return (
     <li className={styles.item} data-tone={KIND_TONE[entry.kind]}>
-      <i className={styles.dot} aria-hidden="true" />
+      <Glyph shape={TONE_GLYPH[KIND_TONE[entry.kind]]} className={styles.dot} />
       <p className={styles.summary}>{describeActivity(t, entry)}</p>
       <p className={styles.meta}>
         <time className="t-mono" dateTime={new Date(entry.atMs).toISOString()}>

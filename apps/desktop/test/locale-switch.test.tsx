@@ -16,7 +16,7 @@ describe("switching language at runtime", () => {
     const cleanup = connectLocale();
     render(
       <>
-        <TitleBar view="settings" onNavigate={() => undefined} />
+        <TitleBar view="settings" onNavigate={() => undefined} onHide={() => undefined} />
         <SettingsView />
       </>,
     );
@@ -31,7 +31,9 @@ describe("switching language at runtime", () => {
     expect(screen.getByRole("button", { name: "Minimizar" })).toBeTruthy();
     expect(document.documentElement.lang).toBe("es-419");
 
-    fireEvent.click(within(screen.getByRole("radiogroup")).getByLabelText("Português"));
+    fireEvent.click(
+      within(screen.getByRole("radiogroup", { name: "Idioma" })).getByLabelText("Português"),
+    );
     expect(screen.getByRole("button", { name: "Início" })).toBeTruthy();
     expect(screen.getByRole("radiogroup", { name: "Idioma" })).toBeTruthy();
     cleanup();
@@ -49,7 +51,7 @@ describe("switching language at runtime", () => {
 
   it("follows a change made in the other SERSHI window", () => {
     const cleanup = connectLocale();
-    render(<TitleBar view="home" onNavigate={() => undefined} />);
+    render(<TitleBar view="home" onNavigate={() => undefined} onHide={() => undefined} />);
     act(() => {
       window.dispatchEvent(
         new StorageEvent("storage", {

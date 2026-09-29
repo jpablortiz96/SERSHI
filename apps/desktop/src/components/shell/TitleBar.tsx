@@ -1,15 +1,25 @@
+import { useLayoutEffect, useRef, type ComponentType } from "react";
+
 import { useI18n, type MessageKey } from "../../i18n";
-import { currentWindow, sershi } from "../../ipc";
+import { currentWindow } from "../../ipc";
 import { useAssistantStore, type Connection } from "../../state/assistant";
-import { CloseIcon, Mark, MaximizeIcon, MinimizeIcon } from "./icons";
+import {
+  ActivityIcon,
+  CloseIcon,
+  HomeIcon,
+  Mark,
+  MaximizeIcon,
+  MinimizeIcon,
+  SettingsIcon,
+} from "./icons";
 import styles from "./TitleBar.module.css";
 
 export type View = "home" | "activity" | "settings";
 
-export const VIEWS: { id: View; label: MessageKey & `nav.${View}` }[] = [
-  { id: "home", label: "nav.home" },
-  { id: "activity", label: "nav.activity" },
-  { id: "settings", label: "nav.settings" },
+export const VIEWS: { id: View; label: MessageKey & `nav.${View}`; icon: ComponentType }[] = [
+  { id: "home", label: "nav.home", icon: HomeIcon },
+  { id: "activity", label: "nav.activity", icon: ActivityIcon },
+  { id: "settings", label: "nav.settings", icon: SettingsIcon },
 ];
 
 const CONNECTION_KEYS: Record<Connection, MessageKey & `connection.${Connection}`> = {
@@ -22,6 +32,8 @@ const CONNECTION_KEYS: Record<Connection, MessageKey & `connection.${Connection}
 interface TitleBarProps {
   view: View;
   onNavigate: (view: View) => void;
+  /** Hide the Command Center (SERSHI keeps running). */
+  onHide: () => void;
 }
 
 /**
@@ -29,9 +41,20 @@ interface TitleBarProps {
  * ordinary buttons. Closing hides the Command Center — SERSHI stays present
  * in the companion.
  */
-export function TitleBar({ view, onNavigate }: TitleBarProps) {
+export function TitleBar({ view, onNavigate, onHide }: TitleBarProps) {
   const connection = useAssistantStore((s) => s.connection);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const nav = useRef<HTMLElement>(null);
+
+  // The selection indicator slides to the active tab (tab widths depend on
+  // the language, so they are measured).
+  useLayoutEffect(() => {
+    const el = nav.current;
+    const active = el?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!el || !active) return;
+    el.style.setProperty("--indicator-x", `${active.offsetLeft}px`);
+    el.style.setProperty("--indicator-w", `${active.offsetWidth}px`);
+  }, [view, locale]);
 
   return (
     <header className={styles.bar} data-tauri-drag-region>
@@ -43,7 +66,8 @@ export function TitleBar({ view, onNavigate }: TitleBarProps) {
         <span className={styles.phase}>{t("app.phase")}</span>
       </div>
 
-      <nav className={styles.nav} aria-label={t("nav.label")}>
+      <nav ref={nav} className={styles.nav} aria-label={t("nav.label")}>
+        <span className={styles.indicator} aria-hidden="true" />
         {VIEWS.map((v, i) => (
           <button
             key={v.id}
@@ -55,7 +79,8 @@ export function TitleBar({ view, onNavigate }: TitleBarProps) {
               onNavigate(v.id);
             }}
           >
-            {t(v.label)}
+            <v.icon />
+            <span>{t(v.label)}</span>
           </button>
         ))}
       </nav>
@@ -76,16 +101,7 @@ export function TitleBar({ view, onNavigate }: TitleBarProps) {
           >
             <MaximizeIcon />
           </button>
-          <button
-            type="button"
-            aria-label={t("window.hide")}
-            data-variant="close"
-            onClick={() => {
-              // Rust hides the window and cancels any pending approval;
-              // SERSHI keeps running in the companion and tray.
-              sershi.hideCommandCenter().catch(() => undefined);
-            }}
-          >
+          <button type="button" aria-label={t("window.hide")} data-variant="close" onClick={onHide}>
             <CloseIcon />
           </button>
         </div>

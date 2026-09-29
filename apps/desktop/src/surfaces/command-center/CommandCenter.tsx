@@ -7,6 +7,7 @@ import { desktopRuntime, sershi } from "../../ipc";
 import { connectActivity } from "../../state/activity";
 import { connectAssistant, useDisplayState } from "../../state/assistant";
 import { useConversation } from "../../state/conversation";
+import { useWindowPresence } from "../../visual/windowPresence";
 import { ActivityView } from "./ActivityView";
 import styles from "./CommandCenter.module.css";
 import { HomeView } from "./HomeView";
@@ -16,6 +17,7 @@ export function CommandCenter() {
   const [view, setView] = useState<View>("home");
   const state = useDisplayState();
   const { t } = useI18n();
+  const { presence, hide } = useWindowPresence();
 
   useEffect(() => {
     const disconnectAssistant = connectAssistant();
@@ -62,9 +64,9 @@ export function CommandCenter() {
   }, []);
 
   return (
-    <div className={styles.app} data-state={state}>
+    <div className={styles.app} data-state={state} data-presence={presence}>
       <Ambient />
-      <TitleBar view={view} onNavigate={setView} />
+      <TitleBar view={view} onNavigate={setView} onHide={hide} />
       <main key={view} className={styles.view}>
         {view === "home" && (
           <HomeView

@@ -54,6 +54,8 @@ describe("locale resources", () => {
           "platforms.linux",
           "platforms.macos",
           "platforms.windows",
+          // Theme name (a product name, like "SERSHI").
+          "settings.appearance.themes.sershiDark",
           "system.memoryTotal",
           ...(locale === "pt-BR" ? ["system.threads"] : []),
           ...(locale === "es-419" ? ["settings.sections.general"] : []),

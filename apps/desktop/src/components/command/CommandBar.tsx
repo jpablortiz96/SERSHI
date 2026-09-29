@@ -8,6 +8,8 @@ import styles from "./CommandBar.module.css";
 
 /** Mirrors MAX_COMMAND_CHARS in sershi-core. */
 const MAX_CHARS = 1000;
+/** How long the accepted command lingers as it lifts away (matches CSS). */
+export const ACCEPTED_MS = 520;
 
 /**
  * The primary input. Keyboard-first: "/" focuses from anywhere, Enter sends,
@@ -15,6 +17,9 @@ const MAX_CHARS = 1000;
  */
 export function CommandBar() {
   const [text, setText] = useState("");
+  /** The command just sent, shown lifting away while the input clears. */
+  const [accepted, setAccepted] = useState<{ id: number; text: string } | null>(null);
+  const acceptedTimer = useRef<number | undefined>(undefined);
   const input = useRef<HTMLInputElement>(null);
   const history = useRef<string[]>([]);
   const { submit, pending } = useConversation();
@@ -41,6 +46,7 @@ export function CommandBar() {
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
+      window.clearTimeout(acceptedTimer.current);
     };
   }, []);
 
@@ -50,6 +56,12 @@ export function CommandBar() {
     if (!value || pending) return;
     history.current = [...history.current.filter((h) => h !== value), value].slice(-20);
     setText("");
+    // Acknowledge the request visibly before the assistant state takes over.
+    setAccepted({ id: Date.now(), text: value });
+    window.clearTimeout(acceptedTimer.current);
+    acceptedTimer.current = window.setTimeout(() => {
+      setAccepted(null);
+    }, ACCEPTED_MS);
     void submit(value);
   };
 
@@ -68,8 +80,17 @@ export function CommandBar() {
 
   return (
     <form className={styles.form} onSubmit={send}>
-      <div className={styles.bar} data-pending={pending || undefined}>
+      <div
+        className={styles.bar}
+        data-pending={pending || undefined}
+        data-typing={text.trim() ? true : undefined}
+      >
         <span className={styles.signal} aria-hidden="true" />
+        {accepted && (
+          <span key={accepted.id} className={styles.accepted} aria-hidden="true">
+            {accepted.text}
+          </span>
+        )}
         <input
           ref={input}
           className={styles.input}
