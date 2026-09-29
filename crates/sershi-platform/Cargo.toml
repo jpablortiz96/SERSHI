@@ -11,13 +11,30 @@ publish = false
 [dependencies]
 sershi-core.workspace = true
 sysinfo.workspace = true
+# SHA-256 for speech-model integrity (RustCrypto; already built by Tauri).
+sha2 = "0.10"
+
+# Voice (Windows only; docs/VOICE.md and ADR 0014):
+# - cpal: WASAPI capture/playback. Same `windows` crate version as below.
+# - whisper-rs: local whisper.cpp speech recognition, in process. Building
+#   it needs CMake and libclang (LLVM); see docs/VOICE.md#building.
+[target.'cfg(windows)'.dependencies]
+cpal = "0.18"
+whisper-rs = "0.16"
 
 
 # Win32 bindings, same version Tauri already links (no duplicate crate).
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.62"
 features = [
+  "Foundation",
+  "Foundation_Collections",
+  "Media",
+  "Media_Core",
+  "Media_SpeechSynthesis",
+  "Storage_Streams",
   "Win32_Foundation",
+  "Win32_Networking_WinHttp",
   "Win32_Security",
   "Win32_Storage_FileSystem",
   "Win32_Storage_Packaging_Appx",

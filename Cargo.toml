@@ -5,7 +5,7 @@ members = ["crates/sershi-core", "crates/sershi-platform", "apps/desktop/src-tau
 [workspace.package]
 version = "0.0.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "Apache-2.0"
 repository = "https://github.com/jpablortiz96/SERSHI"
 
@@ -29,6 +29,11 @@ expect_used = "deny"
 panic = "deny"
 dbg_macro = "deny"
 todo = "deny"
+
+# Speech-model verification hashes hundreds of MB; keep it fast in dev builds
+# and tests too (4.1 s → well under a second for the default model).
+[profile.dev.package.sha2]
+opt-level = 3
 
 [profile.release]
 codegen-units = 1

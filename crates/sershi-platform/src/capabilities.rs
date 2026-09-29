@@ -70,7 +70,10 @@ pub fn capabilities_for(platform: Platform) -> Vec<PlatformCapability> {
             Planned,
             Some("v0.2"),
         ),
-        capability("voice", "Voice & wake word", Planned, Some("v0.3")),
+        // Push-to-talk with local recognition and speech (Windows); the
+        // wake word waits for Gate 3A.
+        capability("voice", "Voice (push-to-talk)", windows_feature, None),
+        capability("voice.wake_word", "Wake word", Planned, Some("v0.3")),
     ]
 }
 

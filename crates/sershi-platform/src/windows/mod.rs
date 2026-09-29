@@ -22,6 +22,7 @@ mod launch;
 mod packaged;
 mod start_menu;
 mod util;
+pub mod voice;
 
 use std::time::Duration;
 

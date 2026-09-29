@@ -3,6 +3,8 @@
 //! Layout:
 //! - [`system_info`] — portable adapter (works on Windows, Linux and macOS).
 //! - [`capabilities`] — honest per-platform capability report.
+//! - [`voice`] — microphone, speech recognition and synthesis adapters
+//!   (Windows), plus the portable model store.
 //! - `windows` — Windows-only integrations, compiled only for
 //!   `target_os = "windows"`. Nothing outside this module may call Win32.
 //!
@@ -11,6 +13,7 @@
 
 pub mod capabilities;
 pub mod system_info;
+pub mod voice;
 
 #[cfg(windows)]
 mod windows;
