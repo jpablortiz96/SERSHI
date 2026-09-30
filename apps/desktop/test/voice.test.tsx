@@ -62,13 +62,29 @@ function status(overrides: Partial<VoiceStatus> = {}): VoiceStatus {
     models: [
       {
         id: "whisper-small-q8",
-        tier: "balanced",
+        profile: "fast",
+        fileName: "ggml-small-q8_0.bin",
+        quantization: "q8_0",
         sizeBytes: 264_464_607,
-        memoryMb: 420,
+        sha256: "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f",
+        memoryMb: 300,
+        state: { kind: "notInstalled" },
+      },
+      {
+        id: "whisper-large-v3-turbo-q8",
+        profile: "accurate",
+        fileName: "ggml-large-v3-turbo-q8_0.bin",
+        quantization: "q8_0",
+        sizeBytes: 874_188_075,
+        sha256: "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1",
+        memoryMb: 950,
         state: { kind: "notInstalled" },
       },
     ],
+    profile: "fast",
     model: "whisper-small-q8",
+    acceleration: "vulkan",
+    accelerator: "NVIDIA GeForce RTX 3050 6GB Laptop GPU",
     voices: [],
     capturing: false,
     speaking: false,
@@ -305,5 +321,76 @@ describe("interface sounds and speech", () => {
     expect(cueForTransition("executing", "success", false)).toBe("success");
     // Approval requests always ask, spoken or not.
     expect(cueForTransition("planning", "awaitingConfirmation", true)).toBe("confirmation");
+  });
+});
+
+describe("Gate 3B: fast, accurate and measured", () => {
+  it("offers Fast and Accurate with exact model details and the active backend", async () => {
+    const { VoiceSettings } = await import("../src/surfaces/command-center/VoiceSettings");
+    render(<VoiceSettings />);
+    expect(screen.getByText("Fast")).toBeTruthy();
+    expect(screen.getByText("Accurate")).toBeTruthy();
+    expect(screen.getByText(/Whisper Small · q8_0 · 264 MB/)).toBeTruthy();
+    expect(screen.getByText(/Whisper Large v3 Turbo · q8_0 · 874 MB/)).toBeTruthy();
+    expect(screen.getByText(/Graphics card · NVIDIA GeForce RTX 3050/)).toBeTruthy();
+    expect(screen.queryByText(/Very slow without a graphics card/)).toBeNull();
+  });
+
+  it("without a GPU shows the processor and warns that Accurate is slow", async () => {
+    useVoice.setState({ status: status({ acceleration: "cpu", accelerator: null }) });
+    const { VoiceSettings } = await import("../src/surfaces/command-center/VoiceSettings");
+    render(<VoiceSettings />);
+    expect(screen.getByText("Processor")).toBeTruthy();
+    expect(screen.getByText(/Very slow without a graphics card/)).toBeTruthy();
+  });
+
+  it("explains that Automatic language may be slower", async () => {
+    const { VoiceSettings } = await import("../src/surfaces/command-center/VoiceSettings");
+    render(<VoiceSettings />);
+    expect(screen.getByText(/Automatic detects the language every time you speak/)).toBeTruthy();
+  });
+
+  it("profiles and developer overrides are validated when stored", () => {
+    const parsed = parsePreferences(JSON.stringify({ speechProfile: "turbo", endpointMs: 5 }));
+    expect(parsed.speechProfile).toBe("fast");
+    expect(parsed.endpointMs).toBeNull();
+    const accurate = parsePreferences(
+      JSON.stringify({ speechProfile: "accurate", endpointMs: 550 }),
+    );
+    expect(accurate.speechProfile).toBe("accurate");
+    expect(voiceSettings({ ...DEFAULT_PREFERENCES, ...accurate }).profile).toBe("accurate");
+    expect(voiceSettings({ ...DEFAULT_PREFERENCES, ...accurate }).endpointMs).toBe(550);
+  });
+
+  it("timings are diagnostics only: shown in Developer Mode, never a command", async () => {
+    handleVoiceUpdate({
+      kind: "timings",
+      timings: {
+        speechStartMs: 300,
+        speechMs: 900,
+        endpointMs: 610,
+        modelLoadMs: null,
+        sttMs: 340,
+        postCaptureMs: 360,
+        speechEndToTranscriptMs: 970,
+        pipelineMs: 45,
+        toolMs: 30,
+        speculative: true,
+        detectedLanguage: false,
+        acceleration: "vulkan",
+        model: "whisper-small-q8",
+      },
+    });
+    handleVoiceUpdate({ kind: "speechLatency", ms: 180 });
+    expect(useConversation.getState().messages).toHaveLength(0);
+    const { VoiceDiagnostics } = await import("../src/surfaces/command-center/VoiceSettings");
+    render(<VoiceDiagnostics />);
+    expect(screen.getByText("Last word → transcript")).toBeTruthy();
+    expect(screen.getByText(/early decode · fixed language/)).toBeTruthy();
+  });
+
+  it("rejects malformed timing events at the edge", () => {
+    expect(isVoiceUpdate({ kind: "timings", timings: { model: 1 } })).toBe(false);
+    expect(isVoiceUpdate({ kind: "speechLatency", ms: "fast" })).toBe(false);
   });
 });

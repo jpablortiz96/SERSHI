@@ -2,8 +2,9 @@
 import type { CommandOutcome } from "./CommandOutcome";
 import type { LanguageTag } from "./LanguageTag";
 import type { VoiceFailure } from "./VoiceFailure";
+import type { VoiceTimings } from "./VoiceTimings";
 
 /**
  * Voice events for the Command Center (`sershi://voice`).
  */
-export type VoiceUpdate = { "kind": "heard", text: string, language: LanguageTag | null, } | { "kind": "answered", outcome: CommandOutcome, } | { "kind": "noSpeech" } | { "kind": "unclear" } | { "kind": "cancelled" } | { "kind": "failed", reason: VoiceFailure, } | { "kind": "deviceFallback" };
+export type VoiceUpdate = { "kind": "heard", text: string, language: LanguageTag | null, } | { "kind": "answered", outcome: CommandOutcome, } | { "kind": "noSpeech" } | { "kind": "unclear" } | { "kind": "cancelled" } | { "kind": "failed", reason: VoiceFailure, } | { "kind": "deviceFallback" } | { "kind": "timings", timings: VoiceTimings, } | { "kind": "speechLatency", ms: number, };

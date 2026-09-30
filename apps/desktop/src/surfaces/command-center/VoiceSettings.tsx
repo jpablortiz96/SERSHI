@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { downloadPercent } from "../../components/command/VoicePanel";
 import { MESSAGES, useI18n } from "../../i18n";
 import { modelName } from "../../i18n/domain";
+import { ENDPOINT_OVERRIDES } from "../../i18n/preferences";
 import { CONVERSATION_LANGUAGES, type ConversationLanguage, type Locale } from "../../i18n/types";
 import { desktopRuntime } from "../../ipc";
 import { useVoice } from "../../state/voice";
@@ -79,7 +80,8 @@ export function VoiceSettings() {
             optionLabel={(value) => t(`settings.voice.options.${value}`)}
           />
           <SpeechVoice />
-          <Models />
+          <Acceleration />
+          <Profiles />
         </>
       ) : (
         <p className={styles.empty}>{t("settings.voice.unsupported")}</p>
@@ -176,11 +178,34 @@ function SpeechVoice() {
   );
 }
 
-function Models() {
+/** Where speech recognition runs; the CPU is always the fallback. */
+function Acceleration() {
+  const { t } = useI18n();
+  const status = useVoice((s) => s.status);
+  if (!status) return null;
+  const gpu = status.acceleration === "vulkan";
+  return (
+    <Row
+      label={t("settings.voice.acceleration")}
+      detail={
+        gpu ? t("settings.voice.accelerationGpuDetail") : t("settings.voice.accelerationCpuDetail")
+      }
+      value={
+        gpu
+          ? t("settings.voice.accelerationGpu", { device: status.accelerator ?? "GPU" })
+          : t("settings.voice.accelerationCpu")
+      }
+    />
+  );
+}
+
+/** Speech recognition: the Fast and Accurate profiles (measured). */
+function Profiles() {
   const { t } = useI18n();
   const status = useVoice((s) => s.status);
   if (!status) return null;
   const downloading = status.models.some((m) => m.state.kind === "downloading");
+  const gpu = status.acceleration === "vulkan";
   return (
     <div className={styles.rowStacked}>
       <div>
@@ -189,20 +214,37 @@ function Models() {
       </div>
       <ul className={styles.models}>
         {status.models.map((m) => (
-          <ModelRow key={m.id} model={m} active={m.id === status.model} busy={downloading} />
+          <ModelRow
+            key={m.id}
+            model={m}
+            active={m.profile === status.profile}
+            busy={downloading}
+            gpu={gpu}
+          />
         ))}
       </ul>
     </div>
   );
 }
 
-function ModelRow({ model, active, busy }: { model: ModelInfo; active: boolean; busy: boolean }) {
+function ModelRow({
+  model,
+  active,
+  busy,
+  gpu,
+}: {
+  model: ModelInfo;
+  active: boolean;
+  busy: boolean;
+  gpu: boolean;
+}) {
   const { t, format } = useI18n();
   const setPrefs = useVoice((s) => s.setPrefs);
   const download = useVoice((s) => s.download);
   const cancelDownload = useVoice((s) => s.cancelDownload);
   const percent = downloadPercent(model);
   const installed = model.state.kind === "installed";
+  const slowHere = model.profile === "accurate" && !gpu;
 
   let action;
   if (percent !== null) {
@@ -219,7 +261,7 @@ function ModelRow({ model, active, busy }: { model: ModelInfo; active: boolean; 
         aria-pressed={active}
         disabled={active}
         onClick={() => {
-          setPrefs({ speechModel: model.id });
+          setPrefs({ speechProfile: model.profile });
         }}
       >
         {active ? t("settings.voice.inUse") : t("settings.voice.use")}
@@ -232,7 +274,7 @@ function ModelRow({ model, active, busy }: { model: ModelInfo; active: boolean; 
         className={styles.secondary}
         disabled={busy}
         onClick={() => {
-          setPrefs({ speechModel: model.id });
+          setPrefs({ speechProfile: model.profile });
           download(model.id);
         }}
       >
@@ -244,10 +286,17 @@ function ModelRow({ model, active, busy }: { model: ModelInfo; active: boolean; 
   return (
     <li className={styles.model} data-active={active || undefined}>
       <div>
-        <p className={styles.rowLabel}>{modelName(t, model.id)}</p>
+        <p className={styles.rowLabel}>{t(`settings.voice.profiles.${model.profile}`)}</p>
+        <p className={styles.rowDetail}>{t(`settings.voice.profileDetails.${model.profile}`)}</p>
+        {slowHere && (
+          <p className={styles.rowDetail} role="note">
+            <Pill tone="warning">{t("settings.voice.accurateNeedsGpu")}</Pill>
+          </p>
+        )}
         <p className={styles.rowDetail}>
-          {t(`settings.voice.tiers.${model.tier}`)} ·{" "}
           {t("settings.voice.modelMeta", {
+            model: modelName(t, model.id),
+            quantization: model.quantization,
             size: format.megabytes(model.sizeBytes),
             memory: format.megabytes(model.memoryMb * 1_000_000),
           })}
@@ -269,5 +318,71 @@ function ModelRow({ model, active, busy }: { model: ModelInfo; active: boolean; 
         {action}
       </div>
     </li>
+  );
+}
+
+/**
+ * Developer Mode: where the time went for the last spoken command, and a
+ * fixed end-of-speech silence for tuning. Diagnostics only — never what was
+ * said, and nothing here can run a command.
+ */
+export function VoiceDiagnostics() {
+  const { t, format } = useI18n();
+  const latency = useVoice((s) => s.latency);
+  const endpointMs = useVoice((s) => s.prefs.endpointMs);
+  const setPrefs = useVoice((s) => s.setPrefs);
+  const ms = (value: number | null) => (value === null ? "—" : format.milliseconds(value));
+  const timings = latency?.timings;
+  const rows: [string, string][] = timings
+    ? [
+        [t("settings.developer.voice.backend"), timings.acceleration ?? "—"],
+        [t("settings.developer.voice.model"), timings.model],
+        [t("settings.developer.voice.endpoint"), ms(timings.endpointMs)],
+        [t("settings.developer.voice.load"), ms(timings.modelLoadMs)],
+        [t("settings.developer.voice.stt"), ms(timings.sttMs)],
+        [t("settings.developer.voice.postCapture"), ms(timings.postCaptureMs)],
+        [t("settings.developer.voice.toTranscript"), ms(timings.speechEndToTranscriptMs)],
+        [t("settings.developer.voice.pipeline"), ms(timings.pipelineMs)],
+        [t("settings.developer.voice.tool"), ms(timings.toolMs)],
+        [t("settings.developer.voice.speech"), ms(latency.speechMs)],
+        [
+          t("settings.developer.voice.flags"),
+          [
+            timings.speculative ? t("settings.developer.voice.speculative") : null,
+            timings.detectedLanguage
+              ? t("settings.developer.voice.detected")
+              : t("settings.developer.voice.fixed"),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ],
+      ]
+    : [];
+  return (
+    <Section title={t("settings.developer.voice.title")}>
+      <p className={styles.footnote}>{t("settings.developer.voice.footnote")}</p>
+      {timings ? (
+        rows.map(([label, value]) => (
+          <Row key={label} label={label} value={<span className="t-mono">{value}</span>} />
+        ))
+      ) : (
+        <p className={styles.empty}>{t("settings.developer.voice.empty")}</p>
+      )}
+      <Choices<string>
+        name="endpoint-override"
+        label={t("settings.developer.voice.endpointOverride")}
+        detail={t("settings.developer.voice.endpointOverrideDetail")}
+        options={["adaptive", ...ENDPOINT_OVERRIDES.map(String)]}
+        value={endpointMs === null ? "adaptive" : String(endpointMs)}
+        onChange={(value) => {
+          setPrefs({ endpointMs: value === "adaptive" ? null : Number(value) });
+        }}
+        optionLabel={(value) =>
+          value === "adaptive"
+            ? t("settings.developer.voice.adaptive")
+            : format.milliseconds(Number(value))
+        }
+      />
+    </Section>
   );
 }

@@ -54,9 +54,8 @@ const CAPABILITY_KEYS: Partial<Record<string, PlainKey>> = {
 };
 
 const MODEL_KEYS: Partial<Record<string, PlainKey>> = {
-  "whisper-base-q8": "voice.models.whisper-base-q8",
   "whisper-small-q8": "voice.models.whisper-small-q8",
-  "whisper-large-v3-turbo-q5": "voice.models.whisper-large-v3-turbo-q5",
+  "whisper-large-v3-turbo-q8": "voice.models.whisper-large-v3-turbo-q8",
 };
 
 /** A speech model's display name. */

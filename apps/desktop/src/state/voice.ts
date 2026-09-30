@@ -14,6 +14,7 @@ import type {
   VoiceFailure,
   VoiceSettings,
   VoiceStatus,
+  VoiceTimings,
   VoiceUpdate,
 } from "@sershi/contracts";
 import { create } from "zustand";
@@ -37,8 +38,16 @@ export type VoicePrefs = Pick<
   | "speakTypedResponses"
   | "microphone"
   | "speechVoice"
-  | "speechModel"
+  | "speechProfile"
+  | "endpointMs"
 >;
+
+/** The last spoken command's latency record (diagnostics only). */
+export interface LatencyRecord {
+  timings: VoiceTimings;
+  /** Outcome → spoken reply start, when a reply was spoken. */
+  speechMs: number | null;
+}
 
 /** Something the command bar should explain (cleared by the next attempt). */
 export type VoiceNotice =
@@ -53,6 +62,8 @@ interface VoiceStore {
   status: VoiceStatus | null;
   prefs: VoicePrefs;
   notice: VoiceNotice | null;
+  /** Where the time went for the last spoken command (Developer Mode). */
+  latency: LatencyRecord | null;
   refresh: () => Promise<void>;
   setPrefs: (patch: Partial<VoicePrefs>) => void;
   /** Push-to-talk: start, or stop and send if already listening. */
@@ -71,7 +82,8 @@ function prefsFrom(p: Preferences): VoicePrefs {
     speakTypedResponses: p.speakTypedResponses,
     microphone: p.microphone,
     speechVoice: p.speechVoice,
-    speechModel: p.speechModel,
+    speechProfile: p.speechProfile,
+    endpointMs: p.endpointMs,
   };
 }
 
@@ -82,7 +94,8 @@ export function voiceSettings(prefs: VoicePrefs): VoiceSettings {
     microphone: prefs.microphone,
     language: language === "automatic" ? null : language,
     voice: prefs.speechVoice,
-    model: prefs.speechModel,
+    profile: prefs.speechProfile,
+    endpointMs: prefs.endpointMs,
   };
 }
 
@@ -90,6 +103,7 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   status: null,
   prefs: prefsFrom(loadPreferences()),
   notice: null,
+  latency: null,
 
   refresh: async () => {
     if (!desktopRuntime) return;
@@ -200,6 +214,14 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
     case "cancelled":
       clearSpeechExpectation();
       return;
+    case "timings":
+      useVoice.setState({ latency: { timings: update.timings, speechMs: null } });
+      return;
+    case "speechLatency": {
+      const { latency } = useVoice.getState();
+      if (latency) useVoice.setState({ latency: { ...latency, speechMs: update.ms } });
+      return;
+    }
   }
 }
 

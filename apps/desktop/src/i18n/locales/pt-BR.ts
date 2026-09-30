@@ -209,9 +209,8 @@ export const ptBR: Messages = {
       },
     },
     models: {
-      "whisper-base-q8": "Whisper Base",
       "whisper-small-q8": "Whisper Small",
-      "whisper-large-v3-turbo-q5": "Whisper Large v3 Turbo",
+      "whisper-large-v3-turbo-q8": "Whisper Large v3 Turbo",
     },
   },
   system: {
@@ -380,7 +379,7 @@ export const ptBR: Messages = {
       noDevices: "Nenhum microfone encontrado.",
       language: "Idioma da conversa",
       languageDetail:
-        "O idioma que a SERSHI escuta, independente do idioma da interface. Escolher um deixa o reconhecimento cerca de duas vezes mais rápido que Automático.",
+        "O idioma que a SERSHI escuta, independente do idioma da interface. Escolher um é mais rápido: Automático detecta o idioma cada vez que você fala, o que pode ser um pouco mais lento em alguns computadores.",
       languageAutomatic: "Detectar automaticamente",
       responses: "Respostas por voz",
       responsesDetail: "Responder em voz alta quando você falou com a SERSHI.",
@@ -394,15 +393,27 @@ export const ptBR: Messages = {
       voiceDetail:
         "Vozes do Windows instaladas. O padrão do sistema escolhe uma voz no idioma da resposta.",
       noVoices: "Nenhuma voz do Windows está instalada.",
-      model: "Modelo de voz local",
+      model: "Reconhecimento de fala",
       modelDetail:
-        "A fala é reconhecida neste computador. Os modelos são baixados somente quando você pede e verificados antes do uso.",
-      tiers: {
-        fast: "O mais rápido, menos preciso fora do inglês",
-        balanced: "Equilibrado · recomendado",
-        accurate: "O mais preciso · lento na maioria dos computadores",
+        "Funciona neste computador. Os modelos são baixados somente quando você pede e verificados antes do uso.",
+      profiles: {
+        fast: "Rápido",
+        accurate: "Preciso",
       },
-      modelMeta: "{size} · cerca de {memory} de memória",
+      profileDetails: {
+        fast: "Recomendado para comandos. Quase instantâneo com uma placa de vídeo.",
+        accurate:
+          "Ideal para ditado e perguntas longas. Cerca de um segundo por pedido com uma placa de vídeo.",
+      },
+      accurateNeedsGpu: "Muito lento sem placa de vídeo neste computador",
+      modelMeta: "{model} · {quantization} · {size} · cerca de {memory} de memória",
+      acceleration: "Aceleração de fala",
+      accelerationGpu: "Placa de vídeo · {device}",
+      accelerationCpu: "Processador",
+      accelerationGpuDetail:
+        "A fala é reconhecida na sua placa de vídeo (Vulkan), com o processador como alternativa.",
+      accelerationCpuDetail:
+        "Nenhuma placa de vídeo compatível foi encontrada, então a fala é reconhecida no processador. Rápido funciona bem; Preciso é lento.",
       installed: "Instalado",
       corrupt: "Danificado",
       use: "Usar",
@@ -460,6 +471,30 @@ export const ptBR: Messages = {
       groupLabel: "Prévia do estado do assistente",
       live: "Ao vivo",
       catalog: "Aplicativos detectados",
+      voice: {
+        title: "Desenvolvimento · Latência de voz",
+        footnote:
+          "Onde o tempo foi gasto no último comando falado. Nunca contém o que você disse. Apenas em builds de desenvolvimento.",
+        empty: "Use o microfone uma vez para ver uma medição.",
+        backend: "Backend",
+        model: "Modelo",
+        endpoint: "Espera de fim de fala",
+        load: "Carga do modelo (a frio)",
+        stt: "Reconhecimento",
+        postCapture: "Fim da captura → transcrição",
+        toTranscript: "Última palavra → transcrição",
+        pipeline: "Transcrição → resultado (intenção, política, ferramenta)",
+        tool: "Ferramenta",
+        speech: "Resultado → resposta falada",
+        flags: "Caminho",
+        speculative: "decodificação antecipada",
+        detected: "idioma detectado",
+        fixed: "idioma fixo",
+        endpointOverride: "Silêncio de fim de fala",
+        endpointOverrideDetail:
+          "Adaptativo encerra comandos curtos após cerca de 600 ms e pedidos longos após cerca de 900 ms. Um valor fixo é só para ajustes.",
+        adaptive: "Adaptativo",
+      },
     },
     about: {
       version: "Versão",

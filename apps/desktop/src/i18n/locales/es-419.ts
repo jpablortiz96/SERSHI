@@ -215,9 +215,8 @@ export const es419: Messages = {
       },
     },
     models: {
-      "whisper-base-q8": "Whisper Base",
       "whisper-small-q8": "Whisper Small",
-      "whisper-large-v3-turbo-q5": "Whisper Large v3 Turbo",
+      "whisper-large-v3-turbo-q8": "Whisper Large v3 Turbo",
     },
   },
   system: {
@@ -387,7 +386,7 @@ export const es419: Messages = {
       noDevices: "No se encontró ningún micrófono.",
       language: "Idioma de conversación",
       languageDetail:
-        "El idioma que SERSHI escucha, independiente del idioma de la interfaz. Elegir uno hace el reconocimiento unas dos veces más rápido que Automático.",
+        "El idioma que SERSHI escucha, independiente del idioma de la interfaz. Elegir uno es más rápido: Automático detecta el idioma cada vez que hablas, lo que puede ser un poco más lento en algunas computadoras.",
       languageAutomatic: "Detectar automáticamente",
       responses: "Respuestas por voz",
       responsesDetail: "Responder en voz alta cuando le hablaste a SERSHI.",
@@ -401,15 +400,27 @@ export const es419: Messages = {
       voiceDetail:
         "Voces de Windows instaladas. El predeterminado del sistema elige una voz en el idioma de la respuesta.",
       noVoices: "No hay voces de Windows instaladas.",
-      model: "Modelo de voz local",
+      model: "Reconocimiento de voz",
       modelDetail:
-        "La voz se reconoce en esta computadora. Los modelos se descargan solo cuando lo pides y se verifican antes de usarse.",
-      tiers: {
-        fast: "El más rápido, menos preciso fuera del inglés",
-        balanced: "Equilibrado · recomendado",
-        accurate: "El más preciso · lento en la mayoría de las computadoras",
+        "Funciona en esta computadora. Los modelos se descargan solo cuando lo pides y se verifican antes de usarse.",
+      profiles: {
+        fast: "Rápido",
+        accurate: "Preciso",
       },
-      modelMeta: "{size} · unos {memory} de memoria",
+      profileDetails: {
+        fast: "Recomendado para comandos. Casi instantáneo con una tarjeta gráfica.",
+        accurate:
+          "Ideal para dictado y preguntas largas. Alrededor de un segundo por solicitud con una tarjeta gráfica.",
+      },
+      accurateNeedsGpu: "Muy lento sin tarjeta gráfica en esta computadora",
+      modelMeta: "{model} · {quantization} · {size} · unos {memory} de memoria",
+      acceleration: "Aceleración de voz",
+      accelerationGpu: "Tarjeta gráfica · {device}",
+      accelerationCpu: "Procesador",
+      accelerationGpuDetail:
+        "La voz se reconoce en tu tarjeta gráfica (Vulkan), con el procesador como respaldo.",
+      accelerationCpuDetail:
+        "No se encontró una tarjeta gráfica compatible, así que la voz se reconoce en el procesador. Rápido funciona bien; Preciso es lento.",
       installed: "Instalado",
       corrupt: "Dañado",
       use: "Usar",
@@ -467,6 +478,30 @@ export const es419: Messages = {
       groupLabel: "Vista previa del estado del asistente",
       live: "En vivo",
       catalog: "Aplicaciones detectadas",
+      voice: {
+        title: "Desarrollo · Latencia de voz",
+        footnote:
+          "En qué se fue el tiempo del último comando hablado. Nunca contiene lo que dijiste. Solo en compilaciones de desarrollo.",
+        empty: "Usa el micrófono una vez para ver una medición.",
+        backend: "Backend",
+        model: "Modelo",
+        endpoint: "Espera de fin de voz",
+        load: "Carga del modelo (en frío)",
+        stt: "Reconocimiento",
+        postCapture: "Fin de captura → transcripción",
+        toTranscript: "Última palabra → transcripción",
+        pipeline: "Transcripción → resultado (intención, política, herramienta)",
+        tool: "Herramienta",
+        speech: "Resultado → respuesta hablada",
+        flags: "Ruta",
+        speculative: "decodificación anticipada",
+        detected: "idioma detectado",
+        fixed: "idioma fijo",
+        endpointOverride: "Silencio de fin de voz",
+        endpointOverrideDetail:
+          "Adaptativo termina los comandos cortos tras unos 600 ms y las solicitudes largas tras unos 900 ms. Un valor fijo es solo para ajustes.",
+        adaptive: "Adaptativo",
+      },
     },
     about: {
       version: "Versión",

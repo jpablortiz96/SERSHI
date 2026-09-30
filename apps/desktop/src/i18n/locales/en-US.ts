@@ -203,9 +203,8 @@ export const enUS = {
       },
     },
     models: {
-      "whisper-base-q8": "Whisper Base",
       "whisper-small-q8": "Whisper Small",
-      "whisper-large-v3-turbo-q5": "Whisper Large v3 Turbo",
+      "whisper-large-v3-turbo-q8": "Whisper Large v3 Turbo",
     },
   },
   system: {
@@ -372,7 +371,7 @@ export const enUS = {
       noDevices: "No microphone found.",
       language: "Conversation language",
       languageDetail:
-        "The language SERSHI listens for, independent of the interface language. Choosing one makes recognition about twice as fast as Automatic.",
+        "The language SERSHI listens for, independent of the interface language. Choosing one is faster: Automatic detects the language every time you speak, which may be slightly slower on some computers.",
       languageAutomatic: "Detect automatically",
       responses: "Voice responses",
       responsesDetail: "Speak replies when you talked to SERSHI.",
@@ -386,15 +385,27 @@ export const enUS = {
       voiceDetail:
         "Installed Windows voices. System default picks a voice in the reply's language.",
       noVoices: "No Windows voices are installed.",
-      model: "Local speech model",
+      model: "Speech recognition",
       modelDetail:
-        "Speech is recognised on this computer. Models are downloaded only when you ask, and verified before use.",
-      tiers: {
-        fast: "Fastest, weaker outside English",
-        balanced: "Balanced · recommended",
-        accurate: "Most accurate · slow on most computers",
+        "Runs on this computer. Models are downloaded only when you ask, and verified before use.",
+      profiles: {
+        fast: "Fast",
+        accurate: "Accurate",
       },
-      modelMeta: "{size} · about {memory} of memory",
+      profileDetails: {
+        fast: "Recommended for commands. Near-instant with a graphics card.",
+        accurate:
+          "Best for dictation and long questions. About a second per request with a graphics card.",
+      },
+      accurateNeedsGpu: "Very slow without a graphics card on this computer",
+      modelMeta: "{model} · {quantization} · {size} · about {memory} of memory",
+      acceleration: "Speech acceleration",
+      accelerationGpu: "Graphics card · {device}",
+      accelerationCpu: "Processor",
+      accelerationGpuDetail:
+        "Speech is recognised on your graphics card (Vulkan), with the processor as a fallback.",
+      accelerationCpuDetail:
+        "No supported graphics card was found, so speech is recognised on the processor. Fast still works; Accurate is slow.",
       installed: "Installed",
       corrupt: "Damaged",
       use: "Use",
@@ -453,6 +464,30 @@ export const enUS = {
       groupLabel: "Preview assistant state",
       live: "Live",
       catalog: "Discovered applications",
+      voice: {
+        title: "Developer · Voice latency",
+        footnote:
+          "Where the time went for the last spoken command. Never contains what was said. Developer builds only.",
+        empty: "Use the microphone once to see a measurement.",
+        backend: "Backend",
+        model: "Model",
+        endpoint: "End-of-speech wait",
+        load: "Model load (cold)",
+        stt: "Recognition",
+        postCapture: "Capture stop → transcript",
+        toTranscript: "Last word → transcript",
+        pipeline: "Transcript → result (intent, policy, tool)",
+        tool: "Tool",
+        speech: "Result → spoken reply",
+        flags: "Path",
+        speculative: "early decode",
+        detected: "language detected",
+        fixed: "fixed language",
+        endpointOverride: "End-of-speech silence",
+        endpointOverrideDetail:
+          "Adaptive ends short commands after about 600 ms and longer requests after about 900 ms. A fixed value is for tuning only.",
+        adaptive: "Adaptive",
+      },
     },
     about: {
       version: "Version",

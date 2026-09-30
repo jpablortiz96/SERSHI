@@ -26,6 +26,12 @@ export type ThemePreference = "system" | "light" | "dark";
 /** Registered companion renderers (see visual/companions.ts). */
 export type CompanionAppearance = "orbital";
 
+/** Speech recognition profiles (docs/VOICE.md#models). */
+export type SpeechProfile = "fast" | "accurate";
+export const SPEECH_PROFILES: readonly SpeechProfile[] = ["fast", "accurate"];
+/** End-of-speech overrides offered in Developer Mode (ms). */
+export const ENDPOINT_OVERRIDES: readonly number[] = [450, 550, 650, 750];
+
 export const MOTION_PREFERENCES: readonly MotionPreference[] = ["system", "reduced"];
 export const COMPANION_SIZES: readonly CompanionSize[] = ["small", "medium", "large"];
 export const THEME_PREFERENCES: readonly ThemePreference[] = ["system", "light", "dark"];
@@ -58,8 +64,13 @@ export interface Preferences {
   microphone: string | null;
   /** Speech voice id, or null to pick one for the reply's language. */
   speechVoice: string | null;
-  /** Speech-recognition model id, or null for SERSHI's default. */
-  speechModel: string | null;
+  /** Speech recognition profile ("fast" is the default). */
+  speechProfile: SpeechProfile;
+  /**
+   * Developer tuning only (Developer Mode): a fixed end-of-speech silence in
+   * ms instead of the adaptive default; null = adaptive.
+   */
+  endpointMs: number | null;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -76,7 +87,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   speakTypedResponses: false,
   microphone: null,
   speechVoice: null,
-  speechModel: null,
+  speechProfile: "fast",
+  endpointMs: null,
 };
 
 /** Clamps a volume to 0–100; anything else becomes the default. */
@@ -153,7 +165,17 @@ export function parsePreferences(raw: string | null): Preferences {
       speakTypedResponses: "speakTypedResponses" in value && value.speakTypedResponses === true,
       microphone: parseId("microphone" in value ? value.microphone : undefined),
       speechVoice: parseId("speechVoice" in value ? value.speechVoice : undefined),
-      speechModel: parseId("speechModel" in value ? value.speechModel : undefined),
+      speechProfile: oneOf(
+        SPEECH_PROFILES,
+        "speechProfile" in value ? value.speechProfile : undefined,
+        DEFAULT_PREFERENCES.speechProfile,
+      ),
+      endpointMs:
+        "endpointMs" in value &&
+        typeof value.endpointMs === "number" &&
+        ENDPOINT_OVERRIDES.includes(value.endpointMs)
+          ? value.endpointMs
+          : null,
     };
   } catch {
     return DEFAULT_PREFERENCES;

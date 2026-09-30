@@ -132,6 +132,8 @@ const VOICE_UPDATE_KINDS = [
   "cancelled",
   "failed",
   "deviceFallback",
+  "timings",
+  "speechLatency",
 ] as const satisfies readonly VoiceUpdate["kind"][];
 
 export function isVoiceUpdate(v: unknown): v is VoiceUpdate {
@@ -144,6 +146,12 @@ export function isVoiceUpdate(v: unknown): v is VoiceUpdate {
       return isCommandOutcome(v.outcome);
     case "failed":
       return isStr(v.reason);
+    case "timings":
+      return (
+        isObj(v.timings) && isStr(v.timings.model) && typeof v.timings.speculative === "boolean"
+      );
+    case "speechLatency":
+      return isNum(v.ms);
     default:
       return true;
   }
@@ -179,6 +187,9 @@ export function isVoiceStatus(v: unknown): v is VoiceStatus {
     Array.isArray(v.models) &&
     v.models.every((m) => isObj(m) && isStr(m.id) && isNum(m.sizeBytes) && isModelState(m.state)) &&
     isStr(v.model) &&
+    (v.profile === "fast" || v.profile === "accurate") &&
+    (v.acceleration === "cpu" || v.acceleration === "vulkan") &&
+    isNullable(v.accelerator, isStr) &&
     Array.isArray(v.voices) &&
     v.voices.every((x) => isObj(x) && isStr(x.id) && isStr(x.name) && isStr(x.language)) &&
     typeof v.capturing === "boolean" &&

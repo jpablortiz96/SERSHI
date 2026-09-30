@@ -32,7 +32,7 @@ import { companionRenderer } from "../../visual/companions";
 import { playCue } from "../../audio/interfaceAudio";
 import styles from "./Page.module.css";
 import { Choices, Pill, Row, Section } from "./SettingsParts";
-import { VoiceSettings } from "./VoiceSettings";
+import { VoiceDiagnostics, VoiceSettings } from "./VoiceSettings";
 import { CatalogInspector, WindowsIntegration } from "./WindowsIntegration";
 
 export function SettingsView() {
@@ -109,6 +109,7 @@ export function SettingsView() {
       {developerMode && (
         <>
           <StatePreview />
+          <VoiceDiagnostics />
           <CatalogInspector />
         </>
       )}
