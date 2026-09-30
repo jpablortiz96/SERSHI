@@ -53,9 +53,10 @@ pub fn decode(bytes: &[u8]) -> Result<SpeechAudio, WavError> {
             b"data" => {
                 let (channels, rate) = format.ok_or(WavError::Unsupported)?;
                 let end = body.saturating_add(size).min(bytes.len());
-                let pcm: Vec<f32> = bytes[body..end]
-                    .chunks_exact(2)
-                    .map(|c| f32::from(i16::from_le_bytes([c[0], c[1]])) / 32_768.0)
+                let (pairs, _) = bytes[body..end].as_chunks::<2>();
+                let pcm: Vec<f32> = pairs
+                    .iter()
+                    .map(|c| f32::from(i16::from_le_bytes(*c)) / 32_768.0)
                     .collect();
                 let mut samples = Vec::with_capacity(pcm.len() / usize::from(channels));
                 downmix(&pcm, channels, &mut samples);
