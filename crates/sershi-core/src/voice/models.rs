@@ -1,77 +1,83 @@
-//! The speech-recognition models SERSHI knows how to install.
+//! The speech-recognition models SERSHI knows how to install, and the two
+//! profiles the user chooses between.
 //!
 //! Models are **data**: SERSHI downloads them only when the user asks, from
 //! a pinned revision of an approved source over HTTPS, verifies the exact
 //! size and SHA-256, and only then moves them into place. They are never
-//! executed. See docs/VOICE.md for sizes, memory use and the measured
+//! executed. See docs/VOICE.md#models for sizes, memory use and the measured
 //! trade-offs on the reference Windows machine.
 //!
 //! Source: the whisper.cpp project's GGML conversions of OpenAI Whisper
 //! (MIT-licensed weights), `huggingface.co/ggerganov/whisper.cpp`, pinned to
 //! one commit so a URL can never start serving different bytes unnoticed
 //! (the SHA-256 check would reject them anyway).
+//!
+//! Only profiles backed by benchmarks exist (Gate 3B): Whisper Base was
+//! dropped because it mis-heard Spanish commands (even as Greek, with high
+//! confidence), and the q5_0 Turbo quantization because q8_0 is faster on
+//! the GPU at the same accuracy.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// The commit of `ggerganov/whisper.cpp` on Hugging Face the URLs pin.
 pub const MODEL_REVISION: &str = "5359861c739e955e79d9a303bcbc70fb988958b1";
 
+/// What the user chooses in Settings › Voice. Each profile maps to exactly
+/// one model; the labels describe measured behaviour, not marketing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum SpeechProfile {
+    /// Lowest latency with good command accuracy (the default).
+    Fast,
+    /// Best accuracy (dictation, long questions); needs GPU acceleration to
+    /// be interactive.
+    Accurate,
+}
+
+impl SpeechProfile {
+    pub const ALL: [SpeechProfile; 2] = [Self::Fast, Self::Accurate];
+}
+
 /// A downloadable speech-recognition model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SttModel {
-    /// Stable SERSHI id, persisted in settings.
+    /// Stable SERSHI id.
     pub id: &'static str,
+    pub profile: SpeechProfile,
     /// File name in the model directory (fixed, never user-supplied).
     pub file_name: &'static str,
+    /// Weight quantization, as named by ggml.
+    pub quantization: &'static str,
     /// Exact download size in bytes.
     pub size_bytes: u64,
     /// Lower-case hex SHA-256 of the file.
     pub sha256: &'static str,
-    /// Resident memory while loaded, in MB (measured on the reference
-    /// machine: docs/VOICE.md#models).
+    /// Memory while loaded, in MB (measured; system RAM on CPU, mostly
+    /// GPU memory with acceleration).
     pub memory_mb: u32,
-    pub tier: ModelTier,
 }
 
-/// How a model trades accuracy for speed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
-#[serde(rename_all = "camelCase")]
-pub enum ModelTier {
-    /// Smallest and fastest; noticeably weaker outside English.
-    Fast,
-    /// SERSHI's default: good Spanish, English and Portuguese at usable speed.
-    Balanced,
-    /// Most accurate; slow on CPU-only machines.
-    Accurate,
-}
+pub const DEFAULT_PROFILE: SpeechProfile = SpeechProfile::Fast;
 
-pub const DEFAULT_STT_MODEL: &str = "whisper-small-q8";
-
-pub const STT_MODELS: [SttModel; 3] = [
+pub const STT_MODELS: [SttModel; 2] = [
     SttModel {
-        id: "whisper-base-q8",
-        file_name: "ggml-base-q8_0.bin",
-        size_bytes: 81_768_585,
-        sha256: "c577b9a86e7e048a0b7eada054f4dd79a56bbfa911fbdacf900ac5b567cbb7d9",
-        memory_mb: 100,
-        tier: ModelTier::Fast,
-    },
-    SttModel {
-        id: DEFAULT_STT_MODEL,
+        id: "whisper-small-q8",
+        profile: SpeechProfile::Fast,
         file_name: "ggml-small-q8_0.bin",
+        quantization: "q8_0",
         size_bytes: 264_464_607,
         sha256: "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f",
         memory_mb: 300,
-        tier: ModelTier::Balanced,
     },
     SttModel {
-        id: "whisper-large-v3-turbo-q5",
-        file_name: "ggml-large-v3-turbo-q5_0.bin",
-        size_bytes: 574_041_195,
-        sha256: "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
-        memory_mb: 600,
-        tier: ModelTier::Accurate,
+        id: "whisper-large-v3-turbo-q8",
+        profile: SpeechProfile::Accurate,
+        file_name: "ggml-large-v3-turbo-q8_0.bin",
+        quantization: "q8_0",
+        size_bytes: 874_188_075,
+        sha256: "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1",
+        memory_mb: 950,
     },
 ];
 
@@ -80,9 +86,12 @@ impl SttModel {
         STT_MODELS.iter().find(|m| m.id == id)
     }
 
-    pub fn default_model() -> &'static SttModel {
-        // The catalog always contains the default (tested below).
-        Self::find(DEFAULT_STT_MODEL).unwrap_or(&STT_MODELS[1])
+    /// The model behind a profile (every profile has exactly one).
+    pub fn for_profile(profile: SpeechProfile) -> &'static SttModel {
+        STT_MODELS
+            .iter()
+            .find(|m| m.profile == profile)
+            .unwrap_or(&STT_MODELS[0])
     }
 
     /// The fixed HTTPS download URL (pinned revision).
@@ -100,8 +109,6 @@ mod tests {
 
     #[test]
     fn catalog_is_well_formed() {
-        assert!(SttModel::find(DEFAULT_STT_MODEL).is_some());
-        assert_eq!(SttModel::default_model().tier, ModelTier::Balanced);
         for m in STT_MODELS {
             assert_eq!(m.sha256.len(), 64, "{}", m.id);
             assert!(
@@ -116,6 +123,7 @@ mod tests {
                     .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
             );
             assert!(m.file_name.ends_with(".bin") && !m.file_name.contains(".."));
+            assert!(m.file_name.contains(m.quantization), "{}", m.id);
             assert!(
                 m.url()
                     .starts_with("https://huggingface.co/ggerganov/whisper.cpp/resolve/")
@@ -126,7 +134,35 @@ mod tests {
     }
 
     #[test]
+    fn every_profile_has_exactly_one_model() {
+        for profile in SpeechProfile::ALL {
+            let models: Vec<_> = STT_MODELS.iter().filter(|m| m.profile == profile).collect();
+            assert_eq!(models.len(), 1, "{profile:?}");
+            assert_eq!(SttModel::for_profile(profile).profile, profile);
+        }
+        assert_eq!(
+            SttModel::for_profile(DEFAULT_PROFILE).id,
+            "whisper-small-q8"
+        );
+    }
+
+    #[test]
+    fn ids_and_files_are_unique() {
+        for (i, a) in STT_MODELS.iter().enumerate() {
+            for b in &STT_MODELS[i + 1..] {
+                assert_ne!(a.id, b.id);
+                assert_ne!(a.file_name, b.file_name);
+                assert_ne!(a.sha256, b.sha256);
+            }
+        }
+    }
+
+    #[test]
     fn unknown_models_are_not_found() {
         assert!(SttModel::find("../../evil").is_none());
+        assert!(
+            SttModel::find("whisper-base-q8").is_none(),
+            "dropped in Gate 3B"
+        );
     }
 }

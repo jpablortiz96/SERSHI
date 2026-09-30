@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use sershi_core::voice::latency::{Acceleration, AcceleratorProbe, choose_acceleration};
 use sershi_core::voice::ports::{
     AudioCapturePort, AudioOutputPort, SpeechSynthesisPort, SpeechToTextPort, SttError,
 };
@@ -50,18 +51,44 @@ pub fn voice_platform() -> VoicePlatform {
     }
 }
 
-/// Loads a verified model into the local recogniser. Expensive (hundreds of
-/// MB, about a second); callers load lazily and keep the result.
-pub fn load_recognizer(model: &Path) -> Result<Arc<dyn SpeechToTextPort>, SttError> {
+/// What GPU acceleration is available for speech recognition here.
+pub fn accelerator_probe() -> AcceleratorProbe {
+    #[cfg(windows)]
+    {
+        crate::windows::voice::gpu::probe()
+    }
+    #[cfg(not(windows))]
+    {
+        AcceleratorProbe {
+            compiled: false,
+            runtime: false,
+            devices: Vec::new(),
+        }
+    }
+}
+
+/// The best supported accelerator (and its name); the CPU otherwise.
+pub fn speech_acceleration() -> (Acceleration, Option<String>) {
+    choose_acceleration(&accelerator_probe())
+}
+
+/// Loads a verified model into the local recogniser on `acceleration`
+/// (falling back to the CPU). Expensive (hundreds of MB, one to two
+/// seconds); callers load lazily and keep the result warm.
+pub fn load_recognizer(
+    model: &Path,
+    acceleration: Acceleration,
+) -> Result<Arc<dyn SpeechToTextPort>, SttError> {
     #[cfg(windows)]
     {
         Ok(Arc::new(crate::windows::voice::WhisperRecognizer::load(
             model,
+            acceleration,
         )?))
     }
     #[cfg(not(windows))]
     {
-        let _ = model;
+        let _ = (model, acceleration);
         Err(SttError::Unsupported)
     }
 }

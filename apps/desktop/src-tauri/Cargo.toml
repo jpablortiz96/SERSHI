@@ -15,6 +15,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2.7", features = [] }
 
+[features]
+default = ["vulkan"]
+# GPU speech recognition (docs/VOICE.md#acceleration); CPU fallback always.
+vulkan = ["sershi-platform/vulkan"]
+
 [dependencies]
 sershi-core.workspace = true
 sershi-platform.workspace = true

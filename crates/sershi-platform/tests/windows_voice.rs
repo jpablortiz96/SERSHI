@@ -15,12 +15,14 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use sershi_core::voice::ports::{
-    CaptureError, CaptureSink, PlaybackEnd, PlaybackSink, VoiceChoice,
+    CaptureError, CaptureSink, PlaybackEnd, PlaybackSink, SttError, TranscribeOptions, VoiceChoice,
 };
 use sershi_core::voice::signal::{RECOGNITION_RATE, resample, rms_dbfs};
 use sershi_core::voice::transcript::{Verdict, assess};
-use sershi_core::voice::{LanguageTag, STT_MODELS};
-use sershi_platform::voice::{ModelStore, load_recognizer, microphone_access, voice_platform};
+use sershi_core::voice::{Acceleration, LanguageTag, STT_MODELS};
+use sershi_platform::voice::{
+    ModelStore, load_recognizer, microphone_access, speech_acceleration, voice_platform,
+};
 
 /// Resident memory of this process, in MB (for the validation record).
 fn memory_mb() -> u64 {
@@ -86,17 +88,8 @@ fn synthesized_speech_is_recognised_offline() {
         );
         println!("sha256 verify: {} ms", t.elapsed().as_millis());
     }
-    let before = memory_mb();
-    let t0 = Instant::now();
-    let engine = load_recognizer(&model).expect("model loads");
-    println!(
-        "model load: {} ms, memory {} → {} MB",
-        t0.elapsed().as_millis(),
-        before,
-        memory_mb()
-    );
-
     let voices = platform.synthesis.voices().expect("voices");
+    let mut clips = Vec::new();
     for (text, language, expect) in [
         ("Abre Spotify.", "es", "spotify"),
         ("Open the calculator.", "en", "calculator"),
@@ -121,39 +114,88 @@ fn synthesized_speech_is_recognised_offline() {
             )
             .expect("synthesis");
         let pcm = resample(&speech.samples, speech.sample_rate, RECOGNITION_RATE);
-        for hint in [None, Some(&tag)] {
-            let t = Instant::now();
-            let heard = engine.transcribe(&pcm, hint).expect("recognition");
-            println!(
-                "[{language} hint={:?}] {:?} lang={:?} conf={:.2} nsp={:.3} in {} ms",
-                hint.map(LanguageTag::as_str),
-                heard.text,
-                heard.language.as_ref().map(LanguageTag::as_str),
-                heard.confidence,
-                heard.no_speech_probability,
-                t.elapsed().as_millis()
-            );
-            let Verdict::Accept(text) = assess(&heard) else {
-                panic!("{language}: not accepted");
-            };
-            assert!(text.to_lowercase().contains(expect), "{language}: {text}");
-        }
+        clips.push((tag, expect, pcm));
     }
 
-    println!("memory after recognition: {} MB", memory_mb());
+    // The accelerator SERSHI would pick, then the CPU fallback.
+    let (best, name) = speech_acceleration();
+    println!("accelerator: {best:?} {name:?}");
+    let mut backends = vec![best];
+    if best != Acceleration::Cpu {
+        backends.push(Acceleration::Cpu);
+    }
+    let context = Some("Chrome, Outlook, Spotify, Notepad.".to_owned());
+    for backend in backends {
+        let before = memory_mb();
+        let t0 = Instant::now();
+        let engine = load_recognizer(&model, backend).expect("model loads");
+        println!(
+            "[{backend:?}] load + warm-up: {} ms, memory {} → {} MB, engine on {:?}",
+            t0.elapsed().as_millis(),
+            before,
+            memory_mb(),
+            engine.acceleration()
+        );
+        assert!(backend == Acceleration::Cpu || engine.acceleration() == backend);
+        for (tag, expect, pcm) in &clips {
+            for language in [None, Some(tag.clone())] {
+                for hints in [None, context.clone()] {
+                    let options = TranscribeOptions {
+                        language: language.clone(),
+                        context: hints.clone(),
+                        cancel: None,
+                    };
+                    let t = Instant::now();
+                    let heard = engine.transcribe(pcm, &options).expect("recognition");
+                    println!(
+                        "[{backend:?} {} lang={:?} hints={}] {:?} conf={:.2} in {} ms",
+                        tag.as_str(),
+                        language.as_ref().map(LanguageTag::as_str),
+                        hints.is_some(),
+                        heard.text,
+                        heard.confidence,
+                        t.elapsed().as_millis()
+                    );
+                    let Verdict::Accept(text) = assess(&heard) else {
+                        panic!("{}: not accepted", tag.as_str());
+                    };
+                    assert!(text.to_lowercase().contains(expect), "{text}");
+                    // Hints are recognition context only: they never appear
+                    // as words that were not said.
+                    assert!(!text.contains("Outlook") && !text.contains("Notepad"));
+                }
+            }
+        }
+        println!("[{backend:?}] memory after recognition: {} MB", memory_mb());
 
-    // Silence must never become words.
-    let silence = vec![0.0f32; RECOGNITION_RATE as usize * 2];
-    let heard = engine.transcribe(&silence, None).expect("recognition");
-    println!(
-        "silence → {:?} nsp={:.3}",
-        heard.text, heard.no_speech_probability
-    );
-    assert_ne!(
-        std::mem::discriminant(&assess(&heard)),
-        std::mem::discriminant(&Verdict::Accept(String::new())),
-        "silence produced an accepted transcript"
-    );
+        // Silence must never become words (hints included).
+        let silence = vec![0.0f32; RECOGNITION_RATE as usize * 2];
+        let heard = engine
+            .transcribe(
+                &silence,
+                &TranscribeOptions {
+                    context: context.clone(),
+                    ..TranscribeOptions::default()
+                },
+            )
+            .expect("recognition");
+        println!("[{backend:?}] silence → {:?}", heard.text);
+        assert!(
+            !matches!(assess(&heard), Verdict::Accept(_)),
+            "silence produced an accepted transcript"
+        );
+
+        // A cancelled recognition is discarded.
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let cancelled = engine.transcribe(
+            &clips.first().map_or(silence.clone(), |c| c.2.clone()),
+            &TranscribeOptions {
+                cancel: Some(cancel),
+                ..TranscribeOptions::default()
+            },
+        );
+        assert_eq!(cancelled.err(), Some(SttError::Cancelled));
+    }
 }
 
 struct Collect(mpsc::Sender<Result<usize, CaptureError>>);
@@ -252,17 +294,17 @@ fn speech_plays_to_the_end_and_can_be_stopped() {
     );
 }
 
-/// Downloads the smallest catalog model over HTTPS (WinHTTP) into a
+/// Downloads the Fast profile model over HTTPS (WinHTTP) into a
 /// temporary folder with SERSHI's verification, then deletes it.
 #[test]
-#[ignore = "downloads 82 MB from the internet"]
+#[ignore = "downloads 264 MB from the internet"]
 fn model_download_is_verified_and_atomic() {
     use std::sync::atomic::AtomicBool;
 
     use sershi_core::voice::{ModelState, SttModel};
     use sershi_platform::voice::download_model;
 
-    let model = SttModel::find("whisper-base-q8").expect("catalog");
+    let model = SttModel::find("whisper-small-q8").expect("catalog");
     let dir = std::env::temp_dir().join(format!("sershi-download-{}", std::process::id()));
     let store = ModelStore::new(&dir);
     let t0 = Instant::now();
@@ -288,4 +330,111 @@ fn model_download_is_verified_and_atomic() {
     assert!(cancelled.is_err());
     assert_eq!(store.state(model), ModelState::NotInstalled);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Gate 3B regression: an early decode is aborted while the final decode
+/// starts on the same engine (as when the user resumes speaking). Both must
+/// end cleanly: the aborted one as Cancelled, the final one with a result.
+#[test]
+#[ignore = "needs SERSHI_STT_MODEL"]
+fn an_aborted_decode_never_breaks_the_next_one() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let Some(model) = model_path() else {
+        panic!("set SERSHI_STT_MODEL to an installed model file");
+    };
+    let (best, _) = speech_acceleration();
+    let engine = load_recognizer(&model, best).expect("model loads");
+    let platform = voice_platform();
+    let speech = platform
+        .synthesis
+        .synthesize(
+            "Abre la calculadora, por favor.",
+            VoiceChoice {
+                voice_id: None,
+                language: None,
+            },
+        )
+        .expect("synthesis");
+    let pcm = Arc::new(resample(
+        &speech.samples,
+        speech.sample_rate,
+        RECOGNITION_RATE,
+    ));
+    let mut failures = 0;
+    for round in 0..8 {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let early = {
+            let (engine, pcm, cancel) = (engine.clone(), pcm.clone(), cancel.clone());
+            std::thread::spawn(move || {
+                engine.transcribe(
+                    &pcm,
+                    &TranscribeOptions {
+                        cancel: Some(cancel),
+                        ..TranscribeOptions::default()
+                    },
+                )
+            })
+        };
+        std::thread::sleep(Duration::from_millis(40 * (round % 4)));
+        cancel.store(true, Ordering::Relaxed);
+        let t = Instant::now();
+        let last = engine.transcribe(&pcm, &TranscribeOptions::default());
+        let early = early.join().expect("thread");
+        println!(
+            "round {round}: early={:?} final={:?} in {} ms",
+            early.as_ref().map(|t| t.text.clone()),
+            last.as_ref().map(|t| t.text.clone()),
+            t.elapsed().as_millis()
+        );
+        if !matches!(early, Ok(_) | Err(SttError::Cancelled)) || last.is_err() {
+            failures += 1;
+        }
+    }
+    assert_eq!(failures, 0, "concurrent decodes failed");
+}
+/// Gate 3B regression: decodes that carry a (never set) cancel flag — as
+/// every real command does — must not fail.
+#[test]
+#[ignore = "needs SERSHI_STT_MODEL"]
+fn an_unset_cancel_flag_never_aborts() {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    let Some(model) = model_path() else {
+        panic!("set SERSHI_STT_MODEL to an installed model file");
+    };
+    let (best, _) = speech_acceleration();
+    let engine = load_recognizer(&model, best).expect("model loads");
+    let speech = voice_platform()
+        .synthesis
+        .synthesize(
+            "Abre Outlook.",
+            VoiceChoice {
+                voice_id: None,
+                language: None,
+            },
+        )
+        .expect("synthesis");
+    let pcm = resample(&speech.samples, speech.sample_rate, RECOGNITION_RATE);
+    let mut failures = Vec::new();
+    for round in 0..12 {
+        let result = engine.transcribe(
+            &pcm,
+            &TranscribeOptions {
+                context: (round % 2 == 0).then(|| "Chrome, Outlook, Notepad.".to_owned()),
+                cancel: Some(Arc::new(AtomicBool::new(false))),
+                ..TranscribeOptions::default()
+            },
+        );
+        println!(
+            "round {round}: {:?}",
+            result.as_ref().map(|t| t.text.clone())
+        );
+        if let Err(e) = result {
+            failures.push(e);
+        }
+    }
+    assert!(failures.is_empty(), "{failures:?}");
 }

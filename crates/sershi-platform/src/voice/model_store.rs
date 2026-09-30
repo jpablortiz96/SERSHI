@@ -180,11 +180,12 @@ mod tests {
         let sha = hex(&Sha256::digest(content));
         SttModel {
             id: "test",
+            profile: sershi_core::voice::SpeechProfile::Fast,
             file_name: "ggml-test.bin",
+            quantization: "q8_0",
             size_bytes: content.len() as u64,
             sha256: Box::leak(sha.into_boxed_str()),
             memory_mb: 1,
-            tier: sershi_core::voice::ModelTier::Fast,
         }
     }
 

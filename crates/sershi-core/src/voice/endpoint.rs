@@ -21,9 +21,14 @@ pub struct EndpointConfig {
     pub frame_ms: u32,
     /// Speech must last at least this long in total to count as speech.
     pub min_speech_ms: u32,
-    /// Silence after speech that ends the utterance (pauses between words
-    /// are much shorter).
-    pub trailing_silence_ms: u32,
+    /// Silence that ends a short utterance ("Abre Chrome"). Pauses between
+    /// words are much shorter.
+    pub short_silence_ms: u32,
+    /// Silence that ends a longer request, which tolerates more thinking
+    /// pauses.
+    pub long_silence_ms: u32,
+    /// Utterances with less speech than this use `short_silence_ms`.
+    pub short_utterance_ms: u32,
     /// Hard cap on one push-to-talk capture.
     pub max_capture_ms: u32,
     /// Stop if nothing resembling speech arrives this long after start.
@@ -39,11 +44,36 @@ impl Default for EndpointConfig {
         Self {
             frame_ms: 20,
             min_speech_ms: 200,
-            trailing_silence_ms: 1_000,
+            // Gate 3B: was a fixed 1 000 ms. Short commands end after
+            // 600 ms, longer requests after 900 ms (tuned on physical speech;
+            // docs/VOICE.md#endpointing).
+            short_silence_ms: 600,
+            long_silence_ms: 900,
+            short_utterance_ms: 1_500,
             max_capture_ms: 30_000,
             no_speech_timeout_ms: 8_000,
             threshold_over_noise_db: 10.0,
             absolute_floor_dbfs: -50.0,
+        }
+    }
+}
+
+impl EndpointConfig {
+    /// One fixed silence for every utterance (developer tuning).
+    pub fn with_silence(self, ms: u32) -> Self {
+        Self {
+            short_silence_ms: ms,
+            long_silence_ms: ms,
+            ..self
+        }
+    }
+
+    /// The silence that ends an utterance with `speech_ms` of speech.
+    pub fn silence_for(&self, speech_ms: u32) -> u32 {
+        if speech_ms < self.short_utterance_ms {
+            self.short_silence_ms
+        } else {
+            self.long_silence_ms
         }
     }
 }
@@ -77,6 +107,8 @@ pub struct EndpointDetector {
     trailing_silence: u32,
     heard_speech: bool,
     any_signal: bool,
+    first_speech_frame: Option<u32>,
+    last_speech_frame: Option<u32>,
     finished: Option<Endpoint>,
 }
 
@@ -93,6 +125,8 @@ impl EndpointDetector {
             trailing_silence: 0,
             heard_speech: false,
             any_signal: false,
+            first_speech_frame: None,
+            last_speech_frame: None,
             finished: None,
         }
     }
@@ -151,6 +185,8 @@ impl EndpointDetector {
         if is_speech {
             self.speech_frames += 1;
             self.trailing_silence = 0;
+            self.first_speech_frame.get_or_insert(self.frames);
+            self.last_speech_frame = Some(self.frames);
             if self.ms(self.speech_frames) >= c.min_speech_ms {
                 self.heard_speech = true;
             }
@@ -166,7 +202,8 @@ impl EndpointDetector {
                 Endpoint::NoSpeech
             });
         }
-        if self.heard_speech && self.ms(self.trailing_silence) >= c.trailing_silence_ms {
+        let needed = c.silence_for(self.ms(self.speech_frames));
+        if self.heard_speech && self.ms(self.trailing_silence) >= needed {
             return Some(Endpoint::SpeechEnded);
         }
         if !self.heard_speech && elapsed >= c.no_speech_timeout_ms {
@@ -195,6 +232,29 @@ impl EndpointDetector {
     pub fn elapsed_ms(&self) -> u32 {
         self.ms(self.frames)
     }
+
+    /// Silence since the last speech frame, once speech was heard (for the
+    /// early decode that overlaps the endpoint wait).
+    pub fn pause_ms(&self) -> Option<u32> {
+        self.heard_speech.then(|| self.ms(self.trailing_silence))
+    }
+
+    /// Start of the first speech frame, in ms from the start of capture.
+    pub fn speech_started_ms(&self) -> Option<u32> {
+        self.first_speech_frame.map(|f| self.ms(f - 1))
+    }
+
+    /// End of the last speech frame, in ms from the start of capture.
+    pub fn speech_ended_ms(&self) -> Option<u32> {
+        self.last_speech_frame.map(|f| self.ms(f))
+    }
+
+    /// Samples up to the end of the last speech frame (for deciding whether
+    /// an early decode covered everything that was said).
+    pub fn last_speech_sample(&self) -> usize {
+        self.last_speech_frame
+            .map_or(0, |f| f as usize * self.frame_len)
+    }
 }
 
 #[cfg(test)]
@@ -221,21 +281,60 @@ mod tests {
     }
 
     #[test]
-    fn speech_followed_by_silence_ends_the_utterance() {
+    fn a_short_command_ends_after_a_short_silence() {
         let audio = concat(&[
             noise(RATE, 0.002, 400, 1),
-            speech(RATE, 0.3, 1_200),
+            speech(RATE, 0.3, 1_000),
             noise(RATE, 0.002, 1_500, 2),
         ]);
         let mut d = detector();
         assert_eq!(run(&mut d, &audio), Endpoint::SpeechEnded);
         assert!(d.heard_speech());
-        // Ended ~1 s after the speech, not at the end of the fixture.
-        assert!(
-            d.elapsed_ms() >= 2_500 && d.elapsed_ms() <= 2_800,
-            "{}",
-            d.elapsed_ms()
+        // ~600 ms after the last word, not at the end of the fixture.
+        let ended = d.speech_ended_ms().unwrap();
+        let waited = d.elapsed_ms() - ended;
+        assert!((600..=660).contains(&waited), "waited {waited} ms");
+        assert!(d.speech_started_ms().unwrap() >= 400 && d.speech_started_ms().unwrap() <= 480);
+    }
+
+    #[test]
+    fn a_longer_request_tolerates_a_longer_pause() {
+        let audio = concat(&[
+            speech(RATE, 0.3, 2_400),
+            noise(RATE, 0.002, 750, 3),
+            speech(RATE, 0.3, 600),
+            noise(RATE, 0.002, 1_500, 4),
+        ]);
+        let mut d = detector();
+        assert_eq!(run(&mut d, &audio), Endpoint::SpeechEnded);
+        // The 750 ms pause did not end it; the final 900 ms silence did.
+        let waited = d.elapsed_ms() - d.speech_ended_ms().unwrap();
+        assert!((900..=960).contains(&waited), "waited {waited} ms");
+        assert!(d.speech_ended_ms().unwrap() > 3_500);
+    }
+
+    #[test]
+    fn silence_thresholds_are_adaptive_and_overridable() {
+        let c = EndpointConfig::default();
+        assert_eq!(c.silence_for(800), 600);
+        assert_eq!(c.silence_for(2_000), 900);
+        let fixed = c.with_silence(450);
+        assert_eq!(
+            (fixed.silence_for(800), fixed.silence_for(5_000)),
+            (450, 450)
         );
+    }
+
+    #[test]
+    fn the_pause_is_reported_only_after_speech() {
+        let mut d = detector();
+        run(&mut d, &noise(RATE, 0.002, 500, 5));
+        assert_eq!(d.pause_ms(), None);
+        run(&mut d, &speech(RATE, 0.3, 600));
+        run(&mut d, &noise(RATE, 0.002, 300, 6));
+        let pause = d.pause_ms().unwrap();
+        assert!((280..=320).contains(&pause), "{pause}");
+        assert!(d.last_speech_sample() > 0);
     }
 
     #[test]

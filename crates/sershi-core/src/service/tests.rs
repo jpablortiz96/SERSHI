@@ -580,6 +580,57 @@ fn a_voice_request_runs_exactly_the_typed_pipeline() {
 }
 
 #[test]
+fn a_recognition_cancelled_mid_inference_never_executes_later() {
+    // Gate 3B: the user dismisses SERSHI while the recogniser is still
+    // running; its result arrives afterwards and must be discarded.
+    let mut h = windows();
+    h.service.begin_listening(&mut |_| {}).unwrap();
+    assert!(h.service.end_listening(900, &mut |_| {}));
+    assert!(h.service.cancel_voice(None, &mut |_| {}));
+    assert!(
+        h.service
+            .submit_transcript("Abre Spotify", &mut |_| {})
+            .is_none()
+    );
+    assert_eq!(h.apps.launches(), 0);
+    assert_eq!(h.service.snapshot().state, S::Idle);
+}
+
+#[test]
+fn early_or_partial_text_cannot_run_while_the_microphone_is_open() {
+    // An early (speculative) decode finishes while the user may still be
+    // speaking; only the final transcript after capture ends may submit.
+    let mut h = windows();
+    h.service.begin_listening(&mut |_| {}).unwrap();
+    assert!(
+        h.service
+            .submit_transcript("Abre Spotify", &mut |_| {})
+            .is_none()
+    );
+    assert!(
+        h.service
+            .submit_transcript("Cierra Spotify", &mut |_| {})
+            .is_none()
+    );
+    assert_eq!(h.apps.launches(), 0);
+    assert_eq!(h.apps.closes(), 0);
+    assert!(h.service.pending_confirmation().is_none());
+    // After capture ends, exactly one final transcript is accepted.
+    h.service.end_listening(1_000, &mut |_| {});
+    assert!(
+        h.service
+            .submit_transcript("Abre Spotify", &mut |_| {})
+            .is_some()
+    );
+    assert!(
+        h.service
+            .submit_transcript("Abre Spotify", &mut |_| {})
+            .is_none()
+    );
+    assert_eq!(h.apps.launches(), 1);
+}
+
+#[test]
 fn transcripts_are_only_accepted_while_transcribing() {
     let mut h = windows();
     assert!(h.service.submit_transcript("memory", &mut |_| {}).is_none());

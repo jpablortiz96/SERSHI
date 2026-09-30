@@ -7,11 +7,14 @@
 //! disk, and nothing here is ever sent to the UI except a bounded level.
 
 use std::fmt::Debug;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
 use thiserror::Error;
 
 use super::language::LanguageTag;
+use super::latency::Acceleration;
 use super::transcript::Transcript;
 
 // ── Capture ───────────────────────────────────────────────────────────────
@@ -93,20 +96,37 @@ pub enum SttError {
     UnsupportedLanguage,
     #[error("speech recognition is not available on this platform")]
     Unsupported,
+    /// The recognition was cancelled (the user dismissed it); its result
+    /// is discarded and never submitted.
+    #[error("speech recognition was cancelled")]
+    Cancelled,
     /// Internal detail for diagnostics; never shown to users verbatim.
     #[error("speech recognition failed: {0}")]
     Failed(String),
 }
 
+/// How to recognise one utterance.
+#[derive(Debug, Clone, Default)]
+pub struct TranscribeOptions {
+    /// `None` asks the recogniser to detect the spoken language.
+    pub language: Option<LanguageTag>,
+    /// Short recognition context (installed application names). It only
+    /// helps spelling; it never selects or authorizes anything.
+    pub context: Option<String>,
+    /// Set to abort the recognition as soon as possible.
+    pub cancel: Option<Arc<AtomicBool>>,
+}
+
 /// Local speech-to-text. Input is 16 kHz mono `f32`
-/// ([`super::signal::RECOGNITION_RATE`]); `language` of `None` asks the
-/// recogniser to detect the spoken language.
+/// ([`super::signal::RECOGNITION_RATE`]).
 pub trait SpeechToTextPort: Send + Sync + Debug {
     fn transcribe(
         &self,
         audio: &[f32],
-        language: Option<&LanguageTag>,
+        options: &TranscribeOptions,
     ) -> Result<Transcript, SttError>;
+    /// Where this engine runs.
+    fn acceleration(&self) -> Acceleration;
 }
 
 // ── Synthesis and playback ────────────────────────────────────────────────

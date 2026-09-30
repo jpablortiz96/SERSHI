@@ -22,6 +22,7 @@
 
 pub mod endpoint;
 pub mod language;
+pub mod latency;
 pub mod models;
 pub mod ports;
 pub mod signal;
@@ -29,9 +30,10 @@ pub mod transcript;
 mod types;
 
 pub use language::{CONVERSATION_LANGUAGES, InvalidLanguageTag, LanguageTag};
-pub use models::{DEFAULT_STT_MODEL, ModelTier, STT_MODELS, SttModel};
+pub use latency::{Acceleration, VoiceTimings};
+pub use models::{DEFAULT_PROFILE, STT_MODELS, SpeechProfile, SttModel};
 pub use types::{
-    CaptureStart, LevelSource, MAX_VOICE_ID, MicrophoneAccess, MicrophoneStatus, ModelError,
-    ModelInfo, ModelProgress, ModelState, VoiceFailure, VoiceLevel, VoiceSettings, VoiceStatus,
-    VoiceUpdate,
+    CaptureStart, ENDPOINT_RANGE_MS, LevelSource, MAX_VOICE_ID, MicrophoneAccess, MicrophoneStatus,
+    ModelError, ModelInfo, ModelProgress, ModelState, VoiceFailure, VoiceLevel, VoiceSettings,
+    VoiceStatus, VoiceUpdate,
 };

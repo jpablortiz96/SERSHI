@@ -9,11 +9,18 @@ TS_RS_EXPORT_DIR = { value = "packages/contracts/src/generated", relative = true
 # Portable CPU baseline (AVX2/FMA/F16C) instead of `-march=native`, so a
 # binary built on one machine runs on another and CI matches local builds.
 GGML_NATIVE = "OFF"
+# Ninja instead of MSBuild: the Vulkan backend builds a nested CMake project
+# whose paths under target/ exceed MSBuild FileTracker's path limit. Ninja
+# ships with Visual Studio Build Tools and the GitHub Windows image; it must
+# be on PATH (docs/VOICE.md#building). Read only by whisper-rs-sys's CMake.
+CMAKE_GENERATOR = "Ninja"
 # The `cmake` crate replaces MSVC's per-configuration flags with its own and
 # drops the optimisation level, which made recognition ~10x slower (measured:
 # 35 s vs 3.3 s for one utterance). Restore /O2 for both configurations the
-# build script uses (Release, and RelWithDebInfo in debug builds).
+# build script uses (Release, and RelWithDebInfo in debug builds). C++ also
+# needs /EHsc: the crate's replacement flags drop it, and whisper.cpp uses
+# exceptions (MSVC would compile without proper unwinding; clang-cl refuses).
 CMAKE_C_FLAGS_RELEASE = "/MD /O2 /Ob2 /DNDEBUG"
-CMAKE_CXX_FLAGS_RELEASE = "/MD /O2 /Ob2 /DNDEBUG"
+CMAKE_CXX_FLAGS_RELEASE = "/MD /O2 /Ob2 /DNDEBUG /EHsc"
 CMAKE_C_FLAGS_RELWITHDEBINFO = "/MD /O2 /Ob2 /DNDEBUG"
-CMAKE_CXX_FLAGS_RELWITHDEBINFO = "/MD /O2 /Ob2 /DNDEBUG"
+CMAKE_CXX_FLAGS_RELWITHDEBINFO = "/MD /O2 /Ob2 /DNDEBUG /EHsc"

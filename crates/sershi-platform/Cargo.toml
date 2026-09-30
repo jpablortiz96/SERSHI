@@ -8,6 +8,14 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+default = ["vulkan"]
+# GPU speech recognition through Vulkan (NVIDIA, AMD, Intel). Building it
+# needs the Vulkan SDK (glslc); at run time only the driver's vulkan-1.dll,
+# delay-loaded and checked first, with the CPU as the fallback. Build without
+# it: `--no-default-features`. docs/VOICE.md#building.
+vulkan = ["whisper-rs/vulkan"]
+
 [dependencies]
 sershi-core.workspace = true
 sysinfo.workspace = true
@@ -20,7 +28,8 @@ sha2 = "0.10"
 #   it needs CMake and libclang (LLVM); see docs/VOICE.md#building.
 [target.'cfg(windows)'.dependencies]
 cpal = "0.18"
-whisper-rs = "0.16"
+# raw-api: ggml device enumeration (which accelerator is actually in use).
+whisper-rs = { version = "0.16", features = ["raw-api"] }
 
 
 # Win32 bindings, same version Tauri already links (no duplicate crate).
@@ -40,6 +49,7 @@ features = [
   "Win32_Storage_Packaging_Appx",
   "Win32_System_Com",
   "Win32_System_Com_StructuredStorage",
+  "Win32_System_LibraryLoader",
   "Win32_System_ProcessStatus",
   "Win32_System_Registry",
   "Win32_System_Threading",

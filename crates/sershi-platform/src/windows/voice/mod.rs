@@ -6,6 +6,7 @@
 
 mod capture;
 mod consent;
+pub mod gpu;
 mod http;
 mod output;
 mod stt;

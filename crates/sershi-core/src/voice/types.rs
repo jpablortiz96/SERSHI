@@ -1,7 +1,7 @@
 //! Voice payloads that cross the UI ↔ core boundary.
 //!
 //! What the UI can *send* is small and validated: preferences (device,
-//! language, voice, model ids) and start/stop requests. What it *receives*
+//! language, voice, speech profile) and start/stop requests. What it *receives*
 //! is state, a transcript to display, a bounded 0–1 level for visuals, and
 //! model-download progress. Raw audio never crosses IPC.
 
@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::service::CommandOutcome;
 
 use super::language::LanguageTag;
-use super::models::{ModelTier, STT_MODELS, SttModel};
+use super::latency::{Acceleration, VoiceTimings};
+use super::models::{DEFAULT_PROFILE, STT_MODELS, SpeechProfile, SttModel};
 use super::ports::{InputDevice, SynthesisVoice};
 
 /// Longest accepted device or voice identifier.
@@ -29,9 +30,15 @@ pub struct VoiceSettings {
     pub language: Option<LanguageTag>,
     /// Speech voice id; `None` picks a voice for the reply's language.
     pub voice: Option<String>,
-    /// Speech model id; `None` is SERSHI's default.
-    pub model: Option<String>,
+    /// Speech recognition profile; `None` is SERSHI's default (Fast).
+    pub profile: Option<SpeechProfile>,
+    /// Developer tuning: one fixed end-of-speech silence instead of the
+    /// adaptive default. Accepted range [`ENDPOINT_RANGE_MS`].
+    pub endpoint_ms: Option<u32>,
 }
+
+/// Accepted developer endpoint override, in milliseconds.
+pub const ENDPOINT_RANGE_MS: std::ops::RangeInclusive<u32> = 300..=1_500;
 
 impl VoiceSettings {
     /// Identifiers must be short printable text and the model must be one
@@ -45,16 +52,16 @@ impl VoiceSettings {
         id_ok(&self.microphone)
             && id_ok(&self.voice)
             && self
-                .model
-                .as_deref()
-                .is_none_or(|m| SttModel::find(m).is_some())
+                .endpoint_ms
+                .is_none_or(|ms| ENDPOINT_RANGE_MS.contains(&ms))
+    }
+
+    pub fn profile(&self) -> SpeechProfile {
+        self.profile.unwrap_or(DEFAULT_PROFILE)
     }
 
     pub fn model(&self) -> &'static SttModel {
-        self.model
-            .as_deref()
-            .and_then(SttModel::find)
-            .unwrap_or_else(SttModel::default_model)
+        SttModel::for_profile(self.profile())
     }
 }
 
@@ -104,9 +111,12 @@ pub enum ModelState {
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
     pub id: String,
-    pub tier: ModelTier,
+    pub profile: SpeechProfile,
+    pub file_name: String,
+    pub quantization: String,
     #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub size_bytes: u64,
+    pub sha256: String,
     pub memory_mb: u32,
     pub state: ModelState,
 }
@@ -117,8 +127,11 @@ impl ModelInfo {
             .iter()
             .map(|m| ModelInfo {
                 id: m.id.to_owned(),
-                tier: m.tier,
+                profile: m.profile,
+                file_name: m.file_name.to_owned(),
+                quantization: m.quantization.to_owned(),
                 size_bytes: m.size_bytes,
+                sha256: m.sha256.to_owned(),
                 memory_mb: m.memory_mb,
                 state: state_of(m),
             })
@@ -135,8 +148,14 @@ pub struct VoiceStatus {
     pub supported: bool,
     pub microphone: MicrophoneStatus,
     pub models: Vec<ModelInfo>,
+    /// The chosen speech profile.
+    pub profile: SpeechProfile,
     /// The model voice input uses (installed or not).
     pub model: String,
+    /// Where recognition runs; the CPU is always the fallback.
+    pub acceleration: Acceleration,
+    /// The accelerator's name (e.g. the GPU), when one is used.
+    pub accelerator: Option<String>,
     /// Installed system voices (empty if speech output is unavailable).
     pub voices: Vec<SynthesisVoice>,
     /// The microphone is capturing right now.
@@ -207,6 +226,16 @@ pub enum VoiceUpdate {
     },
     /// The chosen microphone is missing; the system default was used.
     DeviceFallback,
+    /// Where the time went for the last spoken command (diagnostics; never
+    /// what was said).
+    Timings {
+        timings: VoiceTimings,
+    },
+    /// The spoken reply started this long after the outcome arrived.
+    SpeechLatency {
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
+        ms: u32,
+    },
 }
 
 /// Which way sound is flowing, for visuals.
@@ -260,13 +289,21 @@ mod tests {
         assert!(
             serde_json::from_str::<VoiceSettings>(r#"{"microphone":null,"approve":true}"#).is_err()
         );
+        assert!(serde_json::from_str::<VoiceSettings>(r#"{"profile":"turbo"}"#).is_err());
+        assert!(serde_json::from_str::<VoiceSettings>(r#"{"model":"../../model"}"#).is_err());
+        let accurate: VoiceSettings = serde_json::from_str(r#"{"profile":"accurate"}"#).unwrap();
+        assert_eq!(accurate.model().id, "whisper-large-v3-turbo-q8");
         assert!(serde_json::from_str::<VoiceSettings>(r#"{"language":"; rm"}"#).is_err());
         let ok: VoiceSettings =
             serde_json::from_str(r#"{"microphone":"{0.0.1}.{abc}","language":"es"}"#).unwrap();
         assert!(ok.is_valid());
         for bad in [
             VoiceSettings {
-                model: Some("../../model".into()),
+                endpoint_ms: Some(100),
+                ..VoiceSettings::default()
+            },
+            VoiceSettings {
+                endpoint_ms: Some(10_000),
                 ..VoiceSettings::default()
             },
             VoiceSettings {
@@ -284,10 +321,8 @@ mod tests {
 
     #[test]
     fn the_default_model_is_used_unless_another_is_chosen() {
-        assert_eq!(
-            VoiceSettings::default().model().id,
-            super::super::DEFAULT_STT_MODEL
-        );
+        assert_eq!(VoiceSettings::default().model().id, "whisper-small-q8");
+        assert_eq!(VoiceSettings::default().profile(), SpeechProfile::Fast);
     }
 
     #[test]
