@@ -9,6 +9,7 @@ use crate::confirmation::ConfirmationId;
 use crate::ids::ToolId;
 use crate::intent::AnswerTopic;
 use crate::policy::DenialReason;
+use crate::understanding::{Clarification, UnderstandingTrace, UnderstoodAs};
 
 /// Longest command accepted over IPC.
 pub const MAX_COMMAND_CHARS: usize = 1_000;
@@ -50,6 +51,8 @@ pub enum CommandStatus {
     /// SERSHI answered without acting.
     Answered,
     NeedsConfirmation,
+    /// SERSHI asked which application was meant; nothing ran.
+    NeedsClarification,
     Denied,
     /// Understood, but the capability is not built yet.
     Unavailable,
@@ -103,6 +106,9 @@ pub enum OutcomeDetail {
         #[cfg_attr(feature = "ts", ts(type = "number"))]
         max_chars: usize,
     },
+    Clarification {
+        clarification: Clarification,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -118,6 +124,11 @@ pub struct CommandOutcome {
     pub tool_id: Option<ToolId>,
     pub data: Option<Value>,
     pub duration_ms: Option<u32>,
+    /// Set when SERSHI acted on a repaired or inferred reading of the
+    /// request ("SERSHI understood: Open Word"), so the user can see it.
+    pub understood: Option<UnderstoodAs>,
+    /// Developer diagnostics (transient; never stored).
+    pub understanding: Option<UnderstandingTrace>,
 }
 
 impl CommandOutcome {
@@ -129,6 +140,8 @@ impl CommandOutcome {
             tool_id: None,
             data: None,
             duration_ms: None,
+            understood: None,
+            understanding: None,
         }
     }
 

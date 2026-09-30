@@ -108,6 +108,8 @@ const outcome: CommandOutcome = {
     application: { id: "spotify", displayName: "Spotify", source: "startMenu" },
   },
   durationMs: 120,
+  understood: null,
+  understanding: null,
 };
 
 beforeEach(() => {

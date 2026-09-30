@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-download-semantic-model"
+description = "Enables the download_semantic_model command without any pre-configured scope."
+commands.allow = ["download_semantic_model"]
+
+[[permission]]
+identifier = "deny-download-semantic-model"
+description = "Denies the download_semantic_model command without any pre-configured scope."
+commands.deny = ["download_semantic_model"]

@@ -22,6 +22,20 @@
 //! outcome ─ begin_speaking → Speaking ─ end_speaking → Idle
 //! ```
 //!
+//! Understanding (Gate 3C, [`crate::understanding`]) may instead ask which
+//! application was meant:
+//!
+//! ```text
+//! Thinking ─ Clarify → WaitingForClarification
+//!     ─ next request (the answer, typed or spoken) → Thinking → …
+//!     ─ dismiss / expiry → Idle
+//! ```
+//!
+//! The question and a few recent turns live in the service's [`Dialogue`]
+//! (memory only). An answer only selects among the trusted candidates that
+//! were offered; the resulting call goes through the same policy and
+//! confirmation as any other.
+//!
 //! The service is synchronous and owns no threads or timers; the desktop shell
 //! wraps it in a mutex and schedules settle and expiry timers.
 
@@ -45,16 +59,24 @@ use crate::confirmation::{
 };
 use crate::executor::{ExecutionOutcome, ToolExecutor};
 use crate::ids::ToolId;
+use std::sync::Arc;
+
 use crate::intent::{Intent, IntentResolver};
 use crate::permission::PermissionGrants;
 use crate::policy::DenialReason;
 use crate::tool::{Severity, ToolCall, ToolDefinition};
+use crate::understanding::{
+    ApplicationDirectory, Clarification, Dialogue, InputSource, PendingChange, ResolutionTier,
+    SemanticRouterPort, Understanding, Utterance,
+};
 
 #[derive(Debug)]
 pub struct AssistantService {
     machine: StateMachine,
     executor: ToolExecutor,
-    resolver: Box<dyn IntentResolver>,
+    understanding: Understanding,
+    /// The open question and recent turns (memory only).
+    dialogue: Dialogue,
     grants: PermissionGrants,
     activity: ActivityLog,
     confirmations: ConfirmationStore,
@@ -73,12 +95,56 @@ impl AssistantService {
         Self {
             machine: StateMachine::default(),
             executor,
-            resolver,
+            understanding: Understanding::new(resolver),
+            dialogue: Dialogue::default(),
             grants,
             activity: ActivityLog::default(),
             confirmations: ConfirmationStore::default(),
             clock,
         }
+    }
+
+    /// Lets understanding resolve names against the trusted catalog
+    /// (similar names, clarifications). Without it, application names are
+    /// passed to the tools as said, as before Gate 3C.
+    pub fn with_applications(mut self, apps: Arc<dyn ApplicationDirectory>) -> Self {
+        self.understanding.set_applications(apps);
+        self
+    }
+
+    /// Installs (or removes) the local semantic model.
+    pub fn set_semantic_router(&mut self, router: Option<Arc<dyn SemanticRouterPort>>) {
+        self.understanding.set_router(router);
+    }
+
+    /// A request may come soon (the microphone opened).
+    pub fn prepare_understanding(&self) {
+        self.understanding.prepare();
+    }
+
+    /// The question SERSHI is waiting on, if it has not expired.
+    pub fn pending_clarification(&self) -> Option<Clarification> {
+        self.dialogue
+            .pending((self.clock)())
+            .map(|p| p.clarification.clone())
+    }
+
+    /// Expires an overdue question and leaves the waiting state. Returns
+    /// whether one expired.
+    pub fn expire_clarification(&mut self, notify: Notify<'_>) -> bool {
+        let watermark = self.watermark();
+        if self.dialogue.expire((self.clock)()).is_none() {
+            return false;
+        }
+        self.record(NewActivity::new(
+            ActivityKind::ClarificationExpired,
+            "A question expired unanswered",
+        ));
+        if self.machine.state() == AssistantState::WaitingForClarification {
+            self.transition(AssistantEvent::Dismiss, notify);
+        }
+        self.flush_activity(watermark, notify);
+        true
     }
 
     pub fn snapshot(&self) -> AssistantSnapshot {
@@ -163,13 +229,25 @@ impl AssistantService {
     /// Submits a recognised transcript through exactly the same path as
     /// typed text ([`Self::submit`]). `None` if the voice interaction was
     /// superseded (cancelled, or a typed command arrived first).
-    pub fn submit_transcript(&mut self, text: &str, notify: Notify<'_>) -> Option<CommandOutcome> {
+    ///
+    /// `asr_confidence` (mean token probability) and `language` only inform
+    /// understanding; a low confidence makes SERSHI ask rather than act.
+    pub fn submit_transcript(
+        &mut self,
+        text: &str,
+        asr_confidence: Option<f32>,
+        language: Option<&str>,
+        notify: Notify<'_>,
+    ) -> Option<CommandOutcome> {
         if self.machine.state() != AssistantState::Transcribing {
             return None;
         }
-        Some(self.submit(
-            &CommandRequest {
-                text: text.to_owned(),
+        Some(self.submit_utterance(
+            &Utterance {
+                text,
+                source: InputSource::Voice,
+                asr_confidence,
+                language,
             },
             notify,
         ))
@@ -247,7 +325,15 @@ impl AssistantService {
     }
 
     pub fn submit(&mut self, request: &CommandRequest, notify: Notify<'_>) -> CommandOutcome {
-        let text = request.text.trim();
+        self.submit_utterance(&Utterance::typed(&request.text), notify)
+    }
+
+    fn submit_utterance(
+        &mut self,
+        utterance: &Utterance<'_>,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        let text = utterance.text.trim();
         if text.is_empty() {
             return CommandOutcome::rejected(RejectionReason::Empty, "Type or say a command.");
         }
@@ -274,7 +360,31 @@ impl AssistantService {
         ));
         self.transition(AssistantEvent::RequestReceived, notify);
 
-        let outcome = match self.resolver.resolve(text) {
+        let now = (self.clock)();
+        if self.dialogue.expire(now).is_some() {
+            self.record(NewActivity::new(
+                ActivityKind::ClarificationExpired,
+                "A question expired unanswered",
+            ));
+        }
+        let had_question = self.dialogue.pending(now).is_some();
+        let interpretation =
+            self.understanding
+                .interpret(&Utterance { text, ..*utterance }, &self.dialogue, now);
+        match &interpretation.pending {
+            PendingChange::Keep => {}
+            PendingChange::Clear => {
+                self.dialogue.clear_pending();
+            }
+            PendingChange::Ask(question) => self.dialogue.ask(question.clone(), now),
+        }
+        if matches!(interpretation.intent, Intent::UseTool(_))
+            && let Some(summary) = interpreted_summary(interpretation.trace.tier)
+        {
+            self.record(NewActivity::new(ActivityKind::CommandInterpreted, summary));
+        }
+
+        let mut outcome = match interpretation.intent {
             Intent::UseTool(call) => self.run_tool(&call, notify),
             Intent::Answer(topic) => {
                 self.transition(AssistantEvent::Completed, notify);
@@ -303,20 +413,43 @@ impl AssistantService {
             }
             Intent::Cancel => {
                 self.transition(AssistantEvent::Dismiss, notify);
-                replaced.as_ref().map_or_else(
-                    || CommandOutcome::new(CommandStatus::Cancelled, "Nothing was waiting."),
-                    cancelled_outcome,
-                )
+                if replaced.is_none() && had_question {
+                    self.record(NewActivity::new(
+                        ActivityKind::ClarificationCancelled,
+                        "Cancelled a question",
+                    ));
+                    CommandOutcome::new(CommandStatus::Cancelled, "Cancelled. Nothing was changed.")
+                } else {
+                    replaced.as_ref().map_or_else(
+                        || CommandOutcome::new(CommandStatus::Cancelled, "Nothing was waiting."),
+                        cancelled_outcome,
+                    )
+                }
+            }
+            Intent::Clarify(clarification) => {
+                self.record(NewActivity::new(
+                    ActivityKind::ClarificationRequested,
+                    "Asked which application was meant",
+                ));
+                self.transition(AssistantEvent::ClarificationRequested, notify);
+                let reply = clarification.canonical_text();
+                CommandOutcome {
+                    detail: Some(OutcomeDetail::Clarification { clarification }),
+                    ..CommandOutcome::new(CommandStatus::NeedsClarification, reply)
+                }
             }
             Intent::NotUnderstood => {
                 self.transition(AssistantEvent::AttentionNeeded, notify);
                 CommandOutcome::new(
                     CommandStatus::NotUnderstood,
-                    "I didn't understand that. Until an AI provider is connected I can answer \
-                     a few system questions — try \"How much memory am I using?\"",
+                    "I didn't understand that. Try, for example, \"Open Chrome\" or \"How much \
+                     memory am I using?\"",
                 )
             }
         };
+        outcome.understood = interpretation.understood;
+        outcome.understanding = Some(interpretation.trace);
+        self.dialogue.record(now, text, turn_summary(&outcome));
         self.flush_activity(watermark, notify);
         outcome
     }
@@ -379,9 +512,17 @@ impl AssistantService {
     pub fn dismiss(&mut self, notify: Notify<'_>) -> Option<CommandOutcome> {
         let watermark = self.watermark();
         let cancelled = self.cancel_confirmations();
+        if self.dialogue.clear_pending() {
+            self.record(NewActivity::new(
+                ActivityKind::ClarificationCancelled,
+                "Cancelled a question",
+            ));
+        }
         if matches!(
             self.machine.state(),
-            AssistantState::Awake | AssistantState::AwaitingConfirmation
+            AssistantState::Awake
+                | AssistantState::AwaitingConfirmation
+                | AssistantState::WaitingForClarification
         ) {
             self.transition(AssistantEvent::Dismiss, notify);
         }
@@ -610,6 +751,30 @@ impl AssistantService {
             notify(ServiceEvent::State(snapshot));
         }
     }
+}
+
+/// Audit text for a request understood through a repair (never the words).
+fn interpreted_summary(tier: ResolutionTier) -> Option<&'static str> {
+    Some(match tier {
+        ResolutionTier::Fuzzy => "Understood a similar application name",
+        ResolutionTier::Phonetic => "Understood a similar-sounding application name",
+        ResolutionTier::VerbRepair => "Understood a misheard command word",
+        ResolutionTier::Context => "Understood the answer to a question",
+        ResolutionTier::Semantic => "Understood with the local language model",
+        _ => return None,
+    })
+}
+
+/// A short, structured memory of what a turn did, for context.
+fn turn_summary(outcome: &CommandOutcome) -> Option<String> {
+    let data = outcome.data.as_ref()?;
+    let app = data.get("application")?.get("displayName")?.as_str()?;
+    let verb = match data.get("kind")?.as_str()? {
+        "opened" => "opened",
+        "closeRequested" => "closed",
+        _ => return None,
+    };
+    Some(format!("{verb} {app}"))
 }
 
 fn cancelled_outcome(pending: &PendingConfirmation) -> CommandOutcome {

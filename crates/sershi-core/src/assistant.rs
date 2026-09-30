@@ -50,12 +50,17 @@ pub enum AssistantState {
     /// Waiting for the user to approve or cancel a pending action. Not
     /// transient: it lasts until the user decides or the request expires.
     AwaitingConfirmation,
+    /// SERSHI asked which application the user meant ("Which one?", "Did
+    /// you mean …?"). Not busy: the answer is simply the next request, typed
+    /// or spoken. Not transient: it lasts until answered, dismissed or
+    /// expired. It never leads to execution by itself.
+    WaitingForClarification,
     /// A request failed. Transient; settles back to idle.
     Error,
 }
 
 impl AssistantState {
-    pub const ALL: [AssistantState; 13] = [
+    pub const ALL: [AssistantState; 14] = [
         Self::Sleeping,
         Self::Idle,
         Self::Awake,
@@ -68,15 +73,16 @@ impl AssistantState {
         Self::Success,
         Self::Warning,
         Self::AwaitingConfirmation,
+        Self::WaitingForClarification,
         Self::Error,
     ];
 
-    /// States that represent in-flight work.
+    /// States that represent in-flight work, which a new request must wait
+    /// for. Speaking is not one of them: a new request (or push-to-talk)
+    /// replaces a spoken reply instead of being refused (Gate 3C: "still
+    /// working on the previous request" after a spoken question).
     pub fn is_busy(self) -> bool {
-        matches!(
-            self,
-            Self::Thinking | Self::Planning | Self::Executing | Self::Speaking
-        )
+        matches!(self, Self::Thinking | Self::Planning | Self::Executing)
     }
 
     /// Outcome states that automatically settle back to [`Self::Idle`].
@@ -123,6 +129,8 @@ pub enum AssistantEvent {
     ConfirmationRequested,
     /// The user approved the pending action; it runs now.
     ConfirmationApproved,
+    /// SERSHI asked the user which application they meant.
+    ClarificationRequested,
     /// The request failed.
     Failed,
     /// A transient outcome finished displaying.
@@ -151,14 +159,26 @@ pub fn transition(
     let next = match (from, event) {
         (S::Sleeping, E::Wake) => S::Idle,
         (S::Sleeping | S::Idle, E::Activate) => S::Awake,
-        (s, E::Sleep) if !s.is_busy() && !s.is_voice_input() && s != S::AwaitingConfirmation => {
+        (s, E::Sleep)
+            if !s.is_busy()
+                && !s.is_voice_input()
+                && !matches!(
+                    s,
+                    S::Speaking | S::AwaitingConfirmation | S::WaitingForClarification
+                ) =>
+        {
             S::Sleeping
         }
 
         // Push-to-talk may start while a previous outcome is still showing.
         // Never while waiting for approval: the service cancels a pending
         // approval first, so the microphone and a confirmation never overlap.
-        (S::Sleeping | S::Idle | S::Awake, E::StartListening) => S::Listening,
+        // A spoken reply stops first (half duplex); an open question stays
+        // open, since its answer is usually spoken.
+        (
+            S::Sleeping | S::Idle | S::Awake | S::Speaking | S::WaitingForClarification,
+            E::StartListening,
+        ) => S::Listening,
         (s, E::StartListening) if s.is_transient() => S::Listening,
         (S::Listening, E::CaptureEnded) => S::Transcribing,
         // A transcript enters the same request path as typed text.
@@ -167,8 +187,12 @@ pub fn transition(
         }
         // A new request may start while a previous outcome is still showing.
         (s, E::RequestReceived) if s.is_transient() => S::Thinking,
-        // A new request replaces a pending confirmation (the service cancels it).
-        (S::AwaitingConfirmation, E::RequestReceived) => S::Thinking,
+        // A new request replaces a pending confirmation (the service cancels
+        // it), interrupts a spoken reply, or answers an open question.
+        (
+            S::AwaitingConfirmation | S::Speaking | S::WaitingForClarification,
+            E::RequestReceived,
+        ) => S::Thinking,
 
         (S::Thinking, E::PlanStarted) => S::Planning,
         (S::Thinking | S::Planning | S::Executing, E::ExecutionStarted) => S::Executing,
@@ -186,6 +210,7 @@ pub fn transition(
             E::AttentionNeeded,
         ) => S::Warning,
         (S::Thinking | S::Planning, E::ConfirmationRequested) => S::AwaitingConfirmation,
+        (S::Thinking | S::Planning, E::ClarificationRequested) => S::WaitingForClarification,
         (S::AwaitingConfirmation, E::ConfirmationApproved) => S::Executing,
         // Anything can fail, except a state with nothing in flight.
         (s, E::Failed) if s != S::Sleeping => S::Error,
@@ -416,7 +441,10 @@ mod tests {
     #[test]
     fn push_to_talk_starts_from_rest_or_a_showing_outcome_only() {
         for s in S::ALL {
-            let allowed = matches!(s, S::Sleeping | S::Idle | S::Awake) || s.is_transient();
+            let allowed = matches!(
+                s,
+                S::Sleeping | S::Idle | S::Awake | S::Speaking | S::WaitingForClarification
+            ) || s.is_transient();
             assert_eq!(transition(s, E::StartListening).is_ok(), allowed, "{s:?}");
         }
         // In particular: never while an approval is pending or work runs.
@@ -472,6 +500,55 @@ mod tests {
                 "{s:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_clarification_waits_without_being_busy_and_never_executes() {
+        let mut m = StateMachine::default();
+        m.apply(E::RequestReceived).unwrap();
+        assert_eq!(
+            m.apply(E::ClarificationRequested).unwrap().state,
+            S::WaitingForClarification
+        );
+        assert!(!S::WaitingForClarification.is_busy());
+        assert!(!S::WaitingForClarification.is_transient());
+        for event in [
+            E::ExecutionStarted,
+            E::ConfirmationApproved,
+            E::ConfirmationRequested,
+            E::Settle,
+            E::Sleep,
+        ] {
+            assert!(m.clone().apply(event).is_err(), "{event:?}");
+        }
+        // The answer is the next request (typed or spoken)…
+        assert_eq!(
+            m.clone().apply(E::RequestReceived).unwrap().state,
+            S::Thinking
+        );
+        assert_eq!(
+            m.clone().apply(E::StartListening).unwrap().state,
+            S::Listening
+        );
+        // …or it is dismissed/expired.
+        assert_eq!(m.apply(E::Dismiss).unwrap().state, S::Idle);
+        // Only understanding can ask.
+        for s in S::ALL {
+            assert_eq!(
+                transition(s, E::ClarificationRequested).is_ok(),
+                matches!(s, S::Thinking | S::Planning),
+                "{s:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_spoken_reply_never_blocks_the_next_request() {
+        assert!(!S::Speaking.is_busy());
+        assert_eq!(transition(S::Speaking, E::RequestReceived), Ok(S::Thinking));
+        assert_eq!(transition(S::Speaking, E::StartListening), Ok(S::Listening));
+        assert!(transition(S::Speaking, E::Sleep).is_err());
+        assert!(transition(S::Speaking, E::ExecutionStarted).is_err());
     }
 
     #[test]

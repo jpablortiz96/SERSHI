@@ -43,6 +43,7 @@ export const ptBR: Messages = {
     success: { label: "Concluído", line: "Tudo certo." },
     warning: { label: "Requer atenção", line: "Algo precisa da sua atenção." },
     awaitingConfirmation: { label: "Aguardando aprovação", line: "Aguardando sua aprovação." },
+    waitingForClarification: { label: "Perguntando", line: "Aguardando sua resposta." },
     error: {
       label: "Não foi possível concluir",
       line: "Algo deu errado. Os detalhes estão em Atividade.",
@@ -91,6 +92,7 @@ export const ptBR: Messages = {
   transcript: {
     youSaid: "Você disse",
     status: {
+      needsClarification: "Pergunta",
       unavailable: "Ainda não disponível",
       notUnderstood: "Não entendido",
       needsConfirmation: "Requer aprovação",
@@ -125,8 +127,9 @@ export const ptBR: Messages = {
     unavailable:
       "Este recurso ainda não está disponível: {capability}. Está planejado para a {milestone}.",
     notUnderstood:
-      "Não entendi. Até que um provedor de IA seja conectado, consigo responder algumas perguntas sobre o sistema. Tente “Quanta memória estou usando?”.",
+      "Não entendi. Tente, por exemplo, “Abra o Chrome” ou “Quanta memória estou usando?”.",
     answer: {
+      noAction: "Tudo bem, não vou fazer nada.",
       greeting:
         "Olá. Eu sou o SERSHI. Posso falar sobre o sistema, a memória e o processador deste computador. A compreensão de linguagem chega quando um provedor de IA for conectado.",
       help: "Consigo informar dados do sistema, o uso de memória e a carga do processador, e abrir ou fechar aplicativos instalados, digitando ou pelo microfone. Tente “Abra o Bloco de notas”. Arquivos e serviços conectados estão no roteiro.",
@@ -161,6 +164,23 @@ export const ptBR: Messages = {
       catalogUnavailable: "Não consegui ler a lista de aplicativos instalados.",
       openCommand: "Abra {app}",
       closeCommand: "Feche {app}",
+    },
+    clarify: {
+      choose: "Encontrei mais de uma opção: {options}. Qual você quer?",
+      didYouMeanOpen: "Você quis dizer {app}?",
+      didYouMeanClose: "Quer que eu feche {app}?",
+      whichOpen: "Qual aplicativo você quer abrir?",
+      whichClose: "Qual aplicativo você quer fechar?",
+      multipleOpen: "Abro um aplicativo por vez: {options}. Qual primeiro?",
+      multipleClose: "Fecho um aplicativo por vez: {options}. Qual primeiro?",
+      option: "{n}. {app}",
+      yes: "Sim",
+      no: "Não",
+    },
+    understood: {
+      label: "A SERSHI entendeu:",
+      open: "Abrir {app}",
+      close: "Fechar {app}",
     },
     offline:
       "Estou rodando como prévia no navegador, então meu núcleo não está conectado. Abra o aplicativo para desktop (pnpm dev) para falar comigo.",
@@ -268,6 +288,10 @@ export const ptBR: Messages = {
       appCloseRequested: "Pedido para fechar {app}",
       microphoneOn: "Microfone ligado",
       microphoneOff: "Microfone desligado",
+      clarificationRequested: "Perguntou qual aplicativo você queria",
+      clarificationCancelled: "Pergunta cancelada",
+      clarificationExpired: "A pergunta expirou sem resposta",
+      commandInterpreted: "Entendeu um pedido imperfeito",
     },
   },
 

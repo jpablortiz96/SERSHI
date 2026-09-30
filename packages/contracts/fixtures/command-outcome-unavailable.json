@@ -8,5 +8,15 @@
   },
   "toolId": null,
   "data": null,
-  "durationMs": null
+  "durationMs": null,
+  "understood": null,
+  "understanding": {
+    "normalized": "battery status",
+    "tier": "keyword",
+    "candidates": [],
+    "confidence": 1.0,
+    "semantic": "notNeeded",
+    "semanticMs": null,
+    "understandingMs": 0.0
+  }
 }

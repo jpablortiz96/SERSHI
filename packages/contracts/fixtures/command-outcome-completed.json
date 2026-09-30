@@ -7,5 +7,15 @@
     "totalBytes": 34359738368,
     "usedBytes": 12884901888
   },
-  "durationMs": 0
+  "durationMs": 0,
+  "understood": null,
+  "understanding": {
+    "normalized": "memory",
+    "tier": "keyword",
+    "candidates": [],
+    "confidence": 1.0,
+    "semantic": "notNeeded",
+    "semanticMs": null,
+    "understandingMs": 0.0
+  }
 }

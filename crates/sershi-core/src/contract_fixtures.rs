@@ -32,8 +32,15 @@ fn write<T: Serialize>(name: &str, value: &T) {
     std::fs::write(dir.join(format!("{name}.json")), json).unwrap();
 }
 
+/// Submits and pins the (timed) understanding diagnostics so fixtures are
+/// stable.
 fn submit(service: &mut AssistantService, text: &str) -> crate::service::CommandOutcome {
-    service.submit(&CommandRequest { text: text.into() }, &mut |_| {})
+    let mut outcome = service.submit(&CommandRequest { text: text.into() }, &mut |_| {});
+    if let Some(trace) = outcome.understanding.as_mut() {
+        trace.understanding_ms = 0.0;
+        trace.semantic_ms = None;
+    }
+    outcome
 }
 
 #[test]
@@ -73,6 +80,30 @@ fn write_contract_fixtures() {
     write("command-outcome-ambiguous", &ambiguous);
     write("command-outcome-confirmation", &confirmation);
     write("confirmation-request", &request);
+
+    // Gate 3C: with the catalog, an ambiguous request is a question, and a
+    // repaired one says what SERSHI understood.
+    let mut registry = ToolRegistry::default();
+    register_all(&mut registry, Arc::new(FakeSystem::ok())).unwrap();
+    let apps = Arc::new(ApplicationManager::new(FakeApps::new(), || {
+        1_767_225_600_000
+    }));
+    app_tools::register(&mut registry, apps.clone()).unwrap();
+    let mut understanding = AssistantService::new(
+        ToolExecutor::new(registry, PolicyEngine::new(Platform::Windows)),
+        Box::new(KeywordIntentResolver),
+        PermissionGrants::default(),
+        || 1_767_225_600_000,
+    )
+    .with_applications(apps);
+    write(
+        "command-outcome-clarification",
+        &submit(&mut understanding, "open visual studio"),
+    );
+    write(
+        "command-outcome-understood",
+        &submit(&mut understanding, "Apreer Spotify"),
+    );
     write("activity", &service.recent_activity(20));
     write("tool-definitions", &service.tool_definitions());
 }

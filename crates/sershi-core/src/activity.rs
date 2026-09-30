@@ -32,6 +32,15 @@ pub enum ActivityKind {
     MicrophoneOn,
     /// The microphone closed (`duration_ms` is how long it was open).
     MicrophoneOff,
+    /// SERSHI asked which application was meant (Gate 3C). `subject` is
+    /// not set: the question's candidates are shown in the conversation.
+    ClarificationRequested,
+    ClarificationCancelled,
+    ClarificationExpired,
+    /// A request was understood through a repair (similar name, sound, a
+    /// malformed command word, context or the local model). The summary
+    /// names the tier; the request text is never recorded.
+    CommandInterpreted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

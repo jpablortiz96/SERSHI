@@ -19,5 +19,15 @@
     "kind": "ambiguous",
     "query": "visual studio"
   },
-  "durationMs": null
+  "durationMs": null,
+  "understood": null,
+  "understanding": {
+    "normalized": "open visual studio",
+    "tier": "none",
+    "candidates": [],
+    "confidence": 0.0,
+    "semantic": "notNeeded",
+    "semanticMs": null,
+    "understandingMs": 0.0
+  }
 }

@@ -17,6 +17,7 @@ use sershi_core::platform::Platform;
 use sershi_core::policy::PolicyEngine;
 use sershi_core::service::{AssistantService, ServiceEvent};
 use sershi_core::tool::ToolRegistry;
+use sershi_core::understanding::CLARIFICATION_TTL_MS;
 use sershi_platform::SysinfoSystemInfo;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -57,7 +58,9 @@ impl Runtime {
             // Persisted grants arrive with the storage layer (ADR 0004).
             PermissionGrants::default(),
             now_ms,
-        );
+        )
+        // Understanding resolves names against the trusted catalog (Gate 3C).
+        .with_applications(apps.clone());
         Ok(Self {
             service: Mutex::new(service),
             system,
@@ -96,6 +99,10 @@ pub fn schedule_settle(app: &AppHandle, snapshot: &AssistantSnapshot) {
         AssistantState::Warning | AssistantState::Error => Duration::from_millis(4_000),
         AssistantState::AwaitingConfirmation => {
             schedule_expiry(app);
+            return;
+        }
+        AssistantState::WaitingForClarification => {
+            schedule_clarification_expiry(app);
             return;
         }
         _ => return,
@@ -138,6 +145,18 @@ fn schedule_expiry(app: &AppHandle) {
         {
             confirmation::expired(&app, &outcome);
         }
+    });
+}
+
+/// Ends an unanswered question shortly after its TTL, so a stale question
+/// can never be answered later and the surfaces return to idle. Idempotent:
+/// an answered or newer question is not overdue.
+fn schedule_clarification_expiry(app: &AppHandle) {
+    let app = app.clone();
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(CLARIFICATION_TTL_MS + 250));
+        let runtime = app.state::<Runtime>();
+        let _ = runtime.with_service(|s| s.expire_clarification(&mut |e| broadcast(&app, e)));
     });
 }
 

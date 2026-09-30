@@ -1,0 +1,33 @@
+{
+  "status": "completed",
+  "reply": "Opened Spotify.",
+  "detail": null,
+  "toolId": "system.open_application",
+  "data": {
+    "application": {
+      "displayName": "Spotify",
+      "id": "spotify",
+      "source": "packagedApp"
+    },
+    "kind": "opened",
+    "matched": "exact"
+  },
+  "durationMs": 0,
+  "understood": {
+    "action": "open",
+    "application": {
+      "id": "spotify",
+      "displayName": "Spotify",
+      "source": "packagedApp"
+    }
+  },
+  "understanding": {
+    "normalized": "apreer spotify",
+    "tier": "verbRepair",
+    "candidates": [],
+    "confidence": 0.75,
+    "semantic": "notNeeded",
+    "semanticMs": null,
+    "understandingMs": 0.0
+  }
+}

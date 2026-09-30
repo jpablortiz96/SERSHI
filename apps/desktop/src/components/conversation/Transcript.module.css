@@ -164,3 +164,15 @@
   width: 12px;
   height: 12px;
 }
+
+/* "SERSHI understood: Open Word" — only after a repaired request. */
+.understood {
+  margin: 0 0 var(--space-1);
+  font-size: var(--type-caption-size);
+  color: var(--text-secondary);
+}
+
+.understood strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}

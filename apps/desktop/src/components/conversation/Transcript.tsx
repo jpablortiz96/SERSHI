@@ -2,7 +2,12 @@ import type { CommandStatus } from "@sershi/contracts";
 import { useEffect, useRef } from "react";
 
 import { useI18n, type I18n } from "../../i18n";
-import { applicationName, asApplicationResult, composeReply } from "../../i18n/domain";
+import {
+  applicationName,
+  asApplicationResult,
+  composeReply,
+  understoodAction,
+} from "../../i18n/domain";
 import { useConversation, type Message, type Reply } from "../../state/conversation";
 import { motionReduced } from "../../visual/appearance";
 import { MicIcon } from "../shell/icons";
@@ -11,6 +16,7 @@ import styles from "./Transcript.module.css";
 type Status = CommandStatus | "offline" | "voice";
 
 const STATUS_WITH_LABEL = [
+  "needsClarification",
   "unavailable",
   "notUnderstood",
   "needsConfirmation",
@@ -57,11 +63,50 @@ function replyText({ t, format }: I18n, reply: Reply): string {
   }
 }
 
-/** For an ambiguous application request: one button per candidate. */
-function Candidates({ reply }: { reply: Reply }) {
+/**
+ * Answers to a question SERSHI asked: one button per offered application
+ * (sent as its exact name, which only selects among the offered ones), or
+ * Yes/No for "Did you mean …?". A button only answers the question; closing
+ * still needs the trusted confirmation window.
+ */
+function Candidates({ reply, latest }: { reply: Reply; latest: boolean }) {
   const { t } = useI18n();
   const submit = useConversation((s) => s.submit);
   if (reply.kind !== "outcome") return null;
+  const detail = reply.outcome.detail;
+  if (detail?.kind === "clarification") {
+    // Only the latest question can still be answered.
+    if (!latest) return null;
+    const c = detail.clarification;
+    if (c.kind === "didYouMean") {
+      return (
+        <ul className={styles.candidates}>
+          <li>
+            <button type="button" onClick={() => void submit(t("reply.clarify.yes"))}>
+              {t("reply.clarify.yes")}
+            </button>
+          </li>
+          <li>
+            <button type="button" onClick={() => void submit(t("reply.clarify.no"))}>
+              {t("reply.clarify.no")}
+            </button>
+          </li>
+        </ul>
+      );
+    }
+    return (
+      <ul className={styles.candidates}>
+        {c.candidates.map((app) => (
+          <li key={app.id}>
+            <button type="button" onClick={() => void submit(app.displayName)}>
+              {applicationName(t, app)}
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  // Without the catalog in understanding (older path): re-ask by name.
   const result = asApplicationResult(reply.outcome.data);
   if (result?.kind !== "ambiguous") return null;
   const closing = reply.outcome.toolId === "system.close_application";
@@ -99,7 +144,7 @@ export function Transcript({ messages }: { messages: Message[] }) {
   return (
     <div className={styles.scroller}>
       <ol className={styles.list} aria-live="polite" aria-relevant="additions">
-        {messages.map((m) => {
+        {messages.map((m, index) => {
           if (m.role === "user") {
             return (
               <li key={m.id} className={styles.message} data-role="user" data-via={m.via}>
@@ -117,8 +162,14 @@ export function Transcript({ messages }: { messages: Message[] }) {
           const outcome = m.reply.kind === "outcome" ? m.reply.outcome : null;
           return (
             <li key={m.id} className={styles.message} data-role="sershi" data-status={status}>
+              {outcome?.understood && (
+                <p className={styles.understood}>
+                  {t("reply.understood.label")}{" "}
+                  <strong>{understoodAction(t, outcome.understood)}</strong>
+                </p>
+              )}
               <p className={styles.reply}>{replyText(i18n, m.reply)}</p>
-              <Candidates reply={m.reply} />
+              <Candidates reply={m.reply} latest={index === messages.length - 1} />
               <p className={styles.meta}>
                 {hasLabel(status) && <span>{t(`transcript.status.${status}`)}</span>}
                 {outcome?.toolId && <span className="t-mono">{outcome.toolId}</span>}

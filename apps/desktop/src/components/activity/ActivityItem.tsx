@@ -33,6 +33,11 @@ export const KIND_TONE: Record<ActivityKind, Tone> = {
   // The microphone opening and closing is a system fact worth seeing.
   microphoneOn: "signal",
   microphoneOff: "signal",
+  // Understanding (Gate 3C): SERSHI asked, or read an imperfect request.
+  clarificationRequested: "neutral",
+  clarificationCancelled: "neutral",
+  clarificationExpired: "neutral",
+  commandInterpreted: "signal",
 };
 
 export function ActivityItem({ entry }: { entry: ActivityEntry }) {

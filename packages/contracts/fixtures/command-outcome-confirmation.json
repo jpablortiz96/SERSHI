@@ -4,5 +4,15 @@
   "detail": null,
   "toolId": "system.close_application",
   "data": null,
-  "durationMs": null
+  "durationMs": null,
+  "understood": null,
+  "understanding": {
+    "normalized": "close spotify",
+    "tier": "none",
+    "candidates": [],
+    "confidence": 0.0,
+    "semantic": "notNeeded",
+    "semanticMs": null,
+    "understandingMs": 0.0
+  }
 }

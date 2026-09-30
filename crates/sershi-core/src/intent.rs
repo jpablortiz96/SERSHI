@@ -14,6 +14,7 @@ use serde_json::Value;
 
 use crate::ids::ToolId;
 use crate::tool::{CallOrigin, ToolCall};
+use crate::understanding::Clarification;
 
 /// A fixed answer SERSHI can give without acting. The UI renders it in the
 /// user's interface language; [`AnswerTopic::canonical_text`] is the English
@@ -24,6 +25,8 @@ use crate::tool::{CallOrigin, ToolCall};
 pub enum AnswerTopic {
     Greeting,
     Help,
+    /// A negated request ("No abras Chrome"): acknowledged, nothing done.
+    NoAction,
 }
 
 impl AnswerTopic {
@@ -38,6 +41,7 @@ impl AnswerTopic {
                  close installed applications — by typing or with the microphone. Try \"Open \
                  Notepad\". Files and connected services are on the roadmap."
             }
+            Self::NoAction => "OK — I won't do anything.",
         }
     }
 }
@@ -80,6 +84,9 @@ pub enum Intent {
     /// authority. There is deliberately no counterpart: no intent can
     /// approve anything (approval exists only on the trusted surface).
     Cancel,
+    /// Ask the user instead of guessing (Gate 3C). The candidates are
+    /// trusted catalog entries; the answer is resolved only among them.
+    Clarify(Clarification),
     /// Not understood.
     NotUnderstood,
 }

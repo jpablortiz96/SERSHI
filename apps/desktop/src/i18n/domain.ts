@@ -9,7 +9,9 @@ import type {
   ApplicationSummary,
   AssistantState,
   CapabilityStatus,
+  Clarification,
   CommandOutcome,
+  UnderstoodAs,
   Platform,
   PlatformCapability,
   RiskLevel,
@@ -143,6 +145,14 @@ function describeEvent(t: Translate, entry: ActivityEntry): string {
       return t("activity.events.microphoneOn");
     case "microphoneOff":
       return t("activity.events.microphoneOff");
+    case "clarificationRequested":
+      return t("activity.events.clarificationRequested");
+    case "clarificationCancelled":
+      return t("activity.events.clarificationCancelled");
+    case "clarificationExpired":
+      return t("activity.events.clarificationExpired");
+    case "commandInterpreted":
+      return t("activity.events.commandInterpreted");
   }
 }
 
@@ -239,6 +249,42 @@ function applicationReply(t: Translate, result: ApplicationResult): string {
   }
 }
 
+/** Numbered options ("1. Windows PowerShell; 2. Windows PowerShell ISE"). */
+function optionList(t: Translate, apps: readonly ApplicationSummary[]): string {
+  return apps
+    .map((app, i) => t("reply.clarify.option", { n: String(i + 1), app: applicationName(t, app) }))
+    .join("; ");
+}
+
+/** A question SERSHI asks instead of guessing. */
+export function clarificationReply(t: Translate, c: Clarification): string {
+  const first = c.candidates[0];
+  const open = c.action === "open";
+  switch (c.kind) {
+    case "chooseApplication":
+      return t("reply.clarify.choose", { options: optionList(t, c.candidates) });
+    case "didYouMean":
+      if (!first) return t(open ? "reply.clarify.whichOpen" : "reply.clarify.whichClose");
+      return t(open ? "reply.clarify.didYouMeanOpen" : "reply.clarify.didYouMeanClose", {
+        app: applicationName(t, first),
+      });
+    case "whichApplication":
+      return t(open ? "reply.clarify.whichOpen" : "reply.clarify.whichClose");
+    case "multipleTargets":
+      return t(open ? "reply.clarify.multipleOpen" : "reply.clarify.multipleClose", {
+        options: optionList(t, c.candidates),
+      });
+  }
+}
+
+/** "Open Microsoft Word": what SERSHI understood a repaired request as. */
+export function understoodAction(t: Translate, understood: UnderstoodAs): string {
+  const app = applicationName(t, understood.application);
+  return understood.action === "open"
+    ? t("reply.understood.open", { app })
+    : t("reply.understood.close", { app });
+}
+
 /**
  * Renders a command outcome in the interface language. Falls back to the
  * core's canonical English `reply` for anything it cannot phrase (e.g. a tool
@@ -262,6 +308,10 @@ export function composeReply(t: Translate, f: Formatters, outcome: CommandOutcom
       return detail?.kind === "answer" ? t(`reply.answer.${detail.topic}`) : outcome.reply;
     case "needsConfirmation":
       return t("reply.needsConfirmation", { tool });
+    case "needsClarification":
+      return detail?.kind === "clarification"
+        ? clarificationReply(t, detail.clarification)
+        : outcome.reply;
     case "denied":
       return detail?.kind === "denied"
         ? t(`reply.denied.${detail.reason.kind}`, { tool })

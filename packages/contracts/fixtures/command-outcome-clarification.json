@@ -1,0 +1,36 @@
+{
+  "status": "needsClarification",
+  "reply": "I found more than one match: Visual Studio 2022, Visual Studio Code. Which one do you want?",
+  "detail": {
+    "kind": "clarification",
+    "clarification": {
+      "kind": "chooseApplication",
+      "action": "open",
+      "candidates": [
+        {
+          "id": "visual-studio-2022",
+          "displayName": "Visual Studio 2022",
+          "source": "startMenu"
+        },
+        {
+          "id": "visual-studio-code",
+          "displayName": "Visual Studio Code",
+          "source": "startMenu"
+        }
+      ]
+    }
+  },
+  "toolId": null,
+  "data": null,
+  "durationMs": null,
+  "understood": null,
+  "understanding": {
+    "normalized": "open visual studio",
+    "tier": "catalog",
+    "candidates": [],
+    "confidence": 0.0,
+    "semantic": "notNeeded",
+    "semanticMs": null,
+    "understandingMs": 0.0
+  }
+}

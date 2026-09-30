@@ -96,6 +96,14 @@ export const STATE_VISUALS: Record<AssistantState, StateVisual> = {
     attention: true,
     glyph: "hourglass",
   },
+  // SERSHI asked which application was meant: attending, not working.
+  waitingForClarification: {
+    pattern: "attend",
+    energy: 0.75,
+    busy: false,
+    attention: true,
+    glyph: "focus",
+  },
   error: { pattern: "falter", energy: 0.6, busy: false, attention: true, glyph: "cross" },
 };
 

@@ -2,6 +2,8 @@
 import type { CommandStatus } from "./CommandStatus";
 import type { OutcomeDetail } from "./OutcomeDetail";
 import type { ToolId } from "./ToolId";
+import type { UnderstandingTrace } from "./UnderstandingTrace";
+import type { UnderstoodAs } from "./UnderstoodAs";
 import type { JsonValue } from "./serde_json/JsonValue";
 
 export type CommandOutcome = { status: CommandStatus, 
@@ -10,4 +12,13 @@ export type CommandOutcome = { status: CommandStatus,
  * `status`, `tool_id`, `data` and `detail`, and fall back to this text
  * for anything they cannot phrase themselves.
  */
-reply: string, detail: OutcomeDetail | null, toolId: ToolId | null, data: JsonValue | null, durationMs: number | null, };
+reply: string, detail: OutcomeDetail | null, toolId: ToolId | null, data: JsonValue | null, durationMs: number | null, 
+/**
+ * Set when SERSHI acted on a repaired or inferred reading of the
+ * request ("SERSHI understood: Open Word"), so the user can see it.
+ */
+understood: UnderstoodAs | null, 
+/**
+ * Developer diagnostics (transient; never stored).
+ */
+understanding: UnderstandingTrace | null, };

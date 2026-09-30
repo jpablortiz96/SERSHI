@@ -104,6 +104,11 @@ struct Inner {
     fallback: bool,
     /// When the last spoken command's outcome arrived (speech latency).
     answered_at: Option<Instant>,
+    /// Incremented whenever speech is stopped (a new request, the
+    /// microphone, the Stop button). A reply still being synthesized when
+    /// that happens is dropped instead of starting late over the next
+    /// interaction (Gate 3C busy-state audit).
+    speech_epoch: u64,
 }
 
 /// Loaded recognition engines, kept warm between commands.
@@ -322,7 +327,14 @@ pub fn start_capture(app: &AppHandle) -> Result<CaptureStart, IpcError> {
     stop_speaking(app);
 
     let runtime = app.state::<Runtime>();
-    let began = runtime.with_service(|s| s.begin_listening(&mut |e| broadcast(app, e)))?;
+    let began = runtime.with_service(|s| {
+        let began = s.begin_listening(&mut |e| broadcast(app, e));
+        if began.is_ok() {
+            // Load the semantic model (if installed) while the user speaks.
+            s.prepare_understanding();
+        }
+        began
+    })?;
     let Ok(cancelled) = began else {
         return refused(VoiceFailure::Busy);
     };
@@ -934,8 +946,14 @@ fn recognise(
             // Exactly the typed-command path (see AssistantService docs).
             let t0 = Instant::now();
             let runtime = app.state::<Runtime>();
+            let language = heard.language.as_ref().map(|l| l.as_str().to_owned());
             let submitted = runtime.with_service(|s| {
-                let outcome = s.submit_transcript(&text, &mut |e| broadcast(app, e));
+                let outcome = s.submit_transcript(
+                    &text,
+                    Some(heard.confidence),
+                    language.as_deref(),
+                    &mut |e| broadcast(app, e),
+                );
                 (outcome, s.snapshot())
             });
             if let Ok((Some(outcome), snapshot)) = submitted {
@@ -1048,6 +1066,7 @@ pub fn speak(app: &AppHandle, text: &str, language: Option<&str>) -> Result<(), 
         inner.settings.voice.clone()
     };
     stop_speaking(app);
+    let epoch = voice.locked()?.speech_epoch;
     let t0 = Instant::now();
     let audio = voice
         .platform
@@ -1062,8 +1081,9 @@ pub fn speak(app: &AppHandle, text: &str, language: Option<&str>) -> Result<(), 
         .map_err(|_| failure(VoiceFailure::SpeechUnavailable))?;
     let id = {
         let mut inner = voice.locked()?;
-        if inner.capture.is_some() {
-            // The user started talking while SERSHI prepared its reply.
+        if inner.capture.is_some() || inner.speech_epoch != epoch {
+            // The user started talking, typed, or pressed Stop while SERSHI
+            // prepared its reply.
             return Ok(());
         }
         inner.next_id += 1;
@@ -1087,12 +1107,20 @@ pub fn speak(app: &AppHandle, text: &str, language: Option<&str>) -> Result<(), 
         Ok(handle) => {
             // Swap under the lock, drop outside it: dropping a playback
             // joins its thread, whose `finished` callback takes this lock.
-            let previous = voice
-                .locked()
-                .ok()
-                .and_then(|mut inner| inner.playback.replace((id, handle)));
+            // If speech was stopped meanwhile, this reply never registers.
+            let (previous, stale) = match voice.locked() {
+                Ok(mut inner) if inner.speech_epoch == epoch && inner.capture.is_none() => {
+                    (inner.playback.replace((id, handle)), None)
+                }
+                _ => (None, Some(handle)),
+            };
             drop(previous);
             let _ = ready_tx.send(());
+            if let Some(stale) = stale {
+                stale.stop();
+                finish_speaking(app);
+                return Ok(());
+            }
             eprintln!(
                 "SERSHI voice: speech started {} ms after request",
                 t0.elapsed().as_millis()
@@ -1135,7 +1163,10 @@ pub fn stop_speaking(app: &AppHandle) {
     let Some(voice) = managed(app) else {
         return;
     };
-    let taken = voice.locked().ok().and_then(|mut i| i.playback.take());
+    let taken = voice.locked().ok().and_then(|mut i| {
+        i.speech_epoch = i.speech_epoch.wrapping_add(1);
+        i.playback.take()
+    });
     if let Some((_, handle)) = taken {
         // Joins the playback thread; no lock is held here.
         handle.stop();

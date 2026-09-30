@@ -31,6 +31,7 @@ export const ASSISTANT_STATES = [
   "success",
   "warning",
   "awaitingConfirmation",
+  "waitingForClarification",
   "error",
 ] as const satisfies readonly AssistantState[];
 
@@ -98,15 +99,40 @@ export function isConfirmationRequest(v: unknown): v is ConfirmationRequest {
   );
 }
 
+const isApplicationSummary = (v: unknown): boolean =>
+  isObj(v) && isStr(v.id) && isStr(v.displayName) && isStr(v.source);
+
 export function isCommandOutcome(v: unknown): v is CommandOutcome {
-  return (
-    isObj(v) &&
-    isStr(v.status) &&
-    isStr(v.reply) &&
-    isNullable(v.toolId, isStr) &&
+  if (
+    !isObj(v) ||
+    !isStr(v.status) ||
+    !isStr(v.reply) ||
+    !isNullable(v.toolId, isStr) ||
     // The Command Center never receives confirmation authorization data.
-    !("confirmation" in v)
-  );
+    "confirmation" in v ||
+    "confirmationId" in v
+  ) {
+    return false;
+  }
+  // A clarification offers trusted applications only (names, never paths).
+  const detail = v.detail;
+  if (isObj(detail) && detail.kind === "clarification") {
+    const c = detail.clarification;
+    if (
+      !isObj(c) ||
+      !isStr(c.kind) ||
+      !isStr(c.action) ||
+      !Array.isArray(c.candidates) ||
+      !c.candidates.every(isApplicationSummary)
+    ) {
+      return false;
+    }
+  }
+  const understood = v.understood;
+  if (understood != null && (!isObj(understood) || !isApplicationSummary(understood.application))) {
+    return false;
+  }
+  return true;
 }
 
 export function isShortcutChange(v: unknown): v is ShortcutChange {

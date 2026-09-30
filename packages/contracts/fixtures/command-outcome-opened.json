@@ -12,5 +12,15 @@
     "kind": "opened",
     "matched": "exact"
   },
-  "durationMs": 0
+  "durationMs": 0,
+  "understood": null,
+  "understanding": {
+    "normalized": "abre spotify",
+    "tier": "none",
+    "candidates": [],
+    "confidence": 0.0,
+    "semantic": "notNeeded",
+    "semanticMs": null,
+    "understandingMs": 0.0
+  }
 }

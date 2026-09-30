@@ -47,6 +47,7 @@ export const enUS = {
     success: { label: "Done", line: "Completed." },
     warning: { label: "Needs attention", line: "Something needs your attention." },
     awaitingConfirmation: { label: "Waiting for you", line: "Waiting for your approval." },
+    waitingForClarification: { label: "Asking you", line: "Waiting for your answer." },
     error: { label: "Couldn't complete", line: "Something went wrong. Details are in Activity." },
   },
 
@@ -92,6 +93,7 @@ export const enUS = {
   transcript: {
     youSaid: "You said",
     status: {
+      needsClarification: "Question",
       unavailable: "Not available yet",
       notUnderstood: "Not understood",
       needsConfirmation: "Needs approval",
@@ -123,8 +125,9 @@ export const enUS = {
       "I couldn't complete {tool}. The system didn't return the information — try again in a moment.",
     unavailable: "{capability} isn't available yet — it's planned for {milestone}.",
     notUnderstood:
-      "I didn't understand that. Until an AI provider is connected I can answer a few system questions — try “How much memory am I using?”",
+      "I didn't understand that. Try, for example, “Open Chrome” or “How much memory am I using?”",
     answer: {
+      noAction: "OK — I won't do anything.",
       greeting:
         "Hello. I'm SERSHI. I can tell you about this computer's system, memory and processor. Language understanding arrives once an AI provider is connected.",
       help: "I can report system information, memory usage and processor load, and open or close installed applications — by typing or with the microphone. Try “Open Notepad”. Files and connected services are on the roadmap.",
@@ -157,6 +160,23 @@ export const enUS = {
       catalogUnavailable: "I couldn't read the list of installed applications.",
       openCommand: "Open {app}",
       closeCommand: "Close {app}",
+    },
+    clarify: {
+      choose: "I found more than one option: {options}. Which one do you want?",
+      didYouMeanOpen: "Did you mean {app}?",
+      didYouMeanClose: "Do you want me to close {app}?",
+      whichOpen: "Which application do you want to open?",
+      whichClose: "Which application do you want to close?",
+      multipleOpen: "I open one application at a time: {options}. Which one first?",
+      multipleClose: "I close one application at a time: {options}. Which one first?",
+      option: "{n}. {app}",
+      yes: "Yes",
+      no: "No",
+    },
+    understood: {
+      label: "SERSHI understood:",
+      open: "Open {app}",
+      close: "Close {app}",
     },
     offline:
       "I'm running as a browser preview, so my core isn't connected. Launch the desktop app (pnpm dev) to talk to me.",
@@ -262,6 +282,10 @@ export const enUS = {
       appCloseRequested: "Asked {app} to close",
       microphoneOn: "Microphone on",
       microphoneOff: "Microphone off",
+      clarificationRequested: "Asked which application you meant",
+      clarificationCancelled: "Question cancelled",
+      clarificationExpired: "Question expired unanswered",
+      commandInterpreted: "Understood an imperfect request",
     },
   },
 

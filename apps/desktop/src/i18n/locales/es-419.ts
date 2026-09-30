@@ -46,6 +46,7 @@ export const es419: Messages = {
     success: { label: "Hecho", line: "Completado." },
     warning: { label: "Requiere atención", line: "Algo requiere tu atención." },
     awaitingConfirmation: { label: "Esperando aprobación", line: "Esperando tu aprobación." },
+    waitingForClarification: { label: "Preguntándote", line: "Esperando tu respuesta." },
     error: {
       label: "No se pudo completar",
       line: "Algo salió mal. Los detalles están en Actividad.",
@@ -94,6 +95,7 @@ export const es419: Messages = {
   transcript: {
     youSaid: "Dijiste",
     status: {
+      needsClarification: "Pregunta",
       unavailable: "Aún no disponible",
       notUnderstood: "No entendido",
       needsConfirmation: "Requiere aprobación",
@@ -128,8 +130,9 @@ export const es419: Messages = {
     unavailable:
       "Esta función aún no está disponible: {capability}. Está planificada para {milestone}.",
     notUnderstood:
-      "No entendí eso. Hasta que se conecte un proveedor de IA, puedo responder algunas preguntas sobre el sistema. Prueba con «¿Cuánta memoria estoy usando?».",
+      "No entendí eso. Prueba, por ejemplo, «Abre Chrome» o «¿Cuánta memoria estoy usando?».",
     answer: {
+      noAction: "De acuerdo, no haré nada.",
       greeting:
         "Hola. Soy SERSHI. Puedo contarte sobre el sistema, la memoria y el procesador de esta computadora. La comprensión del lenguaje llegará cuando se conecte un proveedor de IA.",
       help: "Puedo informarte sobre el sistema, el uso de memoria y la carga del procesador, y abrir o cerrar aplicaciones instaladas, escribiendo o con el micrófono. Prueba con «Abre el Bloc de notas». Los archivos y los servicios conectados están en la hoja de ruta.",
@@ -164,6 +167,23 @@ export const es419: Messages = {
       catalogUnavailable: "No pude leer la lista de aplicaciones instaladas.",
       openCommand: "Abre {app}",
       closeCommand: "Cierra {app}",
+    },
+    clarify: {
+      choose: "Encontré más de una opción: {options}. ¿Cuál quieres?",
+      didYouMeanOpen: "¿Quisiste decir {app}?",
+      didYouMeanClose: "¿Quieres que cierre {app}?",
+      whichOpen: "¿Qué aplicación quieres abrir?",
+      whichClose: "¿Qué aplicación quieres cerrar?",
+      multipleOpen: "Abro una aplicación a la vez: {options}. ¿Cuál primero?",
+      multipleClose: "Cierro una aplicación a la vez: {options}. ¿Cuál primero?",
+      option: "{n}. {app}",
+      yes: "Sí",
+      no: "No",
+    },
+    understood: {
+      label: "SERSHI entendió:",
+      open: "Abrir {app}",
+      close: "Cerrar {app}",
     },
     offline:
       "Me estoy ejecutando como vista previa en el navegador, así que mi núcleo no está conectado. Abre la aplicación de escritorio (pnpm dev) para hablar conmigo.",
@@ -274,6 +294,10 @@ export const es419: Messages = {
       appCloseRequested: "Se pidió cerrar {app}",
       microphoneOn: "Micrófono activado",
       microphoneOff: "Micrófono desactivado",
+      clarificationRequested: "Preguntó qué aplicación querías",
+      clarificationCancelled: "Pregunta cancelada",
+      clarificationExpired: "La pregunta expiró sin respuesta",
+      commandInterpreted: "Entendió una solicitud imperfecta",
     },
   },
 
