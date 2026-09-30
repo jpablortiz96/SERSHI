@@ -7,7 +7,7 @@ pub mod model;
 pub mod normalize;
 pub mod tools;
 
-pub use catalog::{ApplicationCatalog, MatchKind, Resolution};
+pub use catalog::{ApplicationCatalog, CatalogNames, MatchKind, Resolution};
 pub use manager::{ApplicationManager, CatalogState, CatalogStatus};
 pub use model::{
     AppSource, ApplicationDescriptor, ApplicationSummary, CloseSupport, LaunchTarget, slug,

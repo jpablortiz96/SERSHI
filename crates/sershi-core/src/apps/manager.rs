@@ -10,7 +10,7 @@ use std::time::Instant;
 
 use serde::Serialize;
 
-use super::catalog::{ApplicationCatalog, Resolution};
+use super::catalog::{ApplicationCatalog, CatalogNames, Resolution};
 use super::model::ApplicationSummary;
 use crate::ports::{ApplicationPlatform, PortError};
 use crate::service::Clock;
@@ -100,6 +100,20 @@ impl ApplicationManager {
             .ok()
             .and_then(|inner| inner.catalog.as_ref().map(ApplicationCatalog::list))
             .unwrap_or_default()
+    }
+
+    /// Names of every trusted application (scanning first if needed), for
+    /// scored matching. Paths never leave the catalog.
+    pub fn names(&self) -> Result<Vec<CatalogNames>, PortError> {
+        let mut inner = self.lock()?;
+        if inner.catalog.is_none() {
+            self.scan(&mut inner)?;
+        }
+        Ok(inner
+            .catalog
+            .as_ref()
+            .map(ApplicationCatalog::names)
+            .unwrap_or_default())
     }
 
     pub fn resolve(&self, query: &str) -> Result<Resolution, PortError> {

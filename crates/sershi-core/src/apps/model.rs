@@ -48,10 +48,20 @@ pub enum LaunchTarget {
 
 impl LaunchTarget {
     /// Identity used for de-duplication. Windows paths are case-insensitive
-    /// and sources disagree on case, so compare lowercased.
+    /// and sources disagree on case, so compare lowercased. Arguments are
+    /// part of the identity: "Anaconda PowerShell Prompt" runs the same
+    /// `powershell.exe` as "Windows PowerShell" but is a different
+    /// application, and must not hide it (observed in Gate 3C).
     pub fn identity(&self) -> String {
         match self {
-            Self::Executable { path, .. } => format!("exe:{}", path.display()).to_lowercase(),
+            Self::Executable {
+                path, arguments, ..
+            } => match arguments.as_deref().map(str::trim) {
+                Some(args) if !args.is_empty() => {
+                    format!("exe:{} {args}", path.display()).to_lowercase()
+                }
+                _ => format!("exe:{}", path.display()).to_lowercase(),
+            },
             Self::PackagedApp { aumid } => format!("aumid:{aumid}").to_lowercase(),
             Self::ShellUri { uri } => format!("uri:{uri}"),
             Self::Shortcut { path } => format!("lnk:{}", path.display()).to_lowercase(),

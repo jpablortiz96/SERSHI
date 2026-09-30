@@ -81,3 +81,33 @@ fn an_application_that_is_not_running_is_reported_without_side_effects() {
     // File Explorer is never closable.
     assert!(platform.running_state(&CloseSupport::Unsupported).is_err());
 }
+
+/// Prints this machine's catalog (names and sources only) and how the
+/// physically observed Gate 3C queries resolve. Manual:
+/// `cargo test -p sershi-platform --test windows_applications -- --ignored --nocapture`.
+#[test]
+#[ignore = "inventory of the local machine for Gate 3C"]
+fn print_catalog_inventory() {
+    let platform = sershi_platform::application_platform();
+    let Ok(discovered) = platform.discover() else {
+        return;
+    };
+    let catalog = ApplicationCatalog::build(discovered);
+    for app in catalog.list() {
+        println!("{:?}\t{}\t{}", app.source, app.id, app.display_name);
+    }
+    for q in [
+        "PowerShell",
+        "Windows PowerShell",
+        "Windows PowerShell ISE",
+        "Word",
+        "Microsoft Word",
+        "World",
+        "notas",
+        "Outlook",
+        "Catcode",
+        "Excel",
+    ] {
+        println!("{q:?} → {:?}", catalog.resolve(q));
+    }
+}

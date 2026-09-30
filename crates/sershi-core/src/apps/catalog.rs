@@ -3,12 +3,16 @@
 //!
 //! Resolution tiers, first tier with any match wins:
 //! 1. exact name or id
-//! 2. alias (the application's own aliases plus SERSHI's curated aliases)
+//! 2. alias (the application's own aliases, SERSHI's curated aliases, and a
+//!    vendor-qualified name: "Microsoft Word" → "Word")
 //! 3. word-boundary prefix ("visual studio" → "visual studio code")
 //! 4. every query word appears as a whole word in the name
 //!
 //! One match launches; several matches are **ambiguous** and SERSHI asks
-//! instead of guessing. There is deliberately no edit-distance matching.
+//! instead of guessing, listing the closest candidates first. There is no
+//! edit-distance matching here: similarity and phonetics are scored,
+//! thresholded signals in `crate::understanding`, which only ever select
+//! one of these trusted entries.
 
 use std::collections::HashSet;
 
@@ -19,9 +23,22 @@ use super::normalize::{normalize, words};
 pub const MAX_CANDIDATES: usize = 6;
 
 /// Common short names for well-known applications. Values are normalized
-/// display names as Windows usually presents them.
+/// display names as Windows usually presents them. Aliases are strings
+/// only: they select a discovered application, never a path or command.
 const CURATED_ALIASES: &[(&str, &[&str])] = &[
     ("chrome", &["google chrome"]),
+    ("navegador chrome", &["google chrome"]),
+    ("navegador de google", &["google chrome"]),
+    ("navegador google", &["google chrome"]),
+    ("ms word", &["word", "microsoft word"]),
+    ("ms excel", &["excel", "microsoft excel"]),
+    ("ms outlook", &["outlook", "microsoft outlook"]),
+    ("ms powerpoint", &["powerpoint", "microsoft powerpoint"]),
+    ("power point", &["powerpoint", "microsoft powerpoint"]),
+    // A frequent speech-recognition spelling of "Bloc de notas".
+    ("blog de notas", &["notepad", "bloc de notas"]),
+    ("bloc de notas", &["notepad", "bloc de notas"]),
+    ("powershell ise", &["windows powershell ise"]),
     ("vscode", &["visual studio code"]),
     ("vs code", &["visual studio code"]),
     ("code", &["visual studio code"]),
@@ -34,6 +51,19 @@ const CURATED_ALIASES: &[(&str, &[&str])] = &[
     ("teams", &["microsoft teams", "teams"]),
     ("terminal", &["terminal", "windows terminal"]),
 ];
+
+/// Vendor names that may prefix an application's own name ("Microsoft
+/// Word" for "Word", "Google Chrome" for "Chrome").
+const VENDORS: &[&str] = &["microsoft", "ms", "google", "mozilla", "adobe", "windows"];
+
+/// A trusted application as understanding may see it: identity and names,
+/// never how it is started.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogNames {
+    pub application: ApplicationSummary,
+    /// Normalized display name first, then aliases and curated aliases.
+    pub names: Vec<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -147,6 +177,16 @@ impl ApplicationCatalog {
 
     pub fn resolve(&self, query: &str) -> Resolution {
         let q = normalize(query);
+        match self.resolve_normalized(&q) {
+            // Speech recognition splits compound names ("Power Point",
+            // "Power Shell"): try once without the spaces.
+            Resolution::NotFound if q.contains(' ') => self.resolve_normalized(&q.replace(' ', "")),
+            other => other,
+        }
+    }
+
+    fn resolve_normalized(&self, q: &str) -> Resolution {
+        let q = q.to_owned();
         if q.is_empty() {
             return Resolution::NotFound;
         }
@@ -157,11 +197,19 @@ impl ApplicationCatalog {
             .collect();
         let query_words: Vec<&str> = words(&q).collect();
         let prefix = format!("{q} ");
+        // "microsoft word" → "word"; only for a remaining name of 3+ chars.
+        let unqualified: Option<&str> = VENDORS.iter().find_map(|v| {
+            q.strip_prefix(v)
+                .and_then(|rest| rest.strip_prefix(' '))
+                .filter(|rest| rest.len() >= 3)
+        });
 
         let tiers: [(MatchKind, Matcher<'_>); 4] = [
             (MatchKind::Exact, &|e| e.name == q || e.id_key == q),
             (MatchKind::Alias, &|e| {
-                e.aliases.contains(&q) || curated.contains(&e.name.as_str())
+                e.aliases.contains(&q)
+                    || curated.contains(&e.name.as_str())
+                    || unqualified.is_some_and(|u| e.name == u)
             }),
             (MatchKind::Prefix, &|e| {
                 q.len() >= 3 && e.name.starts_with(&prefix)
@@ -183,8 +231,11 @@ impl ApplicationCatalog {
                     };
                 }
                 many => {
+                    let mut ranked: Vec<&Entry> = many.to_vec();
+                    ranked.sort_by_key(|e| relevance(&query_words, &e.name));
                     return Resolution::Ambiguous(
-                        many.iter()
+                        ranked
+                            .iter()
                             .take(MAX_CANDIDATES)
                             .map(|e| e.app.summary())
                             .collect(),
@@ -194,6 +245,46 @@ impl ApplicationCatalog {
         }
         Resolution::NotFound
     }
+
+    /// Every application's identity and names, for scored matching in
+    /// `crate::understanding`. No launch targets leave the catalog.
+    pub fn names(&self) -> Vec<CatalogNames> {
+        self.entries
+            .iter()
+            .map(|e| {
+                let mut names = vec![e.name.clone()];
+                for alias in &e.aliases {
+                    if !names.contains(alias) {
+                        names.push(alias.clone());
+                    }
+                }
+                for (alias, targets) in CURATED_ALIASES {
+                    if targets.contains(&e.name.as_str()) && !names.iter().any(|n| n == alias) {
+                        names.push((*alias).to_owned());
+                    }
+                }
+                CatalogNames {
+                    application: e.app.summary(),
+                    names,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Sort key for ambiguous matches: closest first. Fewer words beyond the
+/// query, and a platform-variant suffix such as "(x86)" last, so "Windows
+/// PowerShell" is offered before "Windows PowerShell ISE (x86)".
+fn relevance(query_words: &[&str], name: &str) -> (bool, usize, usize) {
+    let name_words: Vec<&str> = words(name).collect();
+    let extra = name_words
+        .iter()
+        .filter(|w| !query_words.contains(w))
+        .count();
+    let variant = name_words
+        .iter()
+        .any(|w| matches!(*w, "x86" | "x64" | "32" | "arm64"));
+    (variant, extra, name.len())
 }
 
 #[cfg(test)]
@@ -273,7 +364,8 @@ pub(crate) mod fixtures {
 
 #[cfg(test)]
 mod tests {
-    use super::fixtures::catalog;
+    use super::super::model::AppSource;
+    use super::fixtures::{catalog, exe};
     use super::*;
 
     fn found(query: &str) -> Option<(String, MatchKind)> {
@@ -369,6 +461,92 @@ mod tests {
         ] {
             assert_eq!(catalog().resolve(q), Resolution::NotFound, "{q:?}");
         }
+    }
+
+    #[test]
+    fn vendor_qualified_names_and_split_compounds_resolve() {
+        let catalog = ApplicationCatalog::build(vec![
+            exe("Word", AppSource::StartMenu, "WINWORD.EXE"),
+            exe("PowerPoint", AppSource::StartMenu, "POWERPNT.EXE"),
+            exe("Google Chrome", AppSource::StartMenu, "chrome.exe"),
+        ]);
+        let id = |q: &str| match catalog.resolve(q) {
+            Resolution::Found { application, .. } => Some(application.id),
+            _ => None,
+        };
+        assert_eq!(id("Microsoft Word").as_deref(), Some("word"));
+        assert_eq!(id("MS Word").as_deref(), Some("word"));
+        assert_eq!(id("Power Point").as_deref(), Some("powerpoint"));
+        assert_eq!(id("navegador de Google").as_deref(), Some("google-chrome"));
+        // A vendor alone, or a vendor before an unknown name, is not a match.
+        assert_eq!(id("Microsoft"), None);
+        assert_eq!(id("Microsoft Photoshop"), None);
+    }
+
+    #[test]
+    fn shortcuts_with_different_arguments_are_different_applications() {
+        use super::super::model::LaunchTarget;
+        let with_args = |name: &str, args: Option<&str>| ApplicationDescriptor {
+            target: LaunchTarget::Executable {
+                path: "C:\\Windows\\powershell.exe".into(),
+                arguments: args.map(str::to_owned),
+                working_dir: None,
+            },
+            ..exe(name, AppSource::StartMenu, "powershell.exe")
+        };
+        let catalog = ApplicationCatalog::build(vec![
+            with_args("Anaconda PowerShell Prompt", Some("-NoExit -Command conda")),
+            with_args("Windows PowerShell", None),
+            with_args("Windows PowerShell copy", None),
+        ]);
+        let names: Vec<String> = catalog.list().into_iter().map(|a| a.display_name).collect();
+        // The plain shortcut is no longer hidden by the one with arguments;
+        // an exact duplicate target still is.
+        assert_eq!(names, ["Anaconda PowerShell Prompt", "Windows PowerShell"]);
+    }
+
+    #[test]
+    fn ambiguous_candidates_come_closest_first() {
+        let catalog = ApplicationCatalog::build(vec![
+            exe(
+                "Windows PowerShell ISE (x86)",
+                AppSource::StartMenu,
+                "a.exe",
+            ),
+            exe(
+                "Developer PowerShell for VS 2022",
+                AppSource::StartMenu,
+                "b.exe",
+            ),
+            exe("Windows PowerShell ISE", AppSource::StartMenu, "c.exe"),
+            exe("Windows PowerShell", AppSource::StartMenu, "d.exe"),
+        ]);
+        let Resolution::Ambiguous(candidates) = catalog.resolve("PowerShell") else {
+            panic!("expected ambiguity");
+        };
+        let names: Vec<String> = candidates.into_iter().map(|c| c.display_name).collect();
+        assert_eq!(
+            names,
+            [
+                "Windows PowerShell",
+                "Windows PowerShell ISE",
+                "Developer PowerShell for VS 2022",
+                "Windows PowerShell ISE (x86)"
+            ]
+        );
+    }
+
+    #[test]
+    fn names_expose_aliases_but_never_targets() {
+        let names = catalog().names();
+        let notepad = names
+            .iter()
+            .find(|n| n.application.id == "windows.notepad")
+            .unwrap();
+        assert!(notepad.names.contains(&"bloc de notas".to_owned()));
+        assert!(notepad.names.contains(&"blog de notas".to_owned()));
+        let debug = format!("{names:?}");
+        assert!(!debug.contains("C:") && !debug.contains(".exe"));
     }
 
     #[test]
