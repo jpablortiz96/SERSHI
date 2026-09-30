@@ -5,6 +5,7 @@
 //! - [`capabilities`] — honest per-platform capability report.
 //! - [`voice`] — microphone, speech recognition and synthesis adapters
 //!   (Windows), plus the portable model store.
+//! - [`semantic`] — the local semantic model's runtime process (Gate 3C).
 //! - `windows` — Windows-only integrations, compiled only for
 //!   `target_os = "windows"`. Nothing outside this module may call Win32.
 //!
@@ -12,6 +13,7 @@
 //! exercised on a physical Windows machine; see `docs/WINDOWS_PLATFORM.md`.
 
 pub mod capabilities;
+pub mod semantic;
 pub mod system_info;
 pub mod voice;
 

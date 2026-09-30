@@ -9,6 +9,7 @@ import { connectAssistant, useDisplayState } from "../../state/assistant";
 import { useConversation } from "../../state/conversation";
 import { connectInterfaceSounds } from "../../audio/connect";
 import { applyStoredShortcut } from "../../state/shortcut";
+import { connectUnderstanding } from "../../state/understanding";
 import { connectVoice } from "../../state/voice";
 import { connectVoiceLevel } from "../../visual/voiceLevel";
 import { useWindowPresence } from "../../visual/windowPresence";
@@ -30,6 +31,8 @@ export function CommandCenter() {
     // Push-to-talk and spoken replies (the microphone stays off until asked).
     const disconnectVoice = connectVoice();
     const disconnectLevel = connectVoiceLevel();
+    // Natural understanding: the user's choice and model downloads.
+    const disconnectUnderstanding = connectUnderstanding();
     // The Command Center configures the global shortcut at start-up.
     applyStoredShortcut();
     // Approvals happen in the trusted confirmation window; their outcomes
@@ -47,6 +50,7 @@ export function CommandCenter() {
       disconnectSounds();
       disconnectVoice();
       disconnectLevel();
+      disconnectUnderstanding();
       stopFocus();
       stopOutcomes();
     };

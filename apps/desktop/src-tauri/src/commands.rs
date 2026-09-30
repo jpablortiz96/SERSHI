@@ -12,12 +12,14 @@ use sershi_core::ports::SystemInfoProvider;
 use sershi_core::service::{CommandOutcome, CommandRequest, ServiceEvent};
 use sershi_core::shortcut::ShortcutChange;
 use sershi_core::system::SystemSnapshot;
+use sershi_core::understanding::status::{SemanticSettings, SemanticStatus};
 use sershi_core::voice::{CaptureStart, VoiceSettings, VoiceStatus};
 use tauri::{AppHandle, State};
 
 use crate::confirmation;
 use crate::integration;
 use crate::runtime::{Runtime, broadcast, schedule_settle};
+use crate::semantic;
 use crate::surfaces;
 use crate::voice;
 
@@ -255,4 +257,35 @@ pub fn download_voice_model(app: AppHandle, model: String) -> Result<(), IpcErro
 #[tauri::command]
 pub fn cancel_voice_model_download(app: AppHandle) {
     voice::cancel_download(&app);
+}
+
+// ── Natural command understanding (Command Center only; docs/SEMANTIC.md) ─
+//
+// The local semantic model only interprets text. None of these commands can
+// run a tool, approve anything or reach the model's input or output.
+
+/// The semantic model's installation and runtime state.
+#[tauri::command(async)]
+pub fn get_semantic_status(app: AppHandle) -> Result<SemanticStatus, IpcError> {
+    semantic::status(&app)
+}
+
+/// Turns natural understanding with the local model on or off.
+#[tauri::command(async)]
+pub fn configure_semantic(
+    app: AppHandle,
+    settings: SemanticSettings,
+) -> Result<SemanticStatus, IpcError> {
+    semantic::configure(&app, settings)
+}
+
+/// Downloads the semantic model from SERSHI's fixed catalog (user-initiated).
+#[tauri::command(async)]
+pub fn download_semantic_model(app: AppHandle) -> Result<(), IpcError> {
+    semantic::download(&app)
+}
+
+#[tauri::command]
+pub fn cancel_semantic_model_download(app: AppHandle) {
+    semantic::cancel_download(&app);
 }

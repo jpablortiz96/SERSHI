@@ -14,6 +14,7 @@ import { create } from "zustand";
 import { loadPreferences } from "../i18n/preferences";
 import { desktopRuntime, sershi } from "../ipc";
 import { clearSpeechExpectation, expectSpeech, speakOutcome, stopSpeaking } from "./speech";
+import { useUnderstanding } from "./understanding";
 
 export type Reply =
   | { kind: "outcome"; outcome: CommandOutcome }
@@ -86,6 +87,7 @@ export const useConversation = create<ConversationStore>((set, get) => {
         // surface only learns that approval is pending.
         const outcome = await sershi.submitCommand(text);
         push({ role: "sershi", reply: { kind: "outcome", outcome } });
+        useUnderstanding.getState().observe(outcome, text);
         if (loadPreferences().speakTypedResponses) {
           expectSpeech();
           speakOutcome(outcome);

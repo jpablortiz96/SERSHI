@@ -16,6 +16,7 @@ import type { ModelProgress } from "./generated/ModelProgress";
 import type { VoiceLevel } from "./generated/VoiceLevel";
 import type { VoiceStatus } from "./generated/VoiceStatus";
 import type { VoiceUpdate } from "./generated/VoiceUpdate";
+import type { SemanticStatus } from "./generated/SemanticStatus";
 
 /** Mirrors `AssistantState::ALL` in Rust. */
 export const ASSISTANT_STATES = [
@@ -133,6 +134,21 @@ export function isCommandOutcome(v: unknown): v is CommandOutcome {
     return false;
   }
   return true;
+}
+
+export function isSemanticStatus(v: unknown): v is SemanticStatus {
+  return (
+    isObj(v) &&
+    typeof v.enabled === "boolean" &&
+    typeof v.available === "boolean" &&
+    typeof v.running === "boolean" &&
+    isNullable(v.backend, isStr) &&
+    isObj(v.model) &&
+    isStr(v.model.id) &&
+    isNum(v.model.sizeBytes) &&
+    isObj(v.model.state) &&
+    isStr(v.model.state.kind)
+  );
 }
 
 export function isShortcutChange(v: unknown): v is ShortcutChange {

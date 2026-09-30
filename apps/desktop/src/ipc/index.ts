@@ -7,6 +7,7 @@ import {
   isModelProgress,
   isNullPayload,
   isPresenceUpdate,
+  isSemanticStatus,
   isShortcutChange,
   isSystemSnapshot,
   isVoiceLevel,
@@ -18,6 +19,7 @@ import {
   type CommandOutcome,
   type ModelProgress,
   type PresenceUpdate,
+  type SemanticSettings,
   type TrayLabels,
   type VoiceLevel,
   type VoiceSettings,
@@ -64,6 +66,13 @@ export const sershi = {
   downloadVoiceModel: (model: string) => call("download_voice_model", { model }),
   cancelVoiceModelDownload: () => call("cancel_voice_model_download", {}),
 
+  // Natural understanding: the local model interprets, it never acts.
+  getSemanticStatus: () => call("get_semantic_status", {}, isSemanticStatus),
+  configureSemantic: (settings: SemanticSettings) =>
+    call("configure_semantic", { settings }, isSemanticStatus),
+  downloadSemanticModel: () => call("download_semantic_model", {}),
+  cancelSemanticModelDownload: () => call("cancel_semantic_model_download", {}),
+
   onAssistantState: (handler: (snapshot: AssistantSnapshot) => void) =>
     subscribe(EVENTS.assistantState, isAssistantSnapshot, handler),
   onActivity: (handler: (entry: ActivityEntry) => void) =>
@@ -82,4 +91,6 @@ export const sershi = {
     subscribe(EVENTS.voiceLevel, isVoiceLevel, handler),
   onVoiceModel: (handler: (progress: ModelProgress) => void) =>
     subscribe(EVENTS.voiceModel, isModelProgress, handler),
+  onSemanticModel: (handler: (progress: ModelProgress) => void) =>
+    subscribe(EVENTS.semanticModel, isModelProgress, handler),
 };

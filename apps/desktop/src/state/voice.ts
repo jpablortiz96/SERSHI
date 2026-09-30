@@ -23,6 +23,7 @@ import { loadPreferences, savePreferences, type Preferences } from "../i18n/pref
 import type { ConversationLanguage } from "../i18n/types";
 import { desktopRuntime, sershi } from "../ipc";
 import { useConversation } from "./conversation";
+import { useUnderstanding } from "./understanding";
 import {
   clearSpeechExpectation,
   expectSpeech,
@@ -190,10 +191,17 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
       conversation.addHeard(update.text);
       if (prefs.voiceResponses) expectSpeech();
       return;
-    case "answered":
+    case "answered": {
       conversation.addReply({ kind: "outcome", outcome: update.outcome });
+      const heard = [...useConversation.getState().messages]
+        .reverse()
+        .find((m) => m.role === "user" && m.via === "voice");
+      useUnderstanding
+        .getState()
+        .observe(update.outcome, heard?.role === "user" ? heard.text : null);
       if (prefs.voiceResponses) speakOutcome(update.outcome);
       return;
+    }
     case "noSpeech":
     case "unclear":
       conversation.addReply({ kind: "voice", notice: update.kind });

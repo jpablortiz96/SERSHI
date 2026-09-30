@@ -71,6 +71,11 @@ export interface Preferences {
    * ms instead of the adaptive default; null = adaptive.
    */
   endpointMs: number | null;
+  /**
+   * Natural command understanding with the local semantic model, once it
+   * is installed (on by default). The model only interprets requests.
+   */
+  naturalUnderstanding: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -89,6 +94,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   speechVoice: null,
   speechProfile: "fast",
   endpointMs: null,
+  naturalUnderstanding: true,
 };
 
 /** Clamps a volume to 0–100; anything else becomes the default. */
@@ -176,6 +182,9 @@ export function parsePreferences(raw: string | null): Preferences {
         ENDPOINT_OVERRIDES.includes(value.endpointMs)
           ? value.endpointMs
           : null,
+      naturalUnderstanding: !(
+        "naturalUnderstanding" in value && value.naturalUnderstanding === false
+      ),
     };
   } catch {
     return DEFAULT_PREFERENCES;

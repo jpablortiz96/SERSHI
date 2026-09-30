@@ -1,7 +1,8 @@
-//! Local storage for speech-recognition models.
+//! Local storage for models: speech recognition (`models\stt`) and the
+//! semantic model (`models\semantic`).
 //!
 //! Models live in SERSHI's per-user app-data directory
-//! (`%LOCALAPPDATA%\dev.sershi.desktop\models\stt` on Windows; the desktop
+//! (`%LOCALAPPDATA%\dev.sershi.desktop\models\…` on Windows; the desktop
 //! shell supplies the path). They are data, never executed.
 //!
 //! Installing is fail-closed:
@@ -19,8 +20,41 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use sershi_core::understanding::models::SemanticModel;
 use sershi_core::voice::{ModelError, ModelState, SttModel};
 use sha2::{Digest, Sha256};
+
+/// What the store needs to know about a model file: all fixed by SERSHI's
+/// catalogs, never by input.
+pub trait ModelFile {
+    fn file_name(&self) -> &str;
+    fn size_bytes(&self) -> u64;
+    fn sha256(&self) -> &str;
+}
+
+impl ModelFile for SttModel {
+    fn file_name(&self) -> &str {
+        self.file_name
+    }
+    fn size_bytes(&self) -> u64 {
+        self.size_bytes
+    }
+    fn sha256(&self) -> &str {
+        self.sha256
+    }
+}
+
+impl ModelFile for SemanticModel {
+    fn file_name(&self) -> &str {
+        self.file_name
+    }
+    fn size_bytes(&self) -> u64 {
+        self.size_bytes
+    }
+    fn sha256(&self) -> &str {
+        self.sha256
+    }
+}
 
 const PARTIAL_SUFFIX: &str = ".partial";
 const CHUNK: usize = 256 * 1024;
@@ -40,29 +74,29 @@ impl ModelStore {
     }
 
     /// Where `model` lives once installed.
-    pub fn path(&self, model: &SttModel) -> PathBuf {
-        self.dir.join(model.file_name)
+    pub fn path(&self, model: &dyn ModelFile) -> PathBuf {
+        self.dir.join(model.file_name())
     }
 
-    fn partial_path(&self, model: &SttModel) -> PathBuf {
+    fn partial_path(&self, model: &dyn ModelFile) -> PathBuf {
         self.dir
-            .join(format!("{}{PARTIAL_SUFFIX}", model.file_name))
+            .join(format!("{}{PARTIAL_SUFFIX}", model.file_name()))
     }
 
     /// Cheap check (size only). The full hash is verified when the model is
     /// installed and again by [`Self::verify`] before it is first loaded.
-    pub fn state(&self, model: &SttModel) -> ModelState {
+    pub fn state(&self, model: &dyn ModelFile) -> ModelState {
         match fs::metadata(self.path(model)) {
-            Ok(meta) if meta.is_file() && meta.len() == model.size_bytes => ModelState::Installed,
+            Ok(meta) if meta.is_file() && meta.len() == model.size_bytes() => ModelState::Installed,
             Ok(_) => ModelState::Corrupt,
             Err(_) => ModelState::NotInstalled,
         }
     }
 
     /// Hashes the installed file. `Ok(true)` only for an exact match.
-    pub fn verify(&self, model: &SttModel) -> io::Result<bool> {
+    pub fn verify(&self, model: &dyn ModelFile) -> io::Result<bool> {
         let mut file = File::open(self.path(model))?;
-        if file.metadata()?.len() != model.size_bytes {
+        if file.metadata()?.len() != model.size_bytes() {
             return Ok(false);
         }
         let mut hasher = Sha256::new();
@@ -74,14 +108,14 @@ impl ModelStore {
             }
             hasher.update(&buf[..n]);
         }
-        Ok(hex(&hasher.finalize()) == model.sha256)
+        Ok(hex(&hasher.finalize()) == model.sha256())
     }
 
     /// Streams `source` into place with integrity checks. `progress`
     /// receives the running byte count; `cancel` aborts between chunks.
     pub fn install(
         &self,
-        model: &SttModel,
+        model: &dyn ModelFile,
         source: &mut dyn Read,
         progress: &mut dyn FnMut(u64),
         cancel: &AtomicBool,
@@ -103,7 +137,7 @@ impl ModelStore {
 
     fn write_verified(
         &self,
-        model: &SttModel,
+        model: &dyn ModelFile,
         source: &mut dyn Read,
         partial: &Path,
         progress: &mut dyn FnMut(u64),
@@ -130,14 +164,14 @@ impl ModelStore {
             };
             received += n as u64;
             // Never store more than the model can be.
-            if received > model.size_bytes {
+            if received > model.size_bytes() {
                 return Err(ModelError::Integrity);
             }
             hasher.update(&buf[..n]);
             file.write_all(&buf[..n]).map_err(|_| ModelError::Storage)?;
             progress(received);
         }
-        if received != model.size_bytes || hex(&hasher.finalize()) != model.sha256 {
+        if received != model.size_bytes() || hex(&hasher.finalize()) != model.sha256() {
             return Err(ModelError::Integrity);
         }
         file.sync_all().map_err(|_| ModelError::Storage)?;
@@ -145,7 +179,7 @@ impl ModelStore {
     }
 
     /// Removes a model that failed verification.
-    pub fn discard(&self, model: &SttModel) {
+    pub fn discard(&self, model: &dyn ModelFile) {
         let _ = fs::remove_file(self.path(model));
     }
 

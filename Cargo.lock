@@ -3376,6 +3376,8 @@ name = "sershi-platform"
 version = "0.0.1"
 dependencies = [
  "cpal",
+ "serde",
+ "serde_json",
  "sershi-core",
  "sha2",
  "sysinfo",

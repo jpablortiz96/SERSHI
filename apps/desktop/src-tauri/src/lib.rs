@@ -10,6 +10,7 @@ mod commands;
 mod confirmation;
 mod integration;
 mod runtime;
+mod semantic;
 mod surfaces;
 mod voice;
 
@@ -28,8 +29,10 @@ pub fn run() {
             app.manage(runtime);
             // Speech models live in the per-user app-data directory
             // (%LOCALAPPDATA%\dev.sershi.desktop\models\stt on Windows).
-            let models = app.path().app_local_data_dir()?.join("models").join("stt");
-            app.manage(voice::Voice::new(models));
+            let models = app.path().app_local_data_dir()?.join("models");
+            app.manage(voice::Voice::new(models.join("stt")));
+            // The optional local semantic model (models\semantic).
+            app.manage(semantic::Semantic::new(models.join("semantic")));
             app.manage(confirmation::ConfirmationSurface::default());
             let integration = integration::setup(app.handle());
             app.manage(integration);
@@ -37,6 +40,7 @@ pub fn run() {
             surfaces::place_companion(app.handle());
             runtime::announce_ready(app.handle());
             runtime::warm_up_catalog(app.handle());
+            semantic::setup(app.handle());
             Ok(())
         })
         .on_window_event(surfaces::on_window_event)
@@ -67,6 +71,10 @@ pub fn run() {
             commands::stop_speaking,
             commands::download_voice_model,
             commands::cancel_voice_model_download,
+            commands::get_semantic_status,
+            commands::configure_semantic,
+            commands::download_semantic_model,
+            commands::cancel_semantic_model_download,
         ])
         .build(tauri::generate_context!());
 
@@ -78,6 +86,7 @@ pub fn run() {
                 confirmation::shutdown(app);
                 // Release the microphone and speaker; stop downloads.
                 voice::shutdown(app);
+                semantic::shutdown(app);
             }
         }),
         Err(error) => {

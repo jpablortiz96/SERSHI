@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "command-center",
-  "description": "The Command Center window: full read access, command submission (typed or push-to-talk), spoken replies and its own window chrome.",
+  "description": "The Command Center window: full read access, command submission (typed or push-to-talk), spoken replies, the local semantic model's settings and its own window chrome.",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -31,6 +31,10 @@
     "allow-speak-reply",
     "allow-stop-speaking",
     "allow-download-voice-model",
-    "allow-cancel-voice-model-download"
+    "allow-cancel-voice-model-download",
+    "allow-get-semantic-status",
+    "allow-configure-semantic",
+    "allow-download-semantic-model",
+    "allow-cancel-semantic-model-download"
   ]
 }

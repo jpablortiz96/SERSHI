@@ -33,6 +33,7 @@ import { playCue } from "../../audio/interfaceAudio";
 import styles from "./Page.module.css";
 import { Choices, Pill, Row, Section } from "./SettingsParts";
 import { VoiceDiagnostics, VoiceSettings } from "./VoiceSettings";
+import { UnderstandingDiagnostics, UnderstandingSettings } from "./UnderstandingSettings";
 import { CatalogInspector, WindowsIntegration } from "./WindowsIntegration";
 
 export function SettingsView() {
@@ -53,6 +54,8 @@ export function SettingsView() {
       </Section>
 
       <VoiceSettings />
+
+      <UnderstandingSettings />
 
       <Appearance />
 
@@ -110,6 +113,7 @@ export function SettingsView() {
         <>
           <StatePreview />
           <VoiceDiagnostics />
+          <UnderstandingDiagnostics />
           <CatalogInspector />
         </>
       )}

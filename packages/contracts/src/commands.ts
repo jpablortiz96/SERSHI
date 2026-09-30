@@ -11,6 +11,8 @@ import type { IntegrationStatus } from "./generated/IntegrationStatus";
 import type { ModelProgress } from "./generated/ModelProgress";
 import type { PresenceUpdate } from "./generated/PresenceUpdate";
 import type { RuntimeInfo } from "./generated/RuntimeInfo";
+import type { SemanticSettings } from "./generated/SemanticSettings";
+import type { SemanticStatus } from "./generated/SemanticStatus";
 import type { ShortcutChange } from "./generated/ShortcutChange";
 import type { SystemSnapshot } from "./generated/SystemSnapshot";
 import type { TrayLabels } from "./generated/TrayLabels";
@@ -61,6 +63,12 @@ export interface CommandMap {
   stop_speaking: { args: NoArgs; result: null };
   download_voice_model: { args: { model: string }; result: null };
   cancel_voice_model_download: { args: NoArgs; result: null };
+  // Natural understanding (Command Center only). The model interprets;
+  // none of these can run a tool or approve anything.
+  get_semantic_status: { args: NoArgs; result: SemanticStatus };
+  configure_semantic: { args: { settings: SemanticSettings }; result: SemanticStatus };
+  download_semantic_model: { args: NoArgs; result: null };
+  cancel_semantic_model_download: { args: NoArgs; result: null };
 }
 
 export type CommandName = keyof CommandMap;
@@ -92,6 +100,10 @@ export const COMMAND_NAMES = [
   "stop_speaking",
   "download_voice_model",
   "cancel_voice_model_download",
+  "get_semantic_status",
+  "configure_semantic",
+  "download_semantic_model",
+  "cancel_semantic_model_download",
 ] as const satisfies readonly CommandName[];
 
 /** Events broadcast by the core to every window. */
@@ -113,6 +125,8 @@ export const EVENTS = {
   voiceLevel: "sershi://voice-level",
   /** Main window only: speech-model download progress. */
   voiceModel: "sershi://voice-model",
+  /** Main window only: semantic-model download progress. */
+  semanticModel: "sershi://semantic-model",
 } as const;
 
 export interface EventMap {
@@ -124,6 +138,7 @@ export interface EventMap {
   [EVENTS.voice]: VoiceUpdate;
   [EVENTS.voiceLevel]: VoiceLevel;
   [EVENTS.voiceModel]: ModelProgress;
+  [EVENTS.semanticModel]: ModelProgress;
 }
 
 export type EventName = keyof EventMap;

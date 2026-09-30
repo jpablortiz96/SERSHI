@@ -29,6 +29,10 @@ const COMMANDS: &[&str] = &[
     "stop_speaking",
     "download_voice_model",
     "cancel_voice_model_download",
+    "get_semantic_status",
+    "configure_semantic",
+    "download_semantic_model",
+    "cancel_semantic_model_download",
 ];
 
 fn main() {

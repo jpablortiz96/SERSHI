@@ -113,15 +113,27 @@ pub fn download_model(
     progress: &mut dyn FnMut(u64),
     cancel: &AtomicBool,
 ) -> Result<(), ModelError> {
+    download_file(store, model, &model.url(), progress, cancel)
+}
+
+/// Downloads a catalog model file from its fixed HTTPS URL into `store`
+/// (size and SHA-256 verified before it is moved into place).
+pub fn download_file(
+    store: &ModelStore,
+    model: &dyn model_store::ModelFile,
+    url: &str,
+    progress: &mut dyn FnMut(u64),
+    cancel: &AtomicBool,
+) -> Result<(), ModelError> {
     #[cfg(windows)]
     {
         let mut body =
-            crate::windows::voice::HttpsGet::open(&model.url()).map_err(|_| ModelError::Network)?;
+            crate::windows::voice::HttpsGet::open(url).map_err(|_| ModelError::Network)?;
         store.install(model, &mut body, progress, cancel)
     }
     #[cfg(not(windows))]
     {
-        let _ = (store, model, progress, cancel);
+        let _ = (store, model, url, progress, cancel);
         Err(ModelError::Network)
     }
 }

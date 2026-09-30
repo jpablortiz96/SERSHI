@@ -64,10 +64,19 @@ describe("locale resources", () => {
           "voice.models.whisper-small-q8",
           // Technical terms shown in Developer Mode.
           "settings.developer.voice.backend",
-          // A punctuation-only pattern (Gate 3C).
+          "settings.developer.understanding.tiers.alias",
+          // Punctuation-only patterns and the GPU acronym (Gate 3C).
           "reply.clarify.option",
+          "settings.understanding.modelMeta",
+          "settings.understanding.backendGpu",
           // A number-and-percent pattern; pt-BR writes it like English.
-          ...(locale === "pt-BR" ? ["system.threads", "settings.appearance.volumeValue"] : []),
+          ...(locale === "pt-BR"
+            ? [
+                "system.threads",
+                "settings.appearance.volumeValue",
+                "settings.understanding.runtime",
+              ]
+            : []),
           // "No" is the same word in Spanish.
           ...(locale === "es-419" ? ["settings.sections.general", "reply.clarify.no"] : []),
         ].sort(),
