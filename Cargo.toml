@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/sershi-core", "crates/sershi-platform", "apps/desktop/src-tauri"]
+members = [
+  "crates/sershi-core",
+  "crates/sershi-platform",
+  "crates/sershi-semantic",
+  "apps/desktop/src-tauri",
+]
 
 [workspace.package]
 version = "0.0.1"
@@ -34,6 +39,10 @@ todo = "deny"
 # Speech-model verification hashes hundreds of MB; keep it fast in dev builds
 # and tests too (4.1 s → well under a second for the default model).
 [profile.dev.package.sha2]
+opt-level = 3
+
+# The semantic engine's decoding loop is hot (vocabulary-sized scans).
+[profile.dev.package.sershi-semantic]
 opt-level = 3
 
 [profile.release]
