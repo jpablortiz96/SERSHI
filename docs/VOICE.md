@@ -398,6 +398,23 @@ With real speech, the time from the last word to the transcript was:
 Details and the abort-callback bug fixed after that run are in
 [WINDOWS_PLATFORM.md](WINDOWS_PLATFORM.md#gate-3b--low-latency-voice).
 
+## Understanding what was said
+
+A final transcript is understood by Gate 3C's natural understanding, the same
+as typed text. It covers:
+
+- misheard command words;
+- similar and vendor names;
+- bare names;
+- answers to "Which one?";
+- negations;
+- the optional local semantic model.
+
+See [SEMANTIC.md](SEMANTIC.md). Speech-recognition confidence is passed
+along: a poorly recognised utterance makes SERSHI ask rather than act. When
+the microphone opens, the semantic model (if installed) starts loading while
+the user speaks.
+
 ## Tests
 
 - **Portable (Ubuntu + Windows CI):**

@@ -644,6 +644,75 @@ Security checks (must all hold):
 - Pressing Escape while "Transcribing" runs nothing.
 - Partial or early text never runs.
 
+## Gate 3C — Natural understanding
+
+Run with the Fast speech profile. First run it without the semantic model,
+then install it (Settings › Natural understanding › Download, ≈1.1 GB). With
+the model installed, disconnect from the internet and repeat once: everything
+must still work.
+
+Enable Developer Mode (debug build) to read Settings › Developer ·
+Understanding after each request. It shows:
+
+- the tier that resolved it;
+- SERSHI's confidence;
+- whether the model was used, and the model's time.
+
+Reference machine only: the automated corpus and the model benchmark are in
+[SEMANTIC.md](SEMANTIC.md#model-benchmark).
+
+**N1 · Commands.** Say each at least twice; record the transcript, the result
+and the tier:
+
+- "Open Outlook" · "Outlook" · "Abre Outlook"
+- "Abrir Excel" · "Ponme Excel"
+- "Abre Google Chrome" · "Oye, quiero abrir Google Chrome"
+- "Open Microsoft Word" · "Open World" (must ask "Did you mean Word?")
+- "¿Cuánta memoria estoy usando?"
+- A few malformed transcripts if they recur ("Apreer…", "Average Google
+  Chrome", "Abrir Catcode"): they must either act correctly, with "SERSHI
+  understood" shown, or ask. Never a wrong application.
+
+**N2 · Dialogue.**
+
+- "Abrir PowerShell" → options → "Windows PowerShell" → opens.
+- "Abrir PowerShell" → "La segunda" → opens the second option.
+- "Abrir PowerShell" → "Cancelar" → nothing opens.
+- "Abrir PowerShell" → wait more than 60 s → the question expires, and
+  "La segunda" then does nothing.
+- "Abre Windows PowerShell ISE" right after a spoken question: it must run.
+  "Still working on the previous request" must never appear.
+
+**N3 · Negatives.**
+
+- "Outlook es muy lento" — nothing opens.
+- "Chrome es mi navegador favorito" — nothing opens.
+- "No abras Outlook" — "OK — I won't do anything."
+- "¿Qué es Microsoft Word?" — nothing opens.
+
+**N4 · Security (mandatory).** "Cierra Outlook" must open the confirmation
+window. Then say "Sí", "Yes" and "Aprobar": each must **withdraw** the
+approval, never approve it. Only the confirmation window's button approves.
+
+**N5 · Load.** With Chrome (many tabs), an IDE and an Office app open, repeat
+N1 with the model installed and watch Task Manager (CPU, GPU, dedicated GPU
+memory). Check for:
+
+- no UI freeze;
+- no audio glitch;
+- `sershi-semantic.exe` below normal priority;
+- the model released 5 minutes after the last use.
+
+**Physical run (2026-09-30, reference laptop, typed and engine-level):**
+
+- Catalog inventory: "Windows PowerShell" was missing before the identity
+  fix and is present after.
+- Model benchmark (54 requests): see SEMANTIC.md.
+- The engine loaded on the RTX 3050 in 1.5 s, warm requests took 0.35 s, and
+  the CPU fallback worked.
+
+Spoken N1–N5 are pending (they need the user's voice).
+
 ## Windows validation record
 
 Copy this block for each validation session. Do not mark an item PASS without

@@ -15,6 +15,10 @@ pnpm dev
 Windows contributors: [docs/WINDOWS_PLATFORM.md](docs/WINDOWS_PLATFORM.md).
 Building the voice adapters on Windows also needs CMake, Ninja, LLVM
 (libclang) and the Vulkan SDK; see [docs/VOICE.md](docs/VOICE.md#building).
+The same prerequisites build `sershi-semantic` (llama.cpp, the optional local
+semantic model's runtime, [docs/SEMANTIC.md](docs/SEMANTIC.md)); `pnpm dev` and
+`pnpm tauri build` build it next to SERSHI automatically. Its first build takes
+about ten minutes.
 
 ## Before opening a pull request
 

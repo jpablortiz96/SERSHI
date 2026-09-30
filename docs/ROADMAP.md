@@ -96,6 +96,36 @@ validation.
 - ⏳ Physical benchmarks with real speech:
   [Gate 3B](WINDOWS_PLATFORM.md#gate-3b--low-latency-voice)
 
+### Gate 3C — Natural semantic understanding (implemented, pending physical validation)
+
+Natural language in, structured intent out, policy still decides
+([SEMANTIC.md](SEMANTIC.md), [ADR 0016](adr/0016-semantic-router-trust-boundary.md)).
+
+- ✅ Deterministic tiers first:
+  - normalization;
+  - EN/ES/PT grammar (wishes, fillers, scoped negation);
+  - trusted aliases, vendor names and split compounds;
+  - fuzzy + phonetic ranking with thresholds and margins;
+  - bare names;
+  - misheard command words.
+- ✅ Clarification instead of guessing ("Which one?", "Did you mean …?"),
+  answered by name, ordinal, yes/no or cancel, only among offered candidates.
+  60 s expiry; `WaitingForClarification` state.
+- ✅ Session context: Rust-authoritative, memory only, bounded.
+- ✅ Busy-state fix: a spoken reply never refuses the next request.
+- ✅ Catalog fix: shortcuts with different arguments are different apps
+  (Windows PowerShell was hidden).
+- ✅ Optional local semantic model (Qwen3 1.7B Q4_K_M, chosen by benchmark
+  over Qwen3 0.6B and Phi-4-mini):
+  - separate llama.cpp process, Vulkan/CPU;
+  - grammar-constrained output, strict validation;
+  - deterministic confidence policy;
+  - verified install, lazy load, 5-minute idle release.
+- ✅ Settings › Natural understanding; developer understanding diagnostics.
+- ⏳ Physical validation:
+  [Gate 3C](WINDOWS_PLATFORM.md#gate-3c--natural-understanding)
+- Later: installer packaging of `sershi-semantic.exe`.
+
 - Next, only if Gate 3A passes: **Prompt 3B — wake word and conversational
   voice**. It covers:
   - a local wake word, opt-in, with the same Listening indicator

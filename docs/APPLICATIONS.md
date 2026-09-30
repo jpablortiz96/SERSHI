@@ -77,20 +77,35 @@ Queries and names are normalized conservatively (case, common accents,
 punctuation, whitespace, a trailing `.exe`). Tiers, first match wins:
 
 1. exact name or id — `spotify`, `windows.calculator`
-2. alias — built-in names in every language (`calc`, `calculadora`, `bloc de notas`) and curated aliases (`chrome`, `vscode`, `vs code`, `code`, `edge`, `word`, …)
+2. alias — built-in names in every language (`calc`, `calculadora`, `bloc de notas`), curated aliases (`chrome`, `vscode`, `vs code`, `code`, `edge`, `word`, `navegador de Google`, `blog de notas`, `power point`, …) and vendor-qualified names (`Microsoft Word`, `MS Excel` → the installed "Word", "Excel")
 3. word-boundary prefix — `google` → Google Chrome (query ≥ 3 characters)
 4. every query word is a whole word of the name — `studio code` → Visual Studio Code
 
-One match → act. Several → **ambiguous**: nothing runs; the UI lists the
-candidates as buttons that re-ask with the exact name. No edit-distance
-matching: `spot` does not open Spotify.
+A spaced query that matches nothing is retried once without spaces
+("Power Shell" → "PowerShell").
+
+One match → act. Several → **ambiguous**: nothing runs. Candidates are listed
+closest first (fewest extra words, platform variants such as "(x86)" last).
+With Gate 3C understanding, SERSHI asks which one, and the answer ("the
+second one", "Windows PowerShell") selects only among them
+([SEMANTIC.md](SEMANTIC.md)). The catalog itself does no edit-distance
+matching (`spot` does not open Spotify). Similar spellings and sounds are
+scored separately by understanding, with thresholds, and it asks when
+unsure.
+
+**Launch identity** includes a shortcut's arguments, so two shortcuts to the
+same executable with different arguments stay separate applications
+("Anaconda PowerShell Prompt" and "Windows PowerShell" both run
+`powershell.exe`).
 
 ## Intent parsing
 
-Only imperative commands act: the verb must be the first word (after an
-optional courtesy prefix such as "please", "por favor", "¿puedes…"). Articles
-("el", "la", "o", "a", "the") and trailing filler ("app", "por favor") are
-dropped.
+Only commands act. The verb must come first (after fillers such as "oye",
+"please", "OK SERSHI"), or right after a wish ("quiero abrir", "I need to
+open", "quero abrir", "¿puedes…"). A bare exact name ("Outlook") also opens.
+Articles ("el", "la", "o", "a", "the") and trailing filler ("app", "por
+favor") are dropped. A negated command ("no abras Chrome") never acts. Full
+grammar: [SEMANTIC.md](SEMANTIC.md#tier-1--grammar-and-trusted-aliases).
 
 | Language | Open                                        | Close                                  |
 | -------- | ------------------------------------------- | -------------------------------------- |
