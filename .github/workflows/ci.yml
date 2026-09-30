@@ -72,8 +72,41 @@ jobs:
       # whisper.cpp (local speech recognition) is built with CMake (preinstalled)
       # and bound with bindgen, which needs libclang from the preinstalled LLVM.
       LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      # GPU speech recognition (Vulkan) needs the Vulkan SDK at build time
+      # (headers, vulkan-1.lib, glslc). Pinned installer, verified by SHA-256.
+      VULKAN_SDK_VERSION: 1.4.357.0
+      VULKAN_SDK_SHA256: 81f474711e9042f4cd22b31b2f7a8870db2e428b21586fb43dd80150be97310d
+      VULKAN_SDK: C:\VulkanSDK\1.4.357.0
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Vulkan SDK
+        id: vulkan-cache
+        uses: actions/cache@v4
+        with:
+          path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-${{ env.VULKAN_SDK_VERSION }}-${{ env.VULKAN_SDK_SHA256 }}
+
+      - name: Install Vulkan SDK (pinned, verified)
+        if: steps.vulkan-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $url = "https://sdk.lunarg.com/sdk/download/$env:VULKAN_SDK_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_SDK_VERSION.exe"
+          $installer = Join-Path $env:RUNNER_TEMP "vulkansdk.exe"
+          Invoke-WebRequest -Uri $url -OutFile $installer
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:VULKAN_SDK_SHA256) { throw "Vulkan SDK checksum mismatch: $hash" }
+          & $installer --root $env:VULKAN_SDK --accept-licenses --default-answer --confirm-command install
+          if (-not (Test-Path "$env:VULKAN_SDK\Bin\glslc.exe")) { throw "Vulkan SDK install incomplete" }
+
+      # whisper.cpp builds with the Ninja generator (MSBuild's file tracker
+      # fails on the Vulkan backend's nested build paths). Pinned version.
+      - name: Tools on PATH (Vulkan SDK, Ninja)
+        shell: pwsh
+        run: |
+          "$env:VULKAN_SDK\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          python -m pip install --disable-pip-version-check ninja==1.11.1.4
+          ninja --version
 
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -93,9 +126,10 @@ jobs:
           pnpm test
           pnpm build
 
-      # Compiles the Tauri shell (including the cfg(windows) platform module)
-      # and runs every Rust test, including the sysinfo adapter against the
-      # runner's real Windows APIs.
+      # Compiles the Tauri shell (including the cfg(windows) platform module
+      # and the Vulkan speech backend) and runs every Rust test. The runner
+      # may have no GPU driver: SERSHI delay-loads vulkan-1.dll and falls
+      # back to the CPU, which these tests exercise.
       - name: Rust — clippy and test
         run: |
           cargo clippy --workspace --all-targets --locked -- -D warnings
