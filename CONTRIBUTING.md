@@ -13,8 +13,8 @@ pnpm dev
 ```
 
 Windows contributors: [docs/WINDOWS_PLATFORM.md](docs/WINDOWS_PLATFORM.md).
-Building the voice adapters on Windows also needs CMake and libclang (LLVM);
-see [docs/VOICE.md](docs/VOICE.md#building).
+Building the voice adapters on Windows also needs CMake, Ninja, LLVM
+(libclang) and the Vulkan SDK; see [docs/VOICE.md](docs/VOICE.md#building).
 
 ## Before opening a pull request
 

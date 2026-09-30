@@ -53,13 +53,14 @@ steps to validate on a physical Windows machine.
 5. **Node.js 22 LTS** (≥ 22.12): <https://nodejs.org>.
 6. **pnpm** via Corepack: `corepack enable` (the repo pins `pnpm@10.33.0`).
 7. **Git** for Windows.
-8. **CMake** and **libclang** (LLVM), for the local speech recogniser
-   (whisper.cpp). Build Tools includes CMake: add
-   `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin`
-   to `PATH`. Install LLVM with `winget install LLVM.LLVM`, or set
-   `LIBCLANG_PATH` to a folder containing `libclang.dll`. Keep the clone path
-   short: MSBuild fails on very long paths. See
-   [VOICE.md](VOICE.md#building).
+8. **Voice build tools** (whisper.cpp with GPU support), details in
+   [VOICE.md](VOICE.md#building):
+   - **CMake** and **Ninja**. Both ship with Build Tools; add
+     `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin`
+     and `…\CMake\Ninja` to `PATH`.
+   - **LLVM**, for libclang: `winget install LLVM.LLVM`.
+   - **Vulkan SDK** 1.4.357.0: `winget install KhronosGroup.VulkanSDK`.
+     Without it, build with `--no-default-features` (CPU-only voice).
 
 End users will need none of this — the target is a single `SERSHI-Setup.exe`
 (v0.9).
@@ -578,6 +579,70 @@ Before starting:
     - result → speech start
 
 Record the values in the validation record below.
+
+## Gate 3B — Low-latency voice
+
+Run after Gate 3A, with both profiles installed (Settings › Voice › Speech
+recognition). Enable Developer Mode (debug build) to read Settings ›
+Developer · Voice latency after each command. Say each phrase at least 3
+times; record the median.
+
+Phrases:
+
+- "Abre Google Chrome"
+- "Open Outlook"
+- "Abre la calculadora"
+- "Cierra Outlook" (must open the confirmation window; Cancel it)
+- "¿Qué memoria está usando mi equipo?"
+
+For each phrase record, in a table like the one below:
+
+- profile (Fast or Accurate) and language (Automatic or fixed)
+- what was said and what was transcribed
+- end-of-speech wait, recognition time, last word → transcript
+- transcript → result (pipeline), tool time, result → spoken reply
+- CPU, RAM and VRAM (Task Manager › Performance › GPU)
+
+**Physical run 1** (2026-09-30, RTX 3050 Laptop, Vulkan, Automatic, real
+speech). Times come from the developer latency log; the log never contains
+the words.
+
+| Profile | Commands | Endpoint wait | Recognition (STT) | Last word → transcript (median, range) | Result → spoken reply |
+| --- | --- | --- | --- | --- | --- |
+| Before (Prompt 3: CPU Small, fixed 1 s endpoint) | — | 1 000 ms | 3–8 s | ≈ 5 s perceived | — |
+| Fast (Small q8_0) | 10 | 600 / 900 ms | 0.56–1.10 s | **1.9 s** (1.0–2.3 s) | 0.19–0.76 s |
+| Accurate (Turbo q8_0) | 6 | 600 / 900 ms | 1.58–2.13 s | **3.1 s** (2.4–4.0 s) | 0.23–1.13 s |
+
+Pipeline (intent, policy, tool) took 0–240 ms.
+
+First GPU load of a new SERSHI binary: 21.2 s for Small, including shader
+compilation. Afterwards: Small 2.3 s, Turbo 6.8 s.
+
+**Bug found and fixed.** 6 of 16 utterances ended in "Recognition failed".
+The cause was whisper-rs's `set_abort_callback_safe`: its trampoline
+returns arbitrary values, so decodes carrying a never-set cancel flag
+aborted (whisper error −6) about half the time. Early decodes failed the
+same way, which also inflated capture-to-transcript times. SERSHI now uses
+its own audited callback. Regression tests
+`an_unset_cancel_flag_never_aborts` (12 of 12, was 6 of 12) and
+`an_aborted_decode_never_breaks_the_next_one` (8 of 8) cover it. Re-measure
+in the next physical run.
+
+**Understanding gaps** (input for Gate 3C):
+
+| Said | Result |
+| --- | --- |
+| "Outlook." | not understood |
+| "Abre Blog de Notas" | application not found |
+| "Afri Google Chrome" | not understood |
+| "Abre el bloc de notas" | ✅ |
+| "Open Outlook" | ✅ |
+
+Security checks (must all hold):
+
+- Saying "Sí / Yes / Aprobar" never approves.
+- Pressing Escape while "Transcribing" runs nothing.
+- Partial or early text never runs.
 
 ## Windows validation record
 

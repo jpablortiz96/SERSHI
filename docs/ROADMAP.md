@@ -83,6 +83,19 @@ validation.
 - ✅ Security: voice uses the typed pipeline and cannot approve
   ([ADR 0014](adr/0014-local-voice-foundation.md))
 - ⏳ Physical pass: [Gate 3A checklist](WINDOWS_PLATFORM.md#gate-3a--local-voice-validation)
+
+### Gate 3B — Low-latency local voice (implemented, pending physical benchmarks)
+
+- ✅ Vulkan GPU recognition with CPU fallback; delay-loaded, System32-only
+  `vulkan-1.dll` ([ADR 0015](adr/0015-low-latency-local-voice.md))
+- ✅ Fast (Whisper Small q8_0) and Accurate (Large v3 Turbo q8_0) profiles
+- ✅ Adaptive end of speech (600 / 900 ms), early decode during the final
+  pause, warm engines (released after 15 idle minutes), background GPU
+  warm-up, installed-app vocabulary context, cancellable recognition
+- ✅ Developer latency diagnostics
+- ⏳ Physical benchmarks with real speech:
+  [Gate 3B](WINDOWS_PLATFORM.md#gate-3b--low-latency-voice)
+
 - Next, only if Gate 3A passes: **Prompt 3B — wake word and conversational
   voice**. It covers:
   - a local wake word, opt-in, with the same Listening indicator

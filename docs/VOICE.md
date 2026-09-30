@@ -157,65 +157,156 @@ over 20 ms frames with an adaptive noise floor:
   speech.
 - Speech means more than 10 dB over the floor and above −50 dBFS, for at
   least 200 ms in total.
-- The utterance ends after 1.0 s of silence following speech.
+- **Adaptive end of speech (Gate 3B):**
+  - Less than 1.5 s of speech ("Abre Chrome") ends after 600 ms of silence.
+  - Longer requests end after 900 ms, so thinking pauses don't cut them.
+  - Prompt 3 used a fixed 1.0 s.
+  - Developer Mode can pin 450 / 550 / 650 / 750 ms for tuning.
 - With no speech after 8 s, the result is "No speech detected".
 - The hard cap is 30 s; SERSHI then transcribes what it heard.
 - A stream of exact zeros is reported as a silent microphone. Windows
   privacy settings do this to desktop apps.
 
 The detector is tested with generated audio (tones, syllable-modulated
-"speech", deterministic noise); no recordings are committed. Thresholds are
-tuned in Gate 3A.
+"speech", deterministic noise); no recordings are committed.
 
 ## Speech recognition
 
 The engine is **whisper.cpp** through `whisper-rs` 0.16 (bindings
-Unlicense, whisper.cpp MIT), in process, CPU only:
+Unlicense, whisper.cpp MIT), in process. Decoding is tuned for short
+commands, with no measured accuracy cost:
 
-- greedy decoding
+- greedy decoding, one candidate
+- temperature 0
 - single segment
 - no timestamps
 - non-speech tokens suppressed
-- 8 threads at most
 
-Language:
+### Acceleration
 
-- **Automatic**: Whisper detects the language.
-- **English / Español / Português**: the language is a hint. This skips
-  detection and is about twice as fast (whisper.cpp runs the encoder twice
-  to detect).
+| Where | When | Threads |
+| --- | --- | --- |
+| **GPU through Vulkan** | A Vulkan GPU driver is present (NVIDIA, AMD or Intel) | ≤ 4 CPU threads |
+| **CPU** | Always available; also the fallback when a GPU load fails, e.g. not enough video memory | min(6, logical cores / 2) |
+
+The CPU thread count is measured: on the 12-thread reference CPU, 6 threads
+took 5.0–5.9 s, while 10–12 threads were slower (8.7–10.7 s) and starved
+the UI.
+
+How the GPU is used safely:
+
+- SERSHI is built with whisper.cpp's Vulkan backend. `vulkan-1.dll` is
+  **delay-loaded** and loaded explicitly from **System32 only**, so a
+  planted copy next to SERSHI is never used.
+- On a machine without the Vulkan loader, whisper.cpp is never called,
+  because its backend registry enumerates Vulkan devices on first use.
+  Voice then reports itself unavailable instead of crashing.
+- The device used is the first GPU ggml reports (the RTX 3050, ahead of the
+  Intel UHD, on the reference laptop). Settings › Voice › Speech
+  acceleration shows it.
+- CUDA and OpenVINO were not adopted:
+  - CUDA needs a 3 GB toolkit to build and ships hundreds of MB of DLLs.
+  - OpenVINO isn't supported by the current dependency stack.
+  - Vulkan is cross-vendor and needs nothing extra on users' machines.
+- A clang-cl build of whisper.cpp gave no CPU gain over MSVC (6.1–6.6 s vs
+  5.4–6.8 s), so the build stays on MSVC.
+
+**Warm-up.** A GPU's first use compiles shader pipelines: about 25 s the
+first time a program runs on a machine (the driver caches them afterwards).
+The first Automatic decode and the first decode with a vocabulary context
+also compiled extra pipelines. So after a GPU load, SERSHI decodes one
+second of silence three ways (fixed language, detection, context) in the
+background. Warm-up:
+
+- runs after a model is installed, and while the user speaks the first
+  command after start-up;
+- never opens the microphone, runs a command or keeps a result.
+
+**Warm engines.** A loaded engine stays in memory between commands. Engines
+are released after 15 minutes without voice use, and when the profile
+changes.
+
+### Language
+
+- **Automatic**: Whisper detects the language on **every** utterance.
+  Reusing the last language as a hint was evaluated and rejected: with a
+  wrong hint Whisper *translates*. English speech with a Spanish hint came
+  out as "¿Cómo mucho memory estoy usando?".
+- **English / Español / Português**: passed straight to Whisper. No
+  detection runs, which is faster. Settings says so.
 
 The interface language never changes because of what you said.
 
+### Faster end of speech
+
+- **Early decode.** When the user pauses for 200 ms, SERSHI starts decoding
+  what it has, overlapping the end-of-speech wait. If the endpoint then
+  fires with no new speech, that result is used. If the user speaks again,
+  the early decode is aborted and the full utterance is decoded.
+- **Vocabulary context.** Up to 12 well-known *installed* application names
+  from the trusted catalog (e.g. "Chrome, Outlook, Notepad.") are given to
+  Whisper to help spelling. This is recognition context only: it never
+  selects, launches or authorizes anything (tested). Its measured effect is
+  small and mixed:
+  - Small: "Hables" → "Abres" (which the resolver accepts).
+  - Turbo: "Hable" → "Habla", with lower confidence.
+  - It costs about 0.05–0.1 s, and never leaked into silence.
+- **Second opinion.** A Fast result too unclear to act on is re-decoded
+  once by the Accurate model, only if that model is installed and a GPU
+  makes it quick. Otherwise SERSHI says it couldn't understand. It never
+  guesses a command.
+
+Security is unchanged: early, partial and warm-up text is **never
+submitted**. Only the final transcript, after capture ends, goes to
+`AssistantService::submit_transcript` (the typed path). A recognition the
+user cancels is aborted and its result discarded (tested).
+
 ### Models
 
-Models come from `huggingface.co/ggerganov/whisper.cpp`, revision
-`5359861c739e955e79d9a303bcbc70fb988958b1`. They are OpenAI Whisper
-weights (MIT).
+Source: `huggingface.co/ggerganov/whisper.cpp`, pinned revision
+`5359861c739e955e79d9a303bcbc70fb988958b1`. These are GGML conversions of
+OpenAI Whisper (weights: MIT).
 
-| Id | File | Download | Memory (approx.) | Trade-off |
-| --- | --- | --- | --- | --- |
-| `whisper-base-q8` | `ggml-base-q8_0.bin` | 82 MB | +91 MB | Fastest. Unreliable outside English in testing: a Spanish clip was heard as "Have a nice party, Faye", and once as Greek with 0.89 confidence |
-| `whisper-small-q8` (default) | `ggml-small-q8_0.bin` | 264 MB | +274 MB | Balanced. Good EN/ES/PT |
-| `whisper-large-v3-turbo-q5` | `ggml-large-v3-turbo-q5_0.bin` | 574 MB | +583 MB | Most accurate. About 34 s per utterance on the reference CPU with a language hint |
+| | Fast (default) | Accurate |
+| --- | --- | --- |
+| Model id | `whisper-small-q8` | `whisper-large-v3-turbo-q8` |
+| File | `ggml-small-q8_0.bin` | `ggml-large-v3-turbo-q8_0.bin` |
+| Quantization | q8_0 | q8_0 |
+| Exact size | 264,464,607 bytes (≈264 MB) | 874,188,075 bytes (≈874 MB) |
+| SHA-256 | `49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f` | `317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1` |
+| URL | `https://huggingface.co/ggerganov/whisper.cpp/resolve/<revision>/ggml-small-q8_0.bin` | `…/ggml-large-v3-turbo-q8_0.bin` |
+| License | MIT | MIT |
+| Memory (measured) | Vulkan: +105 MB RAM (weights in VRAM); CPU: +271 MB RAM | Vulkan: +50 MB RAM (weights in VRAM); CPU: +880 MB RAM |
+| Recognition, GPU (RTX 3050 Laptop), fixed language | 0.36–0.41 s | 0.82–0.83 s |
+| Recognition, GPU, Automatic | 0.45–0.9 s | 1.35–1.47 s |
+| Recognition, CPU, fixed / Automatic | 5.7–6.1 s / 8.8–10.6 s | 38–40 s / 64–82 s |
 
-Memory is the measured increase in resident memory after loading, on the
-reference machine; recognition adds about 15 MB while it runs.
+The recognition times are for a 1.5 s utterance.
 
-SHA-256 values are in `crates/sershi-core/src/voice/models.rs`.
+**Dropped in Gate 3B:**
 
-**Why Small q8_0.** q8_0 was faster than both q5_1 and f16 on the reference
-CPU (9.3 s vs 11.4 s and 11.5 s on Automatic) at equal or better accuracy.
-Base mis-hears Spanish; Large v3 Turbo is too slow on CPU.
+- **Whisper Base q8_0** (`ggml-base-q8_0.bin`, 81,768,585 bytes). This was
+  the ~81 MB file in the Prompt 3 download test. It mis-heard Spanish
+  commands, once as Greek with 0.89 confidence.
+- **Large v3 Turbo q5_0** (574 MB). q8_0 is faster on the GPU (1.5 s vs
+  2.1–2.5 s on Automatic) with the same accuracy.
 
-**Download security:**
+Neither is offered any more.
+
+**Profiles.**
+
+- **Fast** is the default: near-instant with a GPU and usable on CPU.
+- **Accurate** is for dictation and long questions. Without a GPU it is
+  impractical (tens of seconds), and Settings says so.
+
+**Download security** (unchanged, for every model):
 
 1. The user clicks Download (the size is shown first).
 2. `https://` with a pinned URL.
 3. The body is streamed to `<file>.partial`, never beyond the expected size.
 4. Exact size and SHA-256 must match; otherwise the file is deleted.
 5. `fsync`, then an atomic rename.
-6. Before the first load in each session, the file is hashed again (0.4 s).
+6. Before the first load in each session, the file is hashed again.
 7. A damaged file is reported and never loaded.
 8. Leftover `.partial` files are removed at start-up.
 
@@ -252,21 +343,30 @@ skipped when a spoken reply will say it. The approval cue always plays.
 ## Building
 
 Windows builds need, in addition to [WINDOWS_PLATFORM.md](WINDOWS_PLATFORM.md)'s
-prerequisites:
+prerequisites (Visual Studio 2022 Build Tools, Rust, Node, pnpm):
 
-- **CMake**. Visual Studio Build Tools ships one; add
-  `…\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin` to
-  `PATH`, or install CMake.
-- **libclang** for `bindgen`: install LLVM (`winget install LLVM.LLVM`), or
-  set `LIBCLANG_PATH` to a folder containing `libclang.dll`.
-  whisper-rs-sys's bundled bindings are generated on Linux and do not match
-  MSVC's type sizes.
-- Also keep the path to the repository short: MSBuild's file tracker fails
-  on very long paths.
+| Tool | Why | Install |
+| --- | --- | --- |
+| **CMake** | builds whisper.cpp | ships with VS Build Tools: add `…\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin` to `PATH` (or install CMake) |
+| **Ninja** | CMake generator for whisper.cpp; MSBuild's file tracker fails on the Vulkan backend's nested build paths | ships with VS Build Tools: `…\CommonExtensions\Microsoft\CMake\Ninja` on `PATH` (or `pip install ninja`) |
+| **LLVM** (libclang) | `bindgen`: whisper-rs-sys's bundled bindings are generated on Linux and do not match MSVC's type sizes | `winget install LLVM.LLVM`; set `LIBCLANG_PATH=C:\Program Files\LLVM\bin` if it isn't found |
+| **Vulkan SDK** 1.4.357.0 | GPU backend: headers, `vulkan-1.lib`, `glslc` | `winget install KhronosGroup.VulkanSDK`; sets `VULKAN_SDK` |
 
-`.cargo/config.toml` sets `GGML_NATIVE=OFF` (portable AVX2 build) and
-MSVC `/O2` for whisper.cpp; see the comments there. The first build compiles
-whisper.cpp in about a minute.
+Without the Vulkan SDK, build a CPU-only SERSHI with
+`--no-default-features` on `sershi-desktop` / `sershi-platform`.
+
+`.cargo/config.toml` sets, for whisper.cpp only:
+
+- `GGML_NATIVE=OFF`: a portable AVX2 build.
+- `CMAKE_GENERATOR=Ninja`.
+- MSVC `/O2`, which the `cmake` crate drops (10× slower otherwise).
+- `/EHsc`: whisper.cpp uses C++ exceptions.
+
+CI installs the pinned Vulkan SDK installer after verifying its SHA-256
+(`81f474711e9042f4cd22b31b2f7a8870db2e428b21586fb43dd80150be97310d`).
+
+End users need none of this. At run time SERSHI only uses the GPU driver's
+`vulkan-1.dll`, and falls back to the CPU.
 
 Linux and macOS compile SERSHI without voice. The voice adapters are
 `cfg(windows)`; `get_voice_status` reports `supported: false`.
@@ -274,28 +374,29 @@ Linux and macOS compile SERSHI without voice. The voice adapters are
 ## Measurements (reference machine)
 
 Machine: i5-12450HX (8 cores / 12 threads, 2.4 GHz base), 32 GB RAM,
-Windows 11 Home 26200. Other applications were using about 35 % CPU during
-the tests, so these are real-world numbers, not a clean bench.
+NVIDIA RTX 3050 6 GB Laptop GPU (driver 577.05) plus Intel UHD 770,
+Windows 11 Home 26200. Other applications were using about 30–50 % CPU, so
+these are real-world numbers.
 
 | What | Result |
 | --- | --- |
 | Microphone open (WASAPI shared, 48 kHz stereo) | 51 ms |
 | Microphone release | 9 ms |
-| SHA-256 verify of the default model | see Gate 3A record |
-| Model load (Small q8_0) | 275 ms (after verify) |
-| Recognition, ~1.5 s utterance, language set | ~3.0 s |
-| Recognition, same, Automatic | ~5.9 s |
+| Model verify + load (Small q8_0, CPU) | ≈0.5 s |
+| GPU load + warm-up, first run of a program | ≈25–28 s (one-time; then ≈1.9 s) |
 | Speech synthesis of a short reply | ~150 ms |
-| Idle CPU with the microphone off | see Gate 3A record |
+| Idle CPU with the microphone off | unchanged vs Gate 2B |
 
-Recognition dominates latency. Prompt 3B should evaluate clang-cl builds of
-ggml (MSVC's ggml is known to be slower), GPU backends (Vulkan) and
-detecting the language on a shortened window.
+Recognition times per profile are in the models table above.
 
-Recognition accuracy on synthetic speech: Windows' Spain-Spanish voice
-saying "Abre Spotify" is heard as "Hables Spotify" by Small. Real speech
-(Gate 3A) is the reference. The resolver accepts the second-person forms
-"abres/abras/cierras", which are real request phrasings.
+With real speech, the time from the last word to the transcript was:
+
+- Fast: median ≈ 1.9 s;
+- Accurate: median ≈ 3.1 s;
+- Prompt 3: ≈ 5 s.
+
+Details and the abort-callback bug fixed after that run are in
+[WINDOWS_PLATFORM.md](WINDOWS_PLATFORM.md#gate-3b--low-latency-voice).
 
 ## Tests
 

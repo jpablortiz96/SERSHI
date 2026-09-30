@@ -20,5 +20,6 @@ such.
 | [0012](0012-state-driven-visual-system.md)      | State-driven visual system: one table, one renderer, one motion switch | Accepted |
 | [0013](0013-personalization-is-not-privilege.md) | Personalization is not privilege: shortcut, themes, sounds, companion packs | Accepted |
 | [0014](0014-local-voice-foundation.md)          | Local voice: push-to-talk, native audio, local whisper.cpp and Windows speech, no authority | Accepted |
+| [0015](0015-low-latency-local-voice.md)         | Low-latency voice: Vulkan GPU with CPU fallback, Fast/Accurate, adaptive endpoint, early decode | Accepted |
 
 Template: `Status · Context · Decision · Alternatives · Consequences`.
