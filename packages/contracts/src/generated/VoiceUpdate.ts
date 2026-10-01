@@ -7,4 +7,10 @@ import type { VoiceTimings } from "./VoiceTimings";
 /**
  * Voice events for the Command Center (`sershi://voice`).
  */
-export type VoiceUpdate = { "kind": "heard", text: string, language: LanguageTag | null, } | { "kind": "answered", outcome: CommandOutcome, } | { "kind": "noSpeech" } | { "kind": "unclear" } | { "kind": "cancelled" } | { "kind": "failed", reason: VoiceFailure, } | { "kind": "deviceFallback" } | { "kind": "timings", timings: VoiceTimings, } | { "kind": "speechLatency", ms: number, };
+export type VoiceUpdate = { "kind": "heard", text: string, language: LanguageTag | null, 
+/**
+ * When a second pass replaced a suspected language misdetection:
+ * what the first pass literally heard, shown next to the accepted
+ * text (never hidden, never logged).
+ */
+firstHeard: string | null, } | { "kind": "answered", outcome: CommandOutcome, } | { "kind": "noSpeech" } | { "kind": "unclear" } | { "kind": "cancelled" } | { "kind": "failed", reason: VoiceFailure, } | { "kind": "deviceFallback" } | { "kind": "timings", timings: VoiceTimings, } | { "kind": "speechLatency", ms: number, };

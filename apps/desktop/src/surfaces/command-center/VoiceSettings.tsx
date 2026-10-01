@@ -340,6 +340,30 @@ export function VoiceDiagnostics() {
         [t("settings.developer.voice.endpoint"), ms(timings.endpointMs)],
         [t("settings.developer.voice.load"), ms(timings.modelLoadMs)],
         [t("settings.developer.voice.stt"), ms(timings.sttMs)],
+        [
+          t("settings.developer.voice.language"),
+          [
+            timings.language ?? "—",
+            timings.confidencePct === null ? null : format.percent(timings.confidencePct),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ],
+        [
+          t("settings.developer.voice.languageRetry"),
+          timings.languageRetryMs === null
+            ? t("settings.developer.voice.noRetry")
+            : t(
+                timings.retryAccepted
+                  ? "settings.developer.voice.retryAccepted"
+                  : "settings.developer.voice.retryKept",
+                {
+                  from: timings.firstLanguage ?? "?",
+                  to: timings.language ?? "?",
+                  ms: ms(timings.languageRetryMs),
+                },
+              ),
+        ],
         [t("settings.developer.voice.postCapture"), ms(timings.postCaptureMs)],
         [t("settings.developer.voice.toTranscript"), ms(timings.speechEndToTranscriptMs)],
         [t("settings.developer.voice.pipeline"), ms(timings.pipelineMs)],

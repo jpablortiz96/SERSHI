@@ -151,10 +151,15 @@ export function Transcript({ messages }: { messages: Message[] }) {
                 {m.via === "voice" && (
                   <p className={styles.via}>
                     <MicIcon />
-                    {t("transcript.youSaid")}
+                    {m.firstHeard ? t("transcript.heardAgain") : t("transcript.youSaid")}
                   </p>
                 )}
                 <p className={styles.user}>{m.text}</p>
+                {m.firstHeard && (
+                  <p className={styles.firstHeard}>
+                    {t("transcript.firstHeard", { text: m.firstHeard })}
+                  </p>
+                )}
               </li>
             );
           }

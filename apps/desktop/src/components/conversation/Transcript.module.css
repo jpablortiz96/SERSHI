@@ -176,3 +176,10 @@
   font-weight: 600;
   color: var(--text-primary);
 }
+
+/* What recognition first heard, when a second pass replaced it (3C.1). */
+.firstHeard {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-caption-size);
+  color: var(--text-tertiary);
+}

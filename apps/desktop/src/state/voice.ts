@@ -20,6 +20,7 @@ import type {
 import { create } from "zustand";
 
 import { loadPreferences, savePreferences, type Preferences } from "../i18n/preferences";
+import { useLocaleStore } from "../i18n/store";
 import type { ConversationLanguage } from "../i18n/types";
 import { desktopRuntime, sershi } from "../ipc";
 import { useConversation } from "./conversation";
@@ -88,10 +89,19 @@ function prefsFrom(p: Preferences): VoicePrefs {
   };
 }
 
-/** What the core needs from the preferences. */
-export function voiceSettings(prefs: VoicePrefs): VoiceSettings {
+/**
+ * What the core needs from the preferences. The interface language is only
+ * a hint for Automatic recognition's language retries (Gate 3C.1); replies
+ * are always phrased and spoken in the interface language regardless of
+ * what language recognition detected.
+ */
+export function voiceSettings(
+  prefs: VoicePrefs,
+  interfaceLanguage: string | null = useLocaleStore.getState().locale,
+): VoiceSettings {
   const language: ConversationLanguage = prefs.conversationLanguage;
   return {
+    interfaceLanguage,
     microphone: prefs.microphone,
     language: language === "automatic" ? null : language,
     voice: prefs.speechVoice,
@@ -188,7 +198,7 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
   switch (update.kind) {
     case "heard":
       // "You said …" — shown before the command runs.
-      conversation.addHeard(update.text);
+      conversation.addHeard(update.text, update.firstHeard);
       if (prefs.voiceResponses) expectSpeech();
       return;
     case "answered": {
@@ -247,6 +257,16 @@ export function connectVoice(): () => void {
     })
     .catch(() => undefined);
   const stopVoice = sershi.onVoice(handleVoiceUpdate);
+  // The interface language is a recognition hint: keep the core in sync.
+  const stopLocale = useLocaleStore.subscribe((state, previous) => {
+    if (state.locale === previous.locale) return;
+    sershi
+      .configureVoice(voiceSettings(useVoice.getState().prefs, state.locale))
+      .then((status) => {
+        useVoice.setState({ status });
+      })
+      .catch(() => undefined);
+  });
   const stopModel = sershi.onVoiceModel((progress) => {
     const { status } = useVoice.getState();
     if (status) {
@@ -269,5 +289,6 @@ export function connectVoice(): () => void {
   return () => {
     stopVoice();
     stopModel();
+    stopLocale();
   };
 }

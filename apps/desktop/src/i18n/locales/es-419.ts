@@ -94,6 +94,8 @@ export const es419: Messages = {
 
   transcript: {
     youSaid: "Dijiste",
+    heardAgain: "Reconocido de nuevo",
+    firstHeard: "Primero se oyó “{text}”, en un idioma inesperado.",
     status: {
       needsClarification: "Pregunta",
       unavailable: "Aún no disponible",
@@ -538,6 +540,11 @@ export const es419: Messages = {
         endpoint: "Espera de fin de voz",
         load: "Carga del modelo (en frío)",
         stt: "Reconocimiento",
+        language: "Idioma · confianza",
+        languageRetry: "Reintento de idioma",
+        noRetry: "No hizo falta",
+        retryAccepted: "{from} → {to}, usado ({ms})",
+        retryKept: "Se mantuvo {from} ({ms})",
         postCapture: "Fin de captura → transcripción",
         toTranscript: "Última palabra → transcripción",
         pipeline: "Transcripción → resultado (intención, política, herramienta)",

@@ -29,7 +29,18 @@ export type Reply =
 export type Via = "typed" | "voice";
 
 export type Message =
-  | { id: number; role: "user"; text: string; via: Via }
+  | {
+      id: number;
+      role: "user";
+      text: string;
+      via: Via;
+      /**
+       * Voice only: what speech recognition first heard, when a second
+       * pass in the conversation's languages replaced a suspected language
+       * misdetection (Gate 3C.1). Shown next to `text`, never hidden.
+       */
+      firstHeard?: string | null;
+    }
   | { id: number; role: "sershi"; reply: Reply };
 
 interface ConversationStore {
@@ -39,7 +50,7 @@ interface ConversationStore {
   /** Adds a reply that did not come from `submit` (a decision on the confirmation surface). */
   addReply: (reply: Reply) => void;
   /** Shows what SERSHI heard; the core has already submitted it. */
-  addHeard: (text: string) => void;
+  addHeard: (text: string, firstHeard?: string | null) => void;
   clear: () => void;
 }
 
@@ -48,7 +59,9 @@ const MAX_MESSAGES = 40;
 
 let nextId = 1;
 
-type NewMessage = { role: "user"; text: string; via: Via } | { role: "sershi"; reply: Reply };
+type NewMessage =
+  | { role: "user"; text: string; via: Via; firstHeard?: string | null }
+  | { role: "sershi"; reply: Reply };
 
 export const useConversation = create<ConversationStore>((set, get) => {
   const push = (message: NewMessage) => {
@@ -64,8 +77,8 @@ export const useConversation = create<ConversationStore>((set, get) => {
     addReply: (reply) => {
       push({ role: "sershi", reply });
     },
-    addHeard: (text) => {
-      push({ role: "user", text, via: "voice" });
+    addHeard: (text, firstHeard = null) => {
+      push({ role: "user", text, via: "voice", firstHeard });
     },
     submit: async (raw) => {
       const text = raw.trim();

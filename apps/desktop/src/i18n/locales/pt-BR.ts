@@ -91,6 +91,8 @@ export const ptBR: Messages = {
 
   transcript: {
     youSaid: "Você disse",
+    heardAgain: "Reconhecido novamente",
+    firstHeard: "Primeiro foi ouvido “{text}”, em um idioma inesperado.",
     status: {
       needsClarification: "Pergunta",
       unavailable: "Ainda não disponível",
@@ -530,6 +532,11 @@ export const ptBR: Messages = {
         endpoint: "Espera de fim de fala",
         load: "Carga do modelo (a frio)",
         stt: "Reconhecimento",
+        language: "Idioma · confiança",
+        languageRetry: "Nova tentativa de idioma",
+        noRetry: "Não foi preciso",
+        retryAccepted: "{from} → {to}, usado ({ms})",
+        retryKept: "Manteve {from} ({ms})",
         postCapture: "Fim da captura → transcrição",
         toTranscript: "Última palavra → transcrição",
         pipeline: "Transcrição → resultado (intenção, política, ferramenta)",

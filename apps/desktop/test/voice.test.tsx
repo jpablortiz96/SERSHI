@@ -207,7 +207,7 @@ describe("push-to-talk", () => {
 
 describe("what SERSHI heard", () => {
   it("shows the transcript as “You said” before the result, then speaks the reply", () => {
-    handleVoiceUpdate({ kind: "heard", text: "Abre Spotify", language: "es" });
+    handleVoiceUpdate({ kind: "heard", text: "Abre Spotify", language: "es", firstHeard: null });
     handleVoiceUpdate({ kind: "answered", outcome });
     const { messages } = useConversation.getState();
     expect(messages.map((m) => m.role)).toEqual(["user", "sershi"]);
@@ -235,7 +235,7 @@ describe("what SERSHI heard", () => {
 
   it("phrases the reply in the interface language, whatever language was spoken", () => {
     useLocaleStore.setState({ locale: "es-419" });
-    handleVoiceUpdate({ kind: "heard", text: "Open Spotify", language: "en" });
+    handleVoiceUpdate({ kind: "heard", text: "Open Spotify", language: "en", firstHeard: null });
     handleVoiceUpdate({ kind: "answered", outcome });
     expect(speakReply).toHaveBeenCalledWith("Abrí Spotify.", "es-419");
   });
@@ -379,6 +379,11 @@ describe("Gate 3B: fast, accurate and measured", () => {
         toolMs: 30,
         speculative: true,
         detectedLanguage: false,
+        language: "es",
+        confidencePct: 91,
+        firstLanguage: null,
+        retryAccepted: false,
+        languageRetryMs: null,
         acceleration: "vulkan",
         model: "whisper-small-q8",
       },

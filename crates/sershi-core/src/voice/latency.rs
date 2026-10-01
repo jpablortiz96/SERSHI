@@ -210,6 +210,16 @@ pub struct VoiceTimings {
     pub speculative: bool,
     /// Language detection ran.
     pub detected_language: bool,
+    /// The final transcript's language (detected, retried or fixed).
+    pub language: Option<LanguageTag>,
+    /// Recognition confidence of the final transcript, 0–100.
+    pub confidence_pct: Option<u8>,
+    /// The first pass's detected language, when a language retry ran.
+    pub first_language: Option<LanguageTag>,
+    /// Whether the retry replaced the first transcript.
+    pub retry_accepted: bool,
+    /// Language probabilities + second pass, when a retry ran.
+    pub language_retry_ms: Option<u32>,
     pub acceleration: Option<Acceleration>,
     pub model: String,
 }
@@ -344,15 +354,33 @@ mod tests {
     fn timings_never_carry_words() {
         let json = serde_json::to_value(VoiceTimings {
             model: "whisper-small-q8".into(),
+            language: LanguageTag::parse("es").ok(),
+            first_language: LanguageTag::parse("ru").ok(),
+            confidence_pct: Some(82),
+            retry_accepted: true,
+            language_retry_ms: Some(700),
             ..VoiceTimings::default()
         })
         .unwrap();
         let keys: Vec<_> = json.as_object().unwrap().keys().cloned().collect();
         assert!(
             keys.iter().all(|k| k.ends_with("Ms")
-                || ["speculative", "detectedLanguage", "acceleration", "model"]
-                    .contains(&k.as_str())),
+                || [
+                    "speculative",
+                    "detectedLanguage",
+                    "acceleration",
+                    "model",
+                    // Gate 3C.1: language tags, a percentage and a flag.
+                    "language",
+                    "firstLanguage",
+                    "confidencePct",
+                    "retryAccepted",
+                ]
+                .contains(&k.as_str())),
             "{keys:?}"
         );
+        // Language fields are validated tags, never text.
+        assert_eq!(json["language"], "es");
+        assert_eq!(json["firstLanguage"], "ru");
     }
 }

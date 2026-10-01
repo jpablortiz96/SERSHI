@@ -28,4 +28,10 @@ profile: SpeechProfile | null,
  * Developer tuning: one fixed end-of-speech silence instead of the
  * adaptive default. Accepted range [`ENDPOINT_RANGE_MS`].
  */
-endpointMs: number | null, };
+endpointMs: number | null, 
+/**
+ * The interface language (what SERSHI writes and speaks). Only a hint
+ * for choosing a second recognition pass's language in Automatic mode
+ * (Gate 3C.1); it never forces recognition.
+ */
+interfaceLanguage: LanguageTag | null, };

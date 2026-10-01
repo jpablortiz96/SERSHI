@@ -253,6 +253,26 @@ impl AssistantService {
         ))
     }
 
+    /// Whether a transcript would already be understood by SERSHI's
+    /// deterministic tiers in the current conversation (no model, no side
+    /// effects: nothing recorded, no state change). Speech recognition uses
+    /// it to skip a language retry for transcripts that already resolve
+    /// (Gate 3C.1). Grants nothing: the transcript is still submitted
+    /// through [`Self::submit_transcript`].
+    pub fn resolves_deterministically(&self, text: &str) -> bool {
+        let now = (self.clock)();
+        self.understanding.resolves_deterministically(
+            &Utterance {
+                text: text.trim(),
+                source: InputSource::Voice,
+                asr_confidence: None,
+                language: None,
+            },
+            &self.dialogue,
+            now,
+        )
+    }
+
     /// Recognition heard nothing usable (silence, unclear speech). Nothing
     /// runs; the assistant shows it needs attention.
     pub fn voice_unusable(&mut self, notify: Notify<'_>) -> bool {

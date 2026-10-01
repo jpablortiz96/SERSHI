@@ -43,6 +43,7 @@ use sershi_core::voice::ports::{
     PlaybackSink, SpeechToTextPort, SttError, TranscribeOptions, VoiceChoice,
 };
 use sershi_core::voice::signal::{LevelMeter, RECOGNITION_RATE, downmix, resample};
+use sershi_core::voice::stabilize::{self, LanguageContext, RecentLanguages};
 use sershi_core::voice::transcript::{self, Transcript, Verdict};
 use sershi_core::voice::{
     CaptureStart, LanguageTag, LevelSource, MicrophoneStatus, ModelError, ModelInfo, ModelProgress,
@@ -109,6 +110,9 @@ struct Inner {
     /// that happens is dropped instead of starting late over the next
     /// interaction (Gate 3C busy-state audit).
     speech_epoch: u64,
+    /// Recently, confidently detected conversation languages (Gate 3C.1;
+    /// memory only, bounded, a hint for language retries).
+    recent_languages: RecentLanguages,
 }
 
 /// Loaded recognition engines, kept warm between commands.
@@ -812,6 +816,48 @@ fn stt_failure(error: &SttError) -> VoiceFailure {
     }
 }
 
+/// A language retry and what it found (Gate 3C.1, docs/VOICE.md).
+struct LanguageRetry {
+    first_language: Option<LanguageTag>,
+    /// What the first pass heard (shown next to an accepted retry).
+    first_text: String,
+    ms: u32,
+    /// The second pass, when it replaced the first.
+    accepted: Option<Transcript>,
+}
+
+/// One second pass in the conversation's language for a short, unresolved
+/// first result in an unexpected language ([`stabilize::plan_retry`]). The
+/// result is only text: it is submitted like any transcript, through
+/// understanding and policy.
+fn retry_language(
+    voice: &Voice,
+    model: &'static SttModel,
+    audio: &[f32],
+    rate: u32,
+    options: &TranscribeOptions,
+    first: &Transcript,
+    language: LanguageTag,
+) -> LanguageRetry {
+    let t0 = Instant::now();
+    let mut retry = LanguageRetry {
+        first_language: first.language.clone(),
+        first_text: transcript::clean(&first.text),
+        ms: 0,
+        accepted: None,
+    };
+    let mut forced = options.clone();
+    forced.language = Some(language);
+    let second = decode(voice, model, audio, rate, &forced);
+    if let Ok(second) = second.result
+        && stabilize::accept_retry(&second).is_some()
+    {
+        retry.accepted = Some(second);
+    }
+    retry.ms = millis(t0);
+    retry
+}
+
 /// Recognises the final utterance (re-using an early decode that covered
 /// it), then submits it exactly like typed text.
 fn recognise(
@@ -864,6 +910,71 @@ fn recognise(
         None => decode(&voice, model, &audio, rate, &opts),
     };
 
+    // Automatic language: a short result in an unexpected language gets one
+    // second pass in ES/EN/PT, only when the evidence supports it.
+    let speech_ms = timeline
+        .speech_started_ms
+        .zip(timeline.speech_ended_ms)
+        .map(|(a, b)| b.saturating_sub(a));
+    let mut opts = opts;
+    let mut language_retry = None;
+    if detect
+        && !cancel.load(Ordering::Relaxed)
+        && let Ok(first) = decoded.result.as_ref()
+    {
+        let now = Instant::now();
+        let context = match voice.locked() {
+            Ok(mut inner) => {
+                inner.recent_languages.observe(first, now);
+                LanguageContext {
+                    interface: inner.settings.interface_language.clone(),
+                    recent: inner.recent_languages.recent(now),
+                }
+            }
+            Err(_) => LanguageContext::default(),
+        };
+        let unexpected = first
+            .language
+            .as_ref()
+            .is_some_and(|l| !stabilize::in_prior(l));
+        // Only an unexpected language needs the (sub-millisecond,
+        // model-free, side-effect-free) understanding check.
+        let resolves = unexpected
+            && app
+                .state::<Runtime>()
+                .with_service(|s| s.resolves_deterministically(&transcript::clean(&first.text)))
+                .unwrap_or(false);
+        let plan = stabilize::plan_retry(
+            stabilize::FirstPass {
+                transcript: first,
+                speech_ms,
+                automatic: detect,
+                resolves,
+            },
+            &context,
+        );
+        // Language tags and flags only, never words.
+        if unexpected {
+            eprintln!(
+                "SERSHI voice: language check first={} resolves={resolves} interface={}                  recent={} → retry {}",
+                first.language.as_ref().map_or("-", LanguageTag::as_str),
+                context.interface.as_ref().map_or("-", LanguageTag::as_str),
+                context.recent.as_ref().map_or("-", LanguageTag::as_str),
+                plan.as_ref().map_or("none", LanguageTag::as_str),
+            );
+        }
+        if let Some(language) = plan {
+            let retry = retry_language(&voice, model, &audio, rate, &opts, first, language);
+            decoded.stt_ms = decoded.stt_ms.saturating_add(retry.ms);
+            if let Some(second) = retry.accepted.clone() {
+                // A later second opinion keeps the chosen language.
+                opts.language = second.language.clone();
+                decoded.result = Ok(second);
+            }
+            language_retry = Some(retry);
+        }
+    }
+
     // A Fast result too unclear to act on gets one second opinion from the
     // Accurate model, when it is installed and a GPU makes that quick.
     let unclear = decoded
@@ -913,6 +1024,23 @@ fn recognise(
         tool_ms: None,
         speculative,
         detected_language: detect,
+        language: decoded
+            .result
+            .as_ref()
+            .ok()
+            .and_then(|t| t.language.clone()),
+        confidence_pct: decoded
+            .result
+            .as_ref()
+            .ok()
+            .map(|t| (t.confidence.clamp(0.0, 1.0) * 100.0).round() as u8),
+        first_language: language_retry
+            .as_ref()
+            .and_then(|r| r.first_language.clone()),
+        retry_accepted: language_retry
+            .as_ref()
+            .is_some_and(|r| r.accepted.is_some()),
+        language_retry_ms: language_retry.as_ref().map(|r| r.ms),
         acceleration: decoded.acceleration,
         model: model.id.to_owned(),
     };
@@ -941,12 +1069,22 @@ fn recognise(
                 VoiceUpdate::Heard {
                     text: text.clone(),
                     language: heard.language.clone(),
+                    first_heard: language_retry
+                        .as_ref()
+                        .filter(|r| r.accepted.is_some())
+                        .map(|r| r.first_text.clone()),
                 },
             );
             // Exactly the typed-command path (see AssistantService docs).
             let t0 = Instant::now();
             let runtime = app.state::<Runtime>();
-            let language = heard.language.as_ref().map(|l| l.as_str().to_owned());
+            // Only a supported conversation language is a useful hint for
+            // understanding; a misdetected one would only mislead it.
+            let language = heard
+                .language
+                .as_ref()
+                .filter(|l| stabilize::in_prior(l))
+                .map(|l| l.as_str().to_owned());
             let submitted = runtime.with_service(|s| {
                 let outcome = s.submit_transcript(
                     &text,
@@ -958,6 +1096,21 @@ fn recognise(
             });
             if let Ok((Some(outcome), snapshot)) = submitted {
                 timings.pipeline_ms = Some(millis(t0));
+                if let Some(trace) = outcome.understanding.as_ref() {
+                    // How it was understood, never what was said.
+                    eprintln!(
+                        "SERSHI voice: understood status={:?} tier={:?} confidence={:.2} \
+                         semantic={:?} understanding={:.1}ms semantic_ms={}",
+                        outcome.status,
+                        trace.tier,
+                        trace.confidence,
+                        trace.semantic,
+                        trace.understanding_ms,
+                        trace
+                            .semantic_ms
+                            .map_or_else(|| "-".to_owned(), |v| v.to_string()),
+                    );
+                }
                 timings.tool_ms = outcome.duration_ms;
                 confirmation::sync(app);
                 schedule_settle(app, &snapshot);
@@ -975,12 +1128,23 @@ fn recognise(
 fn report(app: &AppHandle, timings: VoiceTimings) {
     let ms = |v: Option<u32>| v.map_or_else(|| "-".to_owned(), |v| v.to_string());
     eprintln!(
-        "SERSHI voice: timings model={} backend={:?} detect={} speculative={} endpoint={}ms \
+        "SERSHI voice: timings model={} backend={:?} detect={} speculative={} language={} \
+         confidence={}% first_language={} retry_accepted={} retry={}ms endpoint={}ms \
          load={}ms stt={}ms post_capture={}ms end_to_transcript={}ms pipeline={}ms tool={}ms",
         timings.model,
         timings.acceleration,
         timings.detected_language,
         timings.speculative,
+        timings.language.as_ref().map_or("-", LanguageTag::as_str),
+        timings
+            .confidence_pct
+            .map_or_else(|| "-".to_owned(), |v| v.to_string()),
+        timings
+            .first_language
+            .as_ref()
+            .map_or("-", LanguageTag::as_str),
+        timings.retry_accepted,
+        ms(timings.language_retry_ms),
         ms(timings.endpoint_ms),
         ms(timings.model_load_ms),
         ms(timings.stt_ms),

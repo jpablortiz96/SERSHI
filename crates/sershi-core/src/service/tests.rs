@@ -694,6 +694,63 @@ fn speaking_yes_never_approves_a_sensitive_action() {
     }
 }
 
+/// Gate 3C.1: a transcript from a language retry is submitted through the
+/// same call as any transcript, with no extra trust, whatever language tag
+/// or confidence it carries.
+#[test]
+fn a_language_retry_transcript_is_untrusted_text() {
+    let mut h = windows();
+    h.service.begin_listening(&mut |_| {}).unwrap();
+    assert!(h.service.end_listening(900, &mut |_| {}));
+    // A raw misdetection (no retry, or the retry rejected): nothing runs.
+    let outcome = h
+        .service
+        .submit_transcript("Пон Мекром", Some(0.95), Some("ru"), &mut |_| {})
+        .expect("submitted");
+    assert_ne!(outcome.status, CommandStatus::Completed);
+    assert_eq!(h.apps.launches(), 0);
+
+    // A retried "close" with high confidence still needs the trusted
+    // confirmation window; nothing closes.
+    h.service.begin_listening(&mut |_| {}).unwrap();
+    assert!(h.service.end_listening(900, &mut |_| {}));
+    let outcome = h
+        .service
+        .submit_transcript("Cierra Spotify", Some(0.99), Some("es"), &mut |_| {})
+        .expect("submitted");
+    assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+    assert_eq!(h.apps.closes(), 0);
+    // And a retried "Sí" withdraws that approval instead of granting it.
+    assert!(h.service.pending_confirmation().is_some());
+    let (outcome, _) = say(&mut h, "Sí");
+    assert_ne!(outcome.expect("submitted").status, CommandStatus::Completed);
+    assert!(h.service.pending_confirmation().is_none());
+    assert_eq!(h.apps.closes(), 0);
+}
+
+/// Gate 3C.1: the "already understood?" check behind language retries
+/// changes nothing — no activity, no state, no pending approval touched.
+#[test]
+fn the_retry_check_has_no_side_effects() {
+    let mut h = understanding();
+    request_close(&mut h);
+    let before = (
+        h.service.snapshot(),
+        h.service.recent_activity(50).len(),
+        h.service.pending_confirmation().is_some(),
+    );
+    assert!(h.service.resolves_deterministically("Abre Spotify"));
+    assert!(h.service.resolves_deterministically("Hópinn, Excel."));
+    assert!(!h.service.resolves_deterministically("Ári Óðluk"));
+    let after = (
+        h.service.snapshot(),
+        h.service.recent_activity(50).len(),
+        h.service.pending_confirmation().is_some(),
+    );
+    assert_eq!(before, after);
+    assert_eq!((h.apps.launches(), h.apps.closes()), (0, 0));
+}
+
 #[test]
 fn the_microphone_never_overlaps_a_pending_approval() {
     let mut h = windows();

@@ -35,6 +35,11 @@ pub struct VoiceSettings {
     /// Developer tuning: one fixed end-of-speech silence instead of the
     /// adaptive default. Accepted range [`ENDPOINT_RANGE_MS`].
     pub endpoint_ms: Option<u32>,
+    /// The interface language (what SERSHI writes and speaks). Only a hint
+    /// for choosing a second recognition pass's language in Automatic mode
+    /// (Gate 3C.1); it never forces recognition.
+    #[serde(default)]
+    pub interface_language: Option<LanguageTag>,
 }
 
 /// Accepted developer endpoint override, in milliseconds.
@@ -213,6 +218,11 @@ pub enum VoiceUpdate {
     Heard {
         text: String,
         language: Option<LanguageTag>,
+        /// When a second pass replaced a suspected language misdetection:
+        /// what the first pass literally heard, shown next to the accepted
+        /// text (never hidden, never logged).
+        #[serde(default)]
+        first_heard: Option<String>,
     },
     /// The outcome of the heard command (same pipeline as typed commands).
     Answered {
@@ -328,13 +338,16 @@ mod tests {
     #[test]
     fn updates_never_carry_audio_or_confirmation_ids() {
         let heard = serde_json::to_value(VoiceUpdate::Heard {
-            text: "Abre Spotify".into(),
+            text: "Ponme Chrome".into(),
             language: LanguageTag::parse("es").ok(),
+            first_heard: Some("Пон Мекром".into()),
         })
         .unwrap();
         assert_eq!(heard["kind"], "heard");
         let keys: Vec<_> = heard.as_object().unwrap().keys().cloned().collect();
-        assert_eq!(keys.len(), 3, "{keys:?}");
+        assert_eq!(keys.len(), 4, "{keys:?}");
+        // Words only as text the user sees; nothing else.
+        assert_eq!(heard["firstHeard"], "Пон Мекром");
         let level = serde_json::to_value(VoiceLevel {
             level: 0.5,
             source: LevelSource::Input,

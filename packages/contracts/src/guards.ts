@@ -183,7 +183,11 @@ export function isVoiceUpdate(v: unknown): v is VoiceUpdate {
   if (!(VOICE_UPDATE_KINDS as readonly string[]).includes(v.kind)) return false;
   switch (v.kind) {
     case "heard":
-      return isStr(v.text) && isNullable(v.language, isStr);
+      return (
+        isStr(v.text) &&
+        isNullable(v.language, isStr) &&
+        (v.firstHeard === undefined || isNullable(v.firstHeard, isStr))
+      );
     case "answered":
       return isCommandOutcome(v.outcome);
     case "failed":

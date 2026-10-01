@@ -92,6 +92,8 @@ export const enUS = {
 
   transcript: {
     youSaid: "You said",
+    heardAgain: "Recognized again",
+    firstHeard: "First heard as “{text}”, in an unexpected language.",
     status: {
       needsClarification: "Question",
       unavailable: "Not available yet",
@@ -523,6 +525,11 @@ export const enUS = {
         endpoint: "End-of-speech wait",
         load: "Model load (cold)",
         stt: "Recognition",
+        language: "Language · confidence",
+        languageRetry: "Language retry",
+        noRetry: "Not needed",
+        retryAccepted: "{from} → {to}, used ({ms})",
+        retryKept: "{from} kept ({ms})",
         postCapture: "Capture stop → transcript",
         toTranscript: "Last word → transcript",
         pipeline: "Transcript → result (intent, policy, tool)",

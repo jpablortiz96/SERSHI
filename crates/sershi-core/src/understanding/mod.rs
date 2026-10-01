@@ -248,6 +248,38 @@ impl Understanding {
     }
 
     pub fn interpret(&self, u: &Utterance<'_>, dialogue: &Dialogue, now: u64) -> Interpretation {
+        self.run(u, dialogue, now, false)
+    }
+
+    /// Whether `u` already resolves through a trusted deterministic tier
+    /// (keyword, exact, alias, catalog, similarity, misheard command word,
+    /// or an answer to the pending question) — without the model and
+    /// without changing anything. Speech recognition uses it to skip a
+    /// language retry when the first transcript is already understood
+    /// (Gate 3C.1).
+    pub fn resolves_deterministically(
+        &self,
+        u: &Utterance<'_>,
+        dialogue: &Dialogue,
+        now: u64,
+    ) -> bool {
+        let result = self.run(u, dialogue, now, true);
+        !matches!(
+            result.trace.tier,
+            ResolutionTier::None | ResolutionTier::Semantic
+        ) && matches!(
+            result.intent,
+            Intent::UseTool(_) | Intent::Answer(_) | Intent::Cancel | Intent::NotYetAvailable(_)
+        )
+    }
+
+    fn run(
+        &self,
+        u: &Utterance<'_>,
+        dialogue: &Dialogue,
+        now: u64,
+        deterministic_only: bool,
+    ) -> Interpretation {
         let started = Instant::now();
         let mut run = Run {
             u,
@@ -262,6 +294,7 @@ impl Understanding {
                 understanding_ms: 0.0,
             },
             understood: None,
+            deterministic_only,
         };
         let pending = dialogue.pending(now).map(|p| &p.clarification);
         let (intent, change) = self.decide(&mut run, pending, dialogue, now);
@@ -588,6 +621,9 @@ impl Understanding {
         dialogue: &Dialogue,
         now: u64,
     ) -> Option<Intent> {
+        if run.deterministic_only {
+            return None;
+        }
         let Some(router) = &self.router else {
             run.trace.semantic = SemanticUse::NotInstalled;
             return None;
@@ -641,6 +677,7 @@ impl Understanding {
                 understanding_ms: 0.0,
             },
             understood: None,
+            deterministic_only: false,
         };
         let pending = dialogue.pending(now).map(|p| &p.clarification);
         self.build_request(&run, pending, dialogue, now)
@@ -827,6 +864,8 @@ struct Run<'u, 't> {
     tokens: Vec<Token<'t>>,
     trace: UnderstandingTrace,
     understood: Option<UnderstoodAs>,
+    /// Deterministic tiers only: the model is never consulted.
+    deterministic_only: bool,
 }
 
 impl Run<'_, '_> {

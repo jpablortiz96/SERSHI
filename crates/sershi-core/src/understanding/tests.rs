@@ -556,3 +556,92 @@ fn calls_name_trusted_ids_only() {
         assert_eq!(call.input.as_object().map(|o| o.len()), Some(1));
     }
 }
+
+// ── Gate 3C.1: multilingual switching and language misdetections ──────────
+
+/// ES → EN → PT without touching Settings: every one is deterministic, so
+/// no language retry or model is involved, and nothing locks a language.
+#[test]
+fn switching_languages_needs_no_settings_and_no_model() {
+    let u = with_router(Arc::new(Forbidden));
+    for (text, id) in [
+        ("Abre Outlook", "outlook"),
+        ("Open Outlook", "outlook"),
+        ("Abra o Outlook", "outlook"),
+        ("Ponme Chrome", "google-chrome"),
+        ("Open Chrome", "google-chrome"),
+        ("Abra o Chrome", "google-chrome"),
+        ("Abre Outlook", "outlook"),
+    ] {
+        let result = interpret(&u, text);
+        assert_eq!(did(&result.intent), open(id), "{text}");
+        assert_eq!(result.trace.semantic, SemanticUse::NotNeeded, "{text}");
+    }
+}
+
+/// The exact physical misdetections, as raw text (what reaches
+/// understanding if no retry ran or the retry was rejected). Classified:
+/// none may act; at most SERSHI asks about a trusted application.
+#[test]
+fn real_language_misdetections_never_act_as_raw_text() {
+    let obedient = Scripted::says(SemanticIntent::OpenApplication, Some(0), 1.0);
+    for u in [engine(), with_router(obedient)] {
+        for text in [
+            "Ári og Óllug",
+            "Ári Óðluk",
+            "Og ég kýra á lýr Google Chrome",
+            "Kero árir krum",
+            "Пон Мекром",
+            "Пон мекром",
+        ] {
+            let result = interpret(&u, text);
+            println!(
+                "{text} → {:?} ({:?})",
+                did(&result.intent),
+                result.trace.tier
+            );
+            assert!(
+                matches!(did(&result.intent), Did::Nothing | Did::Ask(..)),
+                "{text}: {:?}",
+                did(&result.intent)
+            );
+        }
+    }
+}
+
+/// Gate 3C.1: transcripts that are already understood skip any language
+/// retry. The check uses the deterministic tiers only — never the model.
+#[test]
+fn the_retry_check_uses_deterministic_tiers_only() {
+    let u = with_router(Arc::new(Forbidden));
+    let d = Dialogue::default();
+    let resolves = |text: &str| u.resolves_deterministically(&Utterance::typed(text), &d, 0);
+    // Physical 3C.1 successes heard as Icelandic/Arabic: no retry.
+    for text in [
+        "Open Chrome.",
+        "Hópinn, Outlook.",
+        "Oye, quiero abrir Google Chrome.",
+        "Outlook",
+        "Abre Excel.",
+        "¿Cuánta memoria estoy usando?",
+    ] {
+        assert!(resolves(text), "{text}");
+    }
+    // Physical failures, a negation, a mention, foreign text: not resolved
+    // (the negation is answered, but it acts on nothing; a retry of a
+    // supported language never happens anyway).
+    for text in [
+        "Ólug.",
+        "Ári olduk.",
+        "Ári vörð.",
+        "Пон Мекром",
+        "A reward.",
+    ] {
+        assert!(!resolves(text), "{text}");
+    }
+    // An ambiguous name asks, which is not "resolved": a retry may help.
+    assert!(!resolves("Abrir PowerShell"));
+    // An answer to the pending question resolves (Context tier).
+    let asked = asked(&u, "Abrir PowerShell");
+    assert!(u.resolves_deterministically(&Utterance::typed("la segunda"), &asked, 1));
+}

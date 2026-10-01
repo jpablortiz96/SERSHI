@@ -2,7 +2,9 @@
 //!
 //! ```text
 //! push-to-talk ─► capture (memory only) ─► endpoint ─► 16 kHz mono
-//!   ─► local recognition ─► assess ─► AssistantService::submit_transcript
+//!   ─► local recognition ─► (Automatic: language stabilization, at most
+//!      one second pass, see [`stabilize`]) ─► assess
+//!   ─► AssistantService::submit_transcript
 //!   ─► the same intent → tool → policy → confirmation pipeline as typed text
 //! outcome ─► localized reply ─► local synthesis ─► playback (Speaking)
 //! ```
@@ -26,6 +28,7 @@ pub mod latency;
 pub mod models;
 pub mod ports;
 pub mod signal;
+pub mod stabilize;
 pub mod transcript;
 mod types;
 
