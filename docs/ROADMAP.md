@@ -96,7 +96,7 @@ validation.
 - ⏳ Physical benchmarks with real speech:
   [Gate 3B](WINDOWS_PLATFORM.md#gate-3b--low-latency-voice)
 
-### Gate 3C — Natural semantic understanding (implemented, pending physical validation)
+### Gate 3C — Natural semantic understanding (accepted)
 
 Natural language in, structured intent out, policy still decides
 ([SEMANTIC.md](SEMANTIC.md), [ADR 0016](adr/0016-semantic-router-trust-boundary.md)).
@@ -122,9 +122,22 @@ Natural language in, structured intent out, policy still decides
   - deterministic confidence policy;
   - verified install, lazy load, 5-minute idle release.
 - ✅ Settings › Natural understanding; developer understanding diagnostics.
-- ⏳ Physical validation:
-  [Gate 3C](WINDOWS_PLATFORM.md#gate-3c--natural-understanding)
+- ✅ Physical validation (N1 natural commands, 2026-10-01).
 - Later: installer packaging of `sershi-semantic.exe`.
+
+### Gate 3C.1 — Multilingual ASR stability (accepted)
+
+- ✅ Interface, conversation and detected language kept separate. Replies
+  never follow a misdetection.
+- ✅ One contextual retry for short, unresolved utterances in an unexpected
+  language. It is skipped when the first transcript is already understood.
+  Whisper's language confidence is not trusted
+  ([VOICE.md](VOICE.md#language-stabilization-gate-3c1)).
+- ✅ Transparent "Recognized again" transcript; developer language
+  diagnostics.
+- Accepted by the user on physical evidence from the first 3C.1 run. The
+  final contextual-retry policy is proven by automated tests; its physical
+  confirmation is folded into Prompt 4's voice acceptance.
 
 - Next, only if Gate 3A passes: **Prompt 3B — wake word and conversational
   voice**. It covers:

@@ -237,6 +237,48 @@ changes.
 
 The interface language never changes because of what you said.
 
+### Language stabilization (Gate 3C.1)
+
+On a short command, Automatic detection sometimes picks an unrelated
+language: Spanish heard as Icelandic ("Ári olduk.", "Ólug.") or written in
+Cyrillic ("Пон Мекром"). Whisper's own language confidence is **no guide**:
+physically, Whisper Large v3 Turbo was 97–99 % sure that short, real
+Spanish speech was Icelandic, with Spanish at 0.00. A first design that
+trusted those probabilities never retried once in the physical run.
+
+Three languages stay separate:
+
+- the **interface language**: what SERSHI writes and speaks. A
+  misdetection never changes it (tested in EN/ES/PT).
+- the **conversation language** (Settings): Automatic, or a fixed language.
+  A fixed language skips everything below.
+- the **detected language**: a recognition fact about one utterance.
+
+Policy (`sershi_core::voice::stabilize::plan_retry`): **one** second pass,
+at most, when all of these hold:
+
+1. the conversation language is Automatic;
+2. SERSHI does **not** already understand the first transcript with its
+   deterministic tiers (`AssistantService::resolves_deterministically`:
+   model-free, side-effect-free, under a millisecond). "Open Chrome" heard
+   as Icelandic still opens Chrome, with no retry and no added time;
+3. the detected language is outside Spanish, English and Portuguese. This
+   is a prior, not a whitelist;
+4. the utterance is short (≤ 6 words or ≤ 3.5 s): a command, not a
+   conversation in another language;
+5. the conversation names a language: the last *confidently* detected
+   ES/EN/PT first pass (memory only, 10 minutes, never a retry result, so
+   it cannot lock), otherwise the interface language if it is ES/EN/PT.
+
+The retry replaces the first result only if it is clear speech in an
+ES/EN/PT script. It is **untrusted text**, submitted like any transcript
+through understanding, policy and the trusted confirmation. The
+conversation shows it as "Recognized again", next to what was first heard.
+Developer diagnostics show the first and final language, confidence and
+retry time; logs show language tags and numbers, never words. Garbled
+transcripts *in* a supported language ("A reward.") are recognition
+errors, not language errors: they are not retried.
+
 ### Faster end of speech
 
 - **Early decode.** When the user pauses for 200 ms, SERSHI starts decoding

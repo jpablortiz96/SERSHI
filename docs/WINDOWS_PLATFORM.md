@@ -713,6 +713,25 @@ memory). Check for:
 
 Spoken N1–N5 are pending (they need the user's voice).
 
+## Gate 3C.1 — Language stability (physical record, 2026-10-01)
+
+Accurate profile (Whisper Large v3 Turbo, Vulkan). The first policy used
+Whisper's language probabilities. 11 utterances:
+
+- 7 were detected outside ES/EN/PT (Icelandic 0.97–0.99, once Arabic).
+  Every retry was blocked because Whisper was "sure", and each still paid
+  ~1 s for the detection pass.
+- 4 of those 7 were already understood (Open Chrome, "Hópinn, Outlook" via
+  verb repair, "Oye, quiero abrir Google Chrome", one catalog match).
+- Negatives did not act.
+- The semantic engine ran BelowNormal at 1.2 GB RAM; GPU memory peaked at
+  5.35 / 6 GB.
+
+That evidence produced the final policy (VOICE.md): no retry for
+understood transcripts, a contextual language, no detection pass. The
+final policy is covered by automated tests. The user accepted the gate
+without a further physical round.
+
 ## Windows validation record
 
 Copy this block for each validation session. Do not mark an item PASS without
