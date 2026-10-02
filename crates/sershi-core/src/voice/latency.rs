@@ -122,7 +122,7 @@ pub const MAX_CONTEXT_NAMES: usize = 12;
 /// Common applications worth biasing recognition towards, when installed.
 /// Recognition context only: it helps Whisper spell "Outlook" and
 /// "PowerPoint"; it never selects, launches or authorizes anything.
-const COMMON_APPS: &[&str] = &[
+pub const COMMON_APPS: &[&str] = &[
     "Chrome",
     "Outlook",
     "Spotify",

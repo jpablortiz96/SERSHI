@@ -3,4 +3,4 @@
 /**
  * How prompts are framed for a model family.
  */
-export type ChatTemplate = "chatMl" | "phi4";
+export type ChatTemplate = "chatMl" | "phi4" | "llama3" | "gemma" | "granite";

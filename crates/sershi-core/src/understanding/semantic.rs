@@ -140,6 +140,31 @@ pub enum ChatTemplate {
     ChatMl,
     /// Phi-4 mini.
     Phi4,
+    /// Llama 3.x instruct.
+    Llama3,
+    /// Gemma 3 (no system role).
+    Gemma,
+    /// IBM Granite 3.x.
+    Granite,
+}
+
+impl ChatTemplate {
+    /// The template for a GGUF file name's model family (benchmarks and
+    /// model catalogs name files after their family).
+    pub fn for_file(name: &str) -> Self {
+        let n = name.to_ascii_lowercase();
+        if n.contains("phi") {
+            Self::Phi4
+        } else if n.contains("llama") {
+            Self::Llama3
+        } else if n.contains("gemma") {
+            Self::Gemma
+        } else if n.contains("granite") {
+            Self::Granite
+        } else {
+            Self::ChatMl
+        }
+    }
 }
 
 /// One constrained generation, as handed to a runtime.
@@ -284,15 +309,7 @@ fn user_message(request: &SemanticRequest) -> String {
 pub fn prompt(request: &SemanticRequest, template: ChatTemplate) -> String {
     let system = format!("{SYSTEM}\n\n{EXAMPLES}");
     let user = user_message(request);
-    match template {
-        ChatTemplate::ChatMl => format!(
-            "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user} /no_think<|im_end|>\n\
-             <|im_start|>assistant\n<think>\n\n</think>\n\n"
-        ),
-        ChatTemplate::Phi4 => {
-            format!("<|system|>{system}<|end|><|user|>{user}<|end|><|assistant|>")
-        }
-    }
+    crate::brain::prompt::render_turns(&system, &user, template)
 }
 
 /// The GBNF grammar for the output with `options` offered handles. The key

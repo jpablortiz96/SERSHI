@@ -74,6 +74,12 @@ pub fn capabilities_for(platform: Platform) -> Vec<PlatformCapability> {
         // wake word waits for Gate 3A.
         capability("voice", "Voice (push-to-talk)", windows_feature, None),
         capability("voice.wake_word", "Wake word", Planned, Some("v0.3")),
+        capability(
+            "connected.mail_calendar",
+            "E-mail & calendar",
+            Planned,
+            Some("v0.4"),
+        ),
     ]
 }
 

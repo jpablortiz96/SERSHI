@@ -11,6 +11,7 @@
 pub mod activity;
 pub mod apps;
 pub mod assistant;
+pub mod brain;
 pub mod builtin;
 pub mod confirmation;
 pub mod executor;
