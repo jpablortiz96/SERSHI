@@ -101,7 +101,7 @@ const TARGET_LEADING: &[&str] = &[
 #[rustfmt::skip]
 const TARGET_TRAILING: &[&str] = &[
     "app", "application", "aplicacion", "aplicativo", "programa", "please", "favor", "por",
-    "porfa", "ahora", "now", "ya", "agora", "pls", "up",
+    "porfa", "ahora", "now", "ya", "agora", "pls", "up", "pra", "mim", "for", "me", "para", "mi",
 ];
 
 /// A word as the user wrote it plus its comparison key.
@@ -411,5 +411,9 @@ mod tests {
         assert_eq!(command("Abre"), Some((AppAction::Open, String::new())));
         assert_eq!(command("abra o"), Some((AppAction::Open, String::new())));
         assert_eq!(bare(&tokens("Oye, Outlook.")), "Outlook");
+        assert_eq!(
+            command("Abre la calculadora pra mim"),
+            Some((AppAction::Open, "calculadora".to_owned()))
+        );
     }
 }

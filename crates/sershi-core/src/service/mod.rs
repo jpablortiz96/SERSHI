@@ -44,9 +44,13 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+mod agent;
+
+pub use agent::{BrainTicket, Progress};
 pub use types::{
-    Clock, CommandOutcome, CommandRequest, CommandStatus, ConfirmationChoice, ConfirmationDecision,
-    MAX_COMMAND_CHARS, OutcomeDetail, RejectionReason, ServiceEvent, VoiceBusy,
+    BrainTrace, BrainUse, Clock, CommandOutcome, CommandRequest, CommandStatus, ConfirmationChoice,
+    ConfirmationDecision, MAX_COMMAND_CHARS, OutcomeDetail, PlanReport, PlanStepReport,
+    RejectionReason, ServiceEvent, StepAction, StepStatus, VoiceBusy,
 };
 
 use crate::activity::{ActivityEntry, ActivityKind, ActivityLog, NewActivity};
@@ -61,13 +65,14 @@ use crate::executor::{ExecutionOutcome, ToolExecutor};
 use crate::ids::ToolId;
 use std::sync::Arc;
 
+use crate::brain::{AgentBrainPort, SessionContext};
 use crate::intent::{Intent, IntentResolver};
 use crate::permission::PermissionGrants;
 use crate::policy::DenialReason;
 use crate::tool::{Severity, ToolCall, ToolDefinition};
 use crate::understanding::{
-    ApplicationDirectory, Clarification, Dialogue, InputSource, PendingChange, ResolutionTier,
-    SemanticRouterPort, Understanding, Utterance,
+    ApplicationDirectory, Clarification, Dialogue, InputSource, Interpretation, PendingChange,
+    ResolutionTier, SemanticRouterPort, Understanding, Utterance,
 };
 
 #[derive(Debug)]
@@ -81,6 +86,23 @@ pub struct AssistantService {
     activity: ActivityLog,
     confirmations: ConfirmationStore,
     clock: Clock,
+    // ── Prompt 4: the conversational layer (memory only) ──
+    brain: Option<Arc<dyn AgentBrainPort>>,
+    /// What SERSHI cannot do yet, for the brain's instructions.
+    unavailable: Vec<String>,
+    /// The interface language replies are written in.
+    response_language: String,
+    /// Recent applications and system facts (references, follow-ups).
+    session: SessionContext,
+    plan: Option<agent::ActivePlan>,
+    thinking: Option<agent::Thinking>,
+    brain_question: Option<agent::BrainQuestion>,
+    ticket_seq: u64,
+    plan_seq: u64,
+    /// The microphone opened by withdrawing a pending approval: the
+    /// transcript that follows is understood conservatively (no context
+    /// references, no model), like a request that replaced an approval.
+    withdrew_approval: bool,
 }
 
 type Notify<'a> = &'a mut dyn FnMut(ServiceEvent);
@@ -101,6 +123,16 @@ impl AssistantService {
             activity: ActivityLog::default(),
             confirmations: ConfirmationStore::default(),
             clock,
+            brain: None,
+            unavailable: Vec::new(),
+            response_language: "en-US".to_owned(),
+            session: SessionContext::default(),
+            plan: None,
+            thinking: None,
+            brain_question: None,
+            ticket_seq: 0,
+            plan_seq: 0,
+            withdrew_approval: false,
         }
     }
 
@@ -201,6 +233,7 @@ impl AssistantService {
         }
         let watermark = self.watermark();
         let cancelled = self.cancel_confirmations();
+        self.withdrew_approval = cancelled.is_some();
         if state == AssistantState::AwaitingConfirmation {
             self.transition(AssistantEvent::Dismiss, notify);
         }
@@ -239,18 +272,8 @@ impl AssistantService {
         language: Option<&str>,
         notify: Notify<'_>,
     ) -> Option<CommandOutcome> {
-        if self.machine.state() != AssistantState::Transcribing {
-            return None;
-        }
-        Some(self.submit_utterance(
-            &Utterance {
-                text,
-                source: InputSource::Voice,
-                asr_confidence,
-                language,
-            },
-            notify,
-        ))
+        let progress = self.begin_transcript(text, asr_confidence, language, notify)?;
+        Some(self.drive(progress, notify))
     }
 
     /// Whether a transcript would already be understood by SERSHI's
@@ -353,44 +376,66 @@ impl AssistantService {
         utterance: &Utterance<'_>,
         notify: Notify<'_>,
     ) -> CommandOutcome {
-        let text = utterance.text.trim();
+        let progress = self.begin_utterance(utterance, notify);
+        self.drive(progress, notify)
+    }
+
+    /// Starts a typed request without running the brain model or a plan's
+    /// steps inline (see [`Progress`]).
+    pub fn begin_request(&mut self, request: &CommandRequest, notify: Notify<'_>) -> Progress {
+        self.begin_utterance(&Utterance::typed(&request.text), notify)
+    }
+
+    /// [`Self::submit_transcript`] without running the brain model or a
+    /// plan's steps inline. `None` if the voice interaction was superseded.
+    pub fn begin_transcript(
+        &mut self,
+        text: &str,
+        asr_confidence: Option<f32>,
+        language: Option<&str>,
+        notify: Notify<'_>,
+    ) -> Option<Progress> {
+        if self.machine.state() != AssistantState::Transcribing {
+            return None;
+        }
+        Some(self.begin_utterance(
+            &Utterance {
+                text,
+                source: InputSource::Voice,
+                asr_confidence,
+                language,
+            },
+            notify,
+        ))
+    }
+
+    /// Requests that are refused before anything happens.
+    fn reject_request(&self, text: &str) -> Option<CommandOutcome> {
         if text.is_empty() {
-            return CommandOutcome::rejected(RejectionReason::Empty, "Type or say a command.");
-        }
-        if text.chars().count() > MAX_COMMAND_CHARS {
-            return CommandOutcome::rejected(
-                RejectionReason::TooLong,
-                format!("That command is too long. Keep it under {MAX_COMMAND_CHARS} characters."),
-            );
-        }
-        if self.machine.state().is_busy() {
-            return CommandOutcome::rejected(
-                RejectionReason::Busy,
-                "I'm still working on the previous request.",
-            );
-        }
-
-        let watermark = self.watermark();
-        // A new request replaces any pending approval.
-        let replaced = self.cancel_confirmations();
-        // The command text itself is deliberately not recorded.
-        self.record(NewActivity::new(
-            ActivityKind::CommandReceived,
-            "Command received",
-        ));
-        self.transition(AssistantEvent::RequestReceived, notify);
-
-        let now = (self.clock)();
-        if self.dialogue.expire(now).is_some() {
-            self.record(NewActivity::new(
-                ActivityKind::ClarificationExpired,
-                "A question expired unanswered",
+            return Some(CommandOutcome::rejected(
+                RejectionReason::Empty,
+                "Type or say a command.",
             ));
         }
-        let had_question = self.dialogue.pending(now).is_some();
-        let interpretation =
-            self.understanding
-                .interpret(&Utterance { text, ..*utterance }, &self.dialogue, now);
+        if text.chars().count() > MAX_COMMAND_CHARS {
+            return Some(CommandOutcome::rejected(
+                RejectionReason::TooLong,
+                format!("That command is too long. Keep it under {MAX_COMMAND_CHARS} characters."),
+            ));
+        }
+        if self.machine.state().is_busy() {
+            return Some(CommandOutcome::rejected(
+                RejectionReason::Busy,
+                "I'm still working on the previous request.",
+            ));
+        }
+        None
+    }
+
+    /// Gate 3C understanding (deterministic tiers, then the semantic
+    /// router), with its effect on the open question and the audit.
+    fn interpret_gate3c(&mut self, u: &Utterance<'_>, now: u64) -> Interpretation {
+        let interpretation = self.understanding.interpret(u, &self.dialogue, now);
         match &interpretation.pending {
             PendingChange::Keep => {}
             PendingChange::Clear => {
@@ -403,9 +448,19 @@ impl AssistantService {
         {
             self.record(NewActivity::new(ActivityKind::CommandInterpreted, summary));
         }
+        interpretation
+    }
 
-        let mut outcome = match interpretation.intent {
-            Intent::UseTool(call) => self.run_tool(&call, notify),
+    /// Carries out an understood intent (one tool call at most).
+    fn act_on(
+        &mut self,
+        intent: Intent,
+        replaced: Option<&PendingConfirmation>,
+        had_question: bool,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        match intent {
+            Intent::UseTool(call) => self.run_call(&call, false, notify),
             Intent::Answer(topic) => {
                 self.transition(AssistantEvent::Completed, notify);
                 CommandOutcome {
@@ -440,13 +495,14 @@ impl AssistantService {
                     ));
                     CommandOutcome::new(CommandStatus::Cancelled, "Cancelled. Nothing was changed.")
                 } else {
-                    replaced.as_ref().map_or_else(
+                    replaced.map_or_else(
                         || CommandOutcome::new(CommandStatus::Cancelled, "Nothing was waiting."),
                         cancelled_outcome,
                     )
                 }
             }
             Intent::Clarify(clarification) => {
+                self.dialogue.ask(clarification.clone(), (self.clock)());
                 self.record(NewActivity::new(
                     ActivityKind::ClarificationRequested,
                     "Asked which application was meant",
@@ -462,14 +518,24 @@ impl AssistantService {
                 self.transition(AssistantEvent::AttentionNeeded, notify);
                 CommandOutcome::new(
                     CommandStatus::NotUnderstood,
-                    "I didn't understand that. Try, for example, \"Open Chrome\" or \"How much \
-                     memory am I using?\"",
+                    "I didn't understand that. Try, for example, \"Open Chrome\" or \"How much                      memory am I using?\"",
                 )
             }
-        };
-        outcome.understood = interpretation.understood;
-        outcome.understanding = Some(interpretation.trace);
-        self.dialogue.record(now, text, turn_summary(&outcome));
+        }
+    }
+
+    /// Completes an outcome: diagnostics, the turn record and the audit.
+    fn finish(
+        &mut self,
+        mut outcome: CommandOutcome,
+        text: &str,
+        brain: Option<BrainTrace>,
+        watermark: u64,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        outcome.brain = brain;
+        self.dialogue
+            .record((self.clock)(), text, turn_summary(&outcome));
         self.flush_activity(watermark, notify);
         outcome
     }
@@ -488,9 +554,14 @@ impl AssistantService {
         if let Some(expired) = self.confirmations.expire(now) {
             self.record_pending(ActivityKind::ConfirmationExpired, &expired);
             self.settle_if_no_pending(notify);
+            let outcome = self.with_plan(
+                expired_outcome(Some(&expired.request.tool_id)),
+                false,
+                notify,
+            );
             if expired.request.id == decision.confirmation_id {
                 self.flush_activity(watermark, notify);
-                return expired_outcome(Some(&expired.request.tool_id));
+                return outcome;
             }
         }
         let outcome = match self.confirmations.take(&decision.confirmation_id, now) {
@@ -506,13 +577,36 @@ impl AssistantService {
                 ConfirmationChoice::Cancel => {
                     self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
                     self.settle_if_no_pending(notify);
-                    cancelled_outcome(&pending)
+                    let outcome = cancelled_outcome(&pending);
+                    self.with_plan(outcome, false, notify)
                 }
-                ConfirmationChoice::Approve => self.run_approved(pending, notify),
+                ConfirmationChoice::Approve => {
+                    let outcome = self.run_approved(pending, notify);
+                    self.with_plan(outcome, true, notify)
+                }
             },
         };
         self.flush_activity(watermark, notify);
         outcome
+    }
+
+    /// A decision on a plan's step: approved, the plan may continue (the
+    /// shell then calls [`Self::advance_plan`] while [`Self::plan_active`]);
+    /// declined or expired, the rest of the plan is cancelled.
+    fn with_plan(
+        &mut self,
+        outcome: CommandOutcome,
+        approved: bool,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        match self.plan_after_decision(&outcome, approved, notify) {
+            Some(Progress::Done(done)) => done,
+            Some(Progress::Step(report)) => CommandOutcome {
+                plan: Some(report),
+                ..outcome
+            },
+            Some(Progress::Think(_)) | None => outcome,
+        }
     }
 
     /// Expires the pending confirmation if it is overdue, returning the
@@ -522,8 +616,13 @@ impl AssistantService {
         let expired = self.confirmations.expire((self.clock)())?;
         self.record_pending(ActivityKind::ConfirmationExpired, &expired);
         self.settle_if_no_pending(notify);
+        let outcome = self.with_plan(
+            expired_outcome(Some(&expired.request.tool_id)),
+            false,
+            notify,
+        );
         self.flush_activity(watermark, notify);
-        Some(expired_outcome(Some(&expired.request.tool_id)))
+        Some(outcome)
     }
 
     /// Returns an attending or waiting assistant to idle (e.g. Escape, the
@@ -532,6 +631,11 @@ impl AssistantService {
     pub fn dismiss(&mut self, notify: Notify<'_>) -> Option<CommandOutcome> {
         let watermark = self.watermark();
         let cancelled = self.cancel_confirmations();
+        // Nothing in flight survives a dismissal: a plan stops, a brain
+        // decision still running will be discarded.
+        self.cancel_plan();
+        self.thinking = None;
+        self.brain_question = None;
         if self.dialogue.clear_pending() {
             self.record(NewActivity::new(
                 ActivityKind::ClarificationCancelled,
@@ -541,6 +645,9 @@ impl AssistantService {
         if matches!(
             self.machine.state(),
             AssistantState::Awake
+                | AssistantState::Thinking
+                | AssistantState::Planning
+                | AssistantState::Executing
                 | AssistantState::AwaitingConfirmation
                 | AssistantState::WaitingForClarification
         ) {
@@ -550,8 +657,13 @@ impl AssistantService {
         cancelled.as_ref().map(cancelled_outcome)
     }
 
-    fn run_tool(&mut self, call: &ToolCall, notify: Notify<'_>) -> CommandOutcome {
-        self.transition(AssistantEvent::PlanStarted, notify);
+    /// Runs one tool call through the executor and policy. `in_plan`: a
+    /// plan step, whose result does not end the interaction (the plan sets
+    /// the final state once).
+    fn run_call(&mut self, call: &ToolCall, in_plan: bool, notify: Notify<'_>) -> CommandOutcome {
+        if self.machine.state() == AssistantState::Thinking {
+            self.transition(AssistantEvent::PlanStarted, notify);
+        }
         let now = (self.clock)();
         let outcome = {
             let machine = &mut self.machine;
@@ -563,7 +675,9 @@ impl AssistantService {
             self.executor
                 .execute(call, &self.grants, &mut self.activity, now, &mut on_execute)
         };
-        self.conclude(outcome, notify)
+        let outcome = self.conclude(outcome, in_plan, notify);
+        self.note_result(call, &outcome);
+        outcome
     }
 
     fn run_approved(&mut self, pending: PendingConfirmation, notify: Notify<'_>) -> CommandOutcome {
@@ -577,25 +691,40 @@ impl AssistantService {
         self.record_pending(ActivityKind::ConfirmationApproved, &pending);
         self.transition(AssistantEvent::ConfirmationApproved, notify);
         let now = (self.clock)();
-        let outcome = self.executor.execute_approved(
+        let in_plan = self.plan.is_some();
+        let execution = self.executor.execute_approved(
             &pending.call,
             &pending.request.subject,
             &self.grants,
             &mut self.activity,
             now,
         );
-        self.conclude(outcome, notify)
+        let outcome = self.conclude(execution, in_plan, notify);
+        self.note_result(&pending.call, &outcome);
+        outcome
     }
 
     /// Maps an execution outcome to the final state and user-facing outcome.
-    fn conclude(&mut self, outcome: ExecutionOutcome, notify: Notify<'_>) -> CommandOutcome {
+    fn conclude(
+        &mut self,
+        outcome: ExecutionOutcome,
+        in_plan: bool,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        // A plan step's result does not end the interaction; the plan sets
+        // the final state. Confirmation is the exception: it always pauses.
+        let end = |service: &mut Self, event: AssistantEvent, notify: Notify<'_>| {
+            if !in_plan {
+                service.transition(event, notify);
+            }
+        };
         match outcome {
             ExecutionOutcome::Completed {
                 tool_id,
                 output,
                 duration_ms,
             } => {
-                self.transition(AssistantEvent::Completed, notify);
+                end(self, AssistantEvent::Completed, notify);
                 CommandOutcome {
                     tool_id: Some(tool_id),
                     data: Some(output.data),
@@ -629,7 +758,7 @@ impl AssistantService {
                             NewActivity::new(ActivityKind::ToolFailed, "Tool failed")
                                 .tool(&tool_id),
                         );
-                        self.transition(AssistantEvent::Failed, notify);
+                        end(self, AssistantEvent::Failed, notify);
                         CommandOutcome {
                             tool_id: Some(tool_id),
                             ..CommandOutcome::new(
@@ -644,7 +773,7 @@ impl AssistantService {
                 }
             }
             ExecutionOutcome::Denied { tool_id, reason } => {
-                self.transition(AssistantEvent::AttentionNeeded, notify);
+                end(self, AssistantEvent::AttentionNeeded, notify);
                 let tool_name = self.tool_name(&tool_id);
                 let why = match &reason {
                     DenialReason::UnknownTool => "that tool isn't installed",
@@ -674,7 +803,7 @@ impl AssistantService {
                     }
                     Severity::Failure => (AssistantEvent::Failed, CommandStatus::Failed),
                 };
-                self.transition(event, notify);
+                end(self, event, notify);
                 CommandOutcome {
                     tool_id: Some(tool_id),
                     data: Some(output.data),
@@ -682,7 +811,7 @@ impl AssistantService {
                 }
             }
             ExecutionOutcome::Failed { tool_id, .. } => {
-                self.transition(AssistantEvent::Failed, notify);
+                end(self, AssistantEvent::Failed, notify);
                 let tool_name = self.tool_name(&tool_id);
                 CommandOutcome {
                     tool_id: Some(tool_id),
@@ -696,7 +825,7 @@ impl AssistantService {
                 }
             }
             ExecutionOutcome::SubjectChanged { tool_id } => {
-                self.transition(AssistantEvent::AttentionNeeded, notify);
+                end(self, AssistantEvent::AttentionNeeded, notify);
                 expired_outcome(Some(&tool_id))
             }
         }

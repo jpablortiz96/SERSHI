@@ -27,6 +27,9 @@ pub enum AnswerTopic {
     Help,
     /// A negated request ("No abras Chrome"): acknowledged, nothing done.
     NoAction,
+    /// A request to run a command, script or program by path: SERSHI
+    /// never does that (Prompt 4); it says so and does nothing.
+    NoCommands,
 }
 
 impl AnswerTopic {
@@ -42,6 +45,10 @@ impl AnswerTopic {
                  Notepad\". Files and connected services are on the roadmap."
             }
             Self::NoAction => "OK — I won't do anything.",
+            Self::NoCommands => {
+                "I can't run commands, scripts or programs by path. I can open installed \
+                 applications and check memory and the processor."
+            }
         }
     }
 }

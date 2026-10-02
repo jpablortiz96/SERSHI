@@ -41,6 +41,12 @@ pub enum ActivityKind {
     /// malformed command word, context or the local model). The summary
     /// names the tier; the request text is never recorded.
     CommandInterpreted,
+    /// A multi-step plan started (Prompt 4); the summary gives its size.
+    PlanStarted,
+    /// A plan finished; the summary says how many steps were done.
+    PlanFinished,
+    /// A plan stopped early (cancelled, replaced, approval declined).
+    PlanCancelled,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

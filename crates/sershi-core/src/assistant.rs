@@ -209,7 +209,10 @@ pub fn transition(
             S::Transcribing | S::Thinking | S::Planning | S::Executing | S::Speaking,
             E::AttentionNeeded,
         ) => S::Warning,
-        (S::Thinking | S::Planning, E::ConfirmationRequested) => S::AwaitingConfirmation,
+        // A plan's later step may need approval after earlier ones ran.
+        (S::Thinking | S::Planning | S::Executing, E::ConfirmationRequested) => {
+            S::AwaitingConfirmation
+        }
         (S::Thinking | S::Planning, E::ClarificationRequested) => S::WaitingForClarification,
         (S::AwaitingConfirmation, E::ConfirmationApproved) => S::Executing,
         // Anything can fail, except a state with nothing in flight.

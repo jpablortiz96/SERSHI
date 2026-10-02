@@ -251,6 +251,22 @@ impl Understanding {
         self.run(u, dialogue, now, false)
     }
 
+    /// [`Self::interpret`] with the deterministic tiers only: the model is
+    /// never consulted. Side-effect free.
+    pub fn interpret_deterministic(
+        &self,
+        u: &Utterance<'_>,
+        dialogue: &Dialogue,
+        now: u64,
+    ) -> Interpretation {
+        self.run(u, dialogue, now, true)
+    }
+
+    /// The trusted catalog's names (empty without a catalog).
+    pub fn catalog_names(&self) -> Vec<crate::apps::CatalogNames> {
+        self.apps.as_ref().map(|a| a.names()).unwrap_or_default()
+    }
+
     /// Whether `u` already resolves through a trusted deterministic tier
     /// (keyword, exact, alias, catalog, similarity, misheard command word,
     /// or an answer to the pending question) — without the model and

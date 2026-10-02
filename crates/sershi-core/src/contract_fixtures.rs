@@ -104,6 +104,14 @@ fn write_contract_fixtures() {
         "command-outcome-understood",
         &submit(&mut understanding, "Apreer Spotify"),
     );
+    // Prompt 4: a compound request becomes a bounded plan (no model).
+    write(
+        "command-outcome-plan",
+        &submit(
+            &mut understanding,
+            "Abre Spotify y Google Chrome, y luego dime cuánta memoria uso",
+        ),
+    );
     write("activity", &service.recent_activity(20));
     write("tool-definitions", &service.tool_definitions());
 }

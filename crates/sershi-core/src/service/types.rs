@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::activity::ActivityEntry;
+use crate::apps::ApplicationSummary;
 use crate::assistant::AssistantSnapshot;
+use crate::brain::route::UnderstandingRoute;
 use crate::confirmation::ConfirmationId;
 use crate::ids::ToolId;
 use crate::intent::AnswerTopic;
@@ -46,8 +48,11 @@ pub struct ConfirmationDecision {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(rename_all = "camelCase")]
 pub enum CommandStatus {
-    /// A tool ran successfully.
+    /// A tool ran successfully (for a plan: every step did).
     Completed,
+    /// A plan finished with some steps done and others not (failed,
+    /// skipped, unresolved). The plan report says which.
+    Partial,
     /// SERSHI answered without acting.
     Answered,
     NeedsConfirmation,
@@ -109,6 +114,112 @@ pub enum OutcomeDetail {
     Clarification {
         clarification: Clarification,
     },
+    /// The Agent Brain's conversational reply (no action). The message is
+    /// the model's text in the response language: shown as SERSHI's words,
+    /// never as a report of what happened.
+    BrainAnswer {
+        message: String,
+    },
+    /// The Agent Brain asked a question; `options` are trusted
+    /// applications (names, never paths) the user can pick.
+    BrainQuestion {
+        message: String,
+        options: Vec<ApplicationSummary>,
+    },
+    /// A plan longer than SERSHI runs in one go ([`crate::brain::MAX_PLAN_STEPS`]).
+    PlanTooLong {
+        #[cfg_attr(feature = "ts", ts(type = "number"))]
+        max_steps: usize,
+    },
+}
+
+/// What one plan step does (no paths, ids or arguments beyond the trusted
+/// application).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum StepAction {
+    Open,
+    Close,
+    Memory,
+    Cpu,
+    SystemInfo,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum StepStatus {
+    Pending,
+    Running,
+    Completed,
+    /// Waiting in the trusted confirmation window.
+    NeedsConfirmation,
+    /// Ran into an expected negative result (not found, not running…).
+    Unresolved,
+    Failed,
+    /// Not run: a step it depends on did not succeed.
+    Skipped,
+    /// Not run: the plan was cancelled, replaced or its approval declined.
+    Cancelled,
+}
+
+/// One step of a plan, as surfaces show it. `data` is the tool's structured
+/// result (trusted), so the final sentence is phrased from facts, never
+/// from the model's words.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanStepReport {
+    pub action: StepAction,
+    pub application: Option<ApplicationSummary>,
+    pub status: StepStatus,
+    pub data: Option<Value>,
+}
+
+/// A bounded multi-step plan and how far it got.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanReport {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub id: u64,
+    pub steps: Vec<PlanStepReport>,
+    /// Finished: no step will run any more.
+    pub done: bool,
+}
+
+/// How the brain route went (developer diagnostics; never the prompt, the
+/// model's reasoning or the request text).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum BrainUse {
+    /// The conversational layer's deterministic tier (references, compound
+    /// commands, follow-ups): no model.
+    Deterministic,
+    /// The brain model decided.
+    Model,
+    /// No brain model installed or enabled.
+    NotInstalled,
+    /// The model failed or timed out; Gate 3C understanding answered.
+    Failed,
+    /// The model's output was rejected by validation.
+    Rejected,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct BrainTrace {
+    pub route: UnderstandingRoute,
+    pub brain: Option<BrainUse>,
+    /// Model time, when the model ran.
+    pub model_ms: Option<u32>,
+    pub prompt_version: u32,
+    /// Steps in the resulting plan (0 for answers and questions).
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
+    pub steps: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -129,6 +240,10 @@ pub struct CommandOutcome {
     pub understood: Option<UnderstoodAs>,
     /// Developer diagnostics (transient; never stored).
     pub understanding: Option<UnderstandingTrace>,
+    /// A multi-step plan and its progress.
+    pub plan: Option<PlanReport>,
+    /// Routing and brain diagnostics (transient; never stored).
+    pub brain: Option<BrainTrace>,
 }
 
 impl CommandOutcome {
@@ -142,6 +257,8 @@ impl CommandOutcome {
             duration_ms: None,
             understood: None,
             understanding: None,
+            plan: None,
+            brain: None,
         }
     }
 
@@ -161,6 +278,8 @@ impl CommandOutcome {
 pub enum ServiceEvent {
     State(AssistantSnapshot),
     Activity(ActivityEntry),
+    /// A plan's progress (after each step), for live display.
+    Plan(PlanReport),
 }
 
 pub type Clock = fn() -> u64;
