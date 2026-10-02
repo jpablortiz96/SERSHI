@@ -56,6 +56,27 @@ pub const SEMANTIC_MODELS: [SemanticModel; 1] = [SemanticModel {
 
 pub const DEFAULT_SEMANTIC_MODEL: &SemanticModel = &SEMANTIC_MODELS[0];
 
+/// The Agent Brain model (Prompt 4), chosen by benchmark
+/// (docs/AGENT_BRAIN.md). The same metadata and verified install as the
+/// semantic model: data, never executed.
+pub const BRAIN_MODELS: [SemanticModel; 1] = [SemanticModel {
+    id: "qwen3-4b-q4km",
+    name: "Qwen3 4B",
+    repository: "unsloth/Qwen3-4B-GGUF",
+    revision: "22c9fc8a8c7700b76a1789366280a6a5a1ad1120",
+    file_name: "Qwen3-4B-Q4_K_M.gguf",
+    quantization: "Q4_K_M",
+    size_bytes: 2_497_281_312,
+    sha256: "f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a",
+    license: "Apache-2.0",
+    template: ChatTemplate::ChatMl,
+    ram_mb_gpu: 2_525,
+    ram_mb_cpu: 2_800,
+    vram_mb: 3_243,
+}];
+
+pub const DEFAULT_BRAIN_MODEL: &SemanticModel = &BRAIN_MODELS[0];
+
 impl SemanticModel {
     pub fn find(id: &str) -> Option<&'static SemanticModel> {
         SEMANTIC_MODELS.iter().find(|m| m.id == id)
@@ -76,7 +97,7 @@ mod tests {
 
     #[test]
     fn catalog_is_pinned_and_verifiable() {
-        for m in SEMANTIC_MODELS {
+        for m in SEMANTIC_MODELS.iter().chain(&BRAIN_MODELS) {
             assert_eq!(m.sha256.len(), 64, "{}", m.id);
             assert!(
                 m.sha256

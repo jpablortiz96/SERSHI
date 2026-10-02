@@ -55,7 +55,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::confirmation;
 use crate::integration;
-use crate::runtime::{Runtime, broadcast, schedule_settle};
+use crate::runtime::{Runtime, broadcast, drive, schedule_settle};
 use crate::surfaces::{COMPANION, MAIN};
 
 /// Voice events for the Command Center (`VoiceUpdate`).
@@ -278,6 +278,16 @@ pub fn configure(app: &AppHandle, settings: VoiceSettings) -> Result<VoiceStatus
             inner.fallback = false;
         }
         inner.settings = settings;
+    }
+    // Replies (and the Agent Brain's messages) follow the interface
+    // language, never what recognition detected.
+    if let Some(tag) = voice
+        .locked()
+        .ok()
+        .and_then(|i| i.settings.interface_language.clone())
+    {
+        let runtime = app.state::<Runtime>();
+        let _ = runtime.with_service(|s| s.set_response_language(tag.as_str()));
     }
     // Keep only the chosen profile's engine (the other one's memory is
     // released; a Fast engine may be re-used for its second pass later).
@@ -1085,16 +1095,23 @@ fn recognise(
                 .as_ref()
                 .filter(|l| stabilize::in_prior(l))
                 .map(|l| l.as_str().to_owned());
-            let submitted = runtime.with_service(|s| {
-                let outcome = s.submit_transcript(
+            let started = runtime.with_service(|s| {
+                s.begin_transcript(
                     &text,
                     Some(heard.confidence),
                     language.as_deref(),
                     &mut |e| broadcast(app, e),
-                );
-                (outcome, s.snapshot())
+                )
             });
-            if let Ok((Some(outcome), snapshot)) = submitted {
+            // Exactly the typed path: brain inference and plan steps run
+            // without holding the service.
+            let submitted = match started {
+                Ok(Some(progress)) => {
+                    drive(app, progress).zip(runtime.with_service(|s| s.snapshot()).ok())
+                }
+                _ => None,
+            };
+            if let Some((outcome, snapshot)) = submitted {
                 timings.pipeline_ms = Some(millis(t0));
                 if let Some(trace) = outcome.understanding.as_ref() {
                     // How it was understood, never what was said.

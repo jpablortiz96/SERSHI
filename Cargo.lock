@@ -3365,6 +3365,7 @@ dependencies = [
  "serde",
  "sershi-core",
  "sershi-platform",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-global-shortcut",

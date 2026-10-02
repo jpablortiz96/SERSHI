@@ -105,6 +105,29 @@ pub fn microphone_access() -> MicrophoneAccess {
     }
 }
 
+/// Free space a download needs besides the model itself: 10 % of its size,
+/// at least 1 GB, so the system volume is never filled.
+pub fn safety_margin(size: u64) -> u64 {
+    (size / 10).max(1_000_000_000)
+}
+
+/// Whether the volume holding `dir` can take a `size`-byte download plus
+/// [`safety_margin`]. Unknown free space (other platforms, a failing query)
+/// does not block: the store still fails cleanly if the disk fills.
+pub fn has_room_for(dir: &std::path::Path, size: u64) -> bool {
+    #[cfg(windows)]
+    {
+        let _ = std::fs::create_dir_all(dir);
+        crate::windows::disk::free_bytes(dir)
+            .is_none_or(|free| free >= size.saturating_add(safety_margin(size)))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (dir, size);
+        true
+    }
+}
+
 /// Downloads `model` from its fixed catalog URL into `store`, verifying
 /// size and SHA-256 before it is moved into place.
 pub fn download_model(
@@ -125,6 +148,9 @@ pub fn download_file(
     progress: &mut dyn FnMut(u64),
     cancel: &AtomicBool,
 ) -> Result<(), ModelError> {
+    if !has_room_for(store.dir(), model.size_bytes()) {
+        return Err(ModelError::DiskFull);
+    }
     #[cfg(windows)]
     {
         let mut body =

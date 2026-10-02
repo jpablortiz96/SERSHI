@@ -45,6 +45,9 @@ pub struct EngineConfig {
     pub load_timeout: Duration,
     /// One generation.
     pub request_timeout: Duration,
+    /// The engine's expected SHA-256 (installer builds): an engine that does
+    /// not match is never started.
+    pub program_sha256: Option<&'static str>,
 }
 
 impl EngineConfig {
@@ -60,6 +63,7 @@ impl EngineConfig {
             context: 2048,
             load_timeout: Duration::from_secs(60),
             request_timeout: Duration::from_secs(if gpu { 5 } else { 12 }),
+            program_sha256: None,
         }
     }
 }
@@ -75,6 +79,7 @@ pub struct EngineStatus {
     pub last_ms: Option<u32>,
     pub last_prompt_tokens: Option<u32>,
     pub last_cached_tokens: Option<u32>,
+    pub last_generated_tokens: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -103,6 +108,7 @@ struct Response {
     text: Option<String>,
     prompt_tokens: Option<u32>,
     cached_tokens: Option<u32>,
+    generated_tokens: Option<u32>,
     ms: Option<u32>,
 }
 
@@ -150,6 +156,8 @@ struct State {
 pub struct EngineGenerator {
     config: EngineConfig,
     state: Arc<Mutex<State>>,
+    /// The engine executable matched `config.program_sha256`.
+    engine_ok: Arc<std::sync::OnceLock<bool>>,
 }
 
 impl std::fmt::Debug for EngineGenerator {
@@ -165,6 +173,7 @@ impl EngineGenerator {
         Self {
             config,
             state: Arc::new(Mutex::new(State::default())),
+            engine_ok: Arc::new(std::sync::OnceLock::new()),
         }
     }
 
@@ -256,6 +265,14 @@ impl EngineGenerator {
         if !self.config.program.is_file() || !self.config.model.is_file() {
             return Err(RouterError::NotInstalled);
         }
+        if let Some(expected) = self.config.program_sha256
+            && !self.engine_verified(expected)
+        {
+            eprintln!(
+                "SERSHI semantic: the inference engine does not match this build; not started"
+            );
+            return Err(RouterError::Unavailable);
+        }
         let mut command = Command::new(&self.config.program);
         command
             .stdin(Stdio::piped())
@@ -302,6 +319,26 @@ impl EngineGenerator {
     }
 }
 
+impl EngineGenerator {
+    /// Hashes the engine executable once per generator (it is code, not
+    /// data: an installer build only runs the engine it shipped with).
+    fn engine_verified(&self, expected: &str) -> bool {
+        use sha2::{Digest, Sha256};
+        if self.engine_ok.get() == Some(&true) {
+            return true;
+        }
+        let ok = std::fs::read(&self.config.program).is_ok_and(|bytes| {
+            let digest = Sha256::digest(&bytes);
+            let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+            hex == expected
+        });
+        if ok {
+            let _ = self.engine_ok.set(true);
+        }
+        ok
+    }
+}
+
 impl TextGenerator for EngineGenerator {
     fn generate(&self, generation: &Generation) -> Result<String, RouterError> {
         let mut state = self.lock()?;
@@ -324,12 +361,14 @@ impl TextGenerator for EngineGenerator {
                 text: Some(text),
                 prompt_tokens,
                 cached_tokens,
+                generated_tokens,
                 ms,
                 ..
             }) => {
                 state.status.last_ms = ms;
                 state.status.last_prompt_tokens = prompt_tokens;
                 state.status.last_cached_tokens = cached_tokens;
+                state.status.last_generated_tokens = generated_tokens;
                 state.last_used = Some(Instant::now());
                 Ok(text)
             }
@@ -378,6 +417,31 @@ mod tests {
         );
         assert!(!generator.status().running);
         assert!(!generator.release_if_idle(Duration::ZERO));
+    }
+
+    #[test]
+    fn an_engine_that_is_not_the_shipped_one_is_never_started() {
+        let dir = std::env::temp_dir().join(format!("sershi-engine-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let program = dir.join("sershi-semantic.exe");
+        let model = dir.join("model.gguf");
+        std::fs::write(&program, b"not the engine").unwrap();
+        std::fs::write(&model, b"gguf").unwrap();
+        let mut config = EngineConfig::new(program, model, false);
+        config.program_sha256 =
+            Some("0000000000000000000000000000000000000000000000000000000000000000");
+        let generator = EngineGenerator::new(config);
+        let generation = Generation {
+            prompt: "p".into(),
+            grammar: "root ::= \"x\"".into(),
+            max_tokens: 4,
+        };
+        assert_eq!(
+            generator.generate(&generation),
+            Err(RouterError::Unavailable)
+        );
+        assert!(!generator.status().running);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

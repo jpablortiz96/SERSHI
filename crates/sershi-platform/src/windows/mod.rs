@@ -17,6 +17,7 @@
 
 mod app_paths;
 mod close;
+pub mod disk;
 pub mod job;
 mod known;
 mod launch;

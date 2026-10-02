@@ -288,6 +288,9 @@ pub enum ModelError {
     Integrity,
     Storage,
     Cancelled,
+    /// Not enough free disk space for the model and a safety margin; the
+    /// download did not start.
+    DiskFull,
 }
 
 #[cfg(test)]

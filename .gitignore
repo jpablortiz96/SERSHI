@@ -8,6 +8,8 @@ dist/
 dist-ssr/
 *.tsbuildinfo
 apps/desktop/src-tauri/gen/schemas/
+# Inference engine staged for installer builds (scripts/stage-sidecars.mjs).
+apps/desktop/src-tauri/binaries/
 
 # Secrets — never commit. Use the OS credential store (see docs/SECURITY.md).
 .env

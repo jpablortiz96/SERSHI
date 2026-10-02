@@ -33,9 +33,43 @@ const COMMANDS: &[&str] = &[
     "configure_semantic",
     "download_semantic_model",
     "cancel_semantic_model_download",
+    "get_brain_status",
+    "configure_brain",
+    "download_brain_model",
+    "cancel_brain_model_download",
+    "reset_conversation",
 ];
 
+/// Installer builds bundle the inference engine (`tauri.bundle.conf.json`).
+/// Its SHA-256 is compiled in, so SERSHI refuses to start an engine that is
+/// not the one it shipped with. Ordinary builds embed nothing (the engine
+/// is the developer's own build next to the executable).
+fn embed_engine_hash() {
+    use sha2::{Digest, Sha256};
+    println!("cargo:rerun-if-env-changed=TAURI_CONFIG");
+    let bundling = std::env::var("TAURI_CONFIG").is_ok_and(|c| c.contains("externalBin"));
+    let target = std::env::var("TARGET").unwrap_or_default();
+    let ext = if target.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    let path = format!("binaries/sershi-semantic-{target}{ext}");
+    println!("cargo:rerun-if-changed={path}");
+    if !bundling {
+        return;
+    }
+    let Ok(bytes) = std::fs::read(&path) else {
+        eprintln!("bundled engine {path} is missing (run scripts/stage-sidecars.mjs)");
+        std::process::exit(1);
+    };
+    let digest = Sha256::digest(&bytes);
+    let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+    println!("cargo:rustc-env=SERSHI_ENGINE_SHA256={hex}");
+}
+
 fn main() {
+    embed_engine_hash();
     // GPU builds delay-load the Vulkan loader so SERSHI starts on machines
     // without a GPU driver; `sershi_platform` checks for it first.
     let windows = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "windows");

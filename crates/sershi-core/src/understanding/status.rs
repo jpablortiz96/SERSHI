@@ -59,6 +59,12 @@ pub struct SemanticStatus {
     pub device: Option<String>,
     pub load_ms: Option<u32>,
     pub last_ms: Option<u32>,
+    /// The model's volume has room for it plus a safety margin (a download
+    /// is refused otherwise).
+    pub free_space_ok: bool,
+    /// Not loaded because another local model covers its role (the
+    /// semantic router while the Agent Brain is active).
+    pub standby: bool,
 }
 
 /// The only setting a surface can change.

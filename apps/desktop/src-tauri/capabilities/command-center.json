@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "command-center",
-  "description": "The Command Center window: full read access, command submission (typed or push-to-talk), spoken replies, the local semantic model's settings and its own window chrome.",
+  "description": "The Command Center window: full read access, command submission (typed or push-to-talk), spoken replies, the local semantic model's and Agent Brain's settings, starting a new conversation, and its own window chrome.",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -35,6 +35,11 @@
     "allow-get-semantic-status",
     "allow-configure-semantic",
     "allow-download-semantic-model",
-    "allow-cancel-semantic-model-download"
+    "allow-cancel-semantic-model-download",
+    "allow-get-brain-status",
+    "allow-configure-brain",
+    "allow-download-brain-model",
+    "allow-cancel-brain-model-download",
+    "allow-reset-conversation"
   ]
 }

@@ -18,8 +18,8 @@ use tauri::{AppHandle, State};
 
 use crate::confirmation;
 use crate::integration;
-use crate::runtime::{Runtime, broadcast, schedule_settle};
-use crate::semantic;
+use crate::local_model::{self, Role};
+use crate::runtime::{Runtime, broadcast, drive, schedule_settle};
 use crate::surfaces;
 use crate::voice;
 
@@ -77,10 +77,12 @@ pub fn submit_command(
 ) -> Result<CommandOutcome, IpcError> {
     // A typed command takes over: SERSHI stops listening and talking.
     voice::interrupt(&app);
-    let (outcome, snapshot) = runtime.with_service(|s| {
-        let outcome = s.submit(&request, &mut |event| broadcast(&app, event));
-        (outcome, s.snapshot())
-    })?;
+    let progress =
+        runtime.with_service(|s| s.begin_request(&request, &mut |event| broadcast(&app, event)))?;
+    // The brain model and plan steps run without holding the service.
+    let outcome = drive(&app, progress)
+        .ok_or_else(|| IpcError::new(IpcErrorCode::Internal, "SERSHI's core is unavailable."))?;
+    let snapshot = runtime.with_service(|s| s.snapshot())?;
     confirmation::sync(&app);
     schedule_settle(&app, &snapshot);
     Ok(outcome)
@@ -267,7 +269,7 @@ pub fn cancel_voice_model_download(app: AppHandle) {
 /// The semantic model's installation and runtime state.
 #[tauri::command(async)]
 pub fn get_semantic_status(app: AppHandle) -> Result<SemanticStatus, IpcError> {
-    semantic::status(&app)
+    local_model::status(&app, Role::Semantic)
 }
 
 /// Turns natural understanding with the local model on or off.
@@ -276,16 +278,57 @@ pub fn configure_semantic(
     app: AppHandle,
     settings: SemanticSettings,
 ) -> Result<SemanticStatus, IpcError> {
-    semantic::configure(&app, settings)
+    local_model::configure(&app, Role::Semantic, settings)
 }
 
 /// Downloads the semantic model from SERSHI's fixed catalog (user-initiated).
 #[tauri::command(async)]
 pub fn download_semantic_model(app: AppHandle) -> Result<(), IpcError> {
-    semantic::download(&app)
+    local_model::download(&app, Role::Semantic)
 }
 
 #[tauri::command]
 pub fn cancel_semantic_model_download(app: AppHandle) {
-    semantic::cancel_download(&app);
+    local_model::cancel_download(&app, Role::Semantic);
+}
+
+// ── The local Agent Brain (Command Center only; docs/AGENT_BRAIN.md) ───────
+//
+// The brain decides and proposes; it never executes or approves. None of
+// these commands can run a tool or reach the brain's input or output.
+
+#[tauri::command(async)]
+pub fn get_brain_status(app: AppHandle) -> Result<SemanticStatus, IpcError> {
+    local_model::status(&app, Role::Brain)
+}
+
+/// Turns the local Agent Brain on or off (once installed).
+#[tauri::command(async)]
+pub fn configure_brain(
+    app: AppHandle,
+    settings: SemanticSettings,
+) -> Result<SemanticStatus, IpcError> {
+    local_model::configure(&app, Role::Brain, settings)
+}
+
+/// Downloads the brain model from SERSHI's fixed catalog (user-initiated;
+/// refused when the disk cannot hold it with a safety margin).
+#[tauri::command(async)]
+pub fn download_brain_model(app: AppHandle) -> Result<(), IpcError> {
+    local_model::download(&app, Role::Brain)
+}
+
+#[tauri::command]
+pub fn cancel_brain_model_download(app: AppHandle) {
+    local_model::cancel_download(&app, Role::Brain);
+}
+
+/// Starts a new conversation: forgets the session context (recent
+/// applications, turns, open questions). Preferences are kept; a pending
+/// approval or running plan is cancelled. Grants nothing.
+#[tauri::command]
+pub fn reset_conversation(app: AppHandle, runtime: State<'_, Runtime>) -> Result<(), IpcError> {
+    runtime.with_service(|s| s.reset_conversation(&mut |event| broadcast(&app, event)))?;
+    confirmation::sync(&app);
+    Ok(())
 }

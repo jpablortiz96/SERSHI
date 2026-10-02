@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-brain-model-download"
+description = "Enables the cancel_brain_model_download command without any pre-configured scope."
+commands.allow = ["cancel_brain_model_download"]
+
+[[permission]]
+identifier = "deny-cancel-brain-model-download"
+description = "Denies the cancel_brain_model_download command without any pre-configured scope."
+commands.deny = ["cancel_brain_model_download"]

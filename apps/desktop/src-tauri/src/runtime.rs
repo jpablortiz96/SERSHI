@@ -15,7 +15,7 @@ use sershi_core::ipc::{IpcError, IpcErrorCode};
 use sershi_core::permission::PermissionGrants;
 use sershi_core::platform::Platform;
 use sershi_core::policy::PolicyEngine;
-use sershi_core::service::{AssistantService, ServiceEvent};
+use sershi_core::service::{AssistantService, CommandOutcome, Progress, ServiceEvent};
 use sershi_core::tool::ToolRegistry;
 use sershi_core::understanding::CLARIFICATION_TTL_MS;
 use sershi_platform::SysinfoSystemInfo;
@@ -27,6 +27,8 @@ use crate::confirmation;
 pub const STATE_EVENT: &str = "sershi://assistant-state";
 /// Event carrying a new `ActivityEntry` to every window.
 pub const ACTIVITY_EVENT: &str = "sershi://activity";
+/// Event carrying a plan's progress (`PlanReport`) to the Command Center.
+pub const PLAN_EVENT: &str = "sershi://plan";
 
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -82,11 +84,38 @@ impl Runtime {
     }
 }
 
+/// Drives a request to its outcome. Brain inference runs **outside** the
+/// service lock (bounded by the engine's request timeout), and plans run one
+/// step per lock, so the user can cancel in between. A brain decision or
+/// step that is no longer current is discarded by the core.
+pub fn drive(app: &AppHandle, mut progress: Progress) -> Option<CommandOutcome> {
+    let runtime = app.state::<Runtime>();
+    loop {
+        progress = match progress {
+            Progress::Done(outcome) => return Some(outcome),
+            Progress::Think(ticket) => {
+                let started = std::time::Instant::now();
+                let result = ticket.brain.decide(&ticket.request);
+                let ms = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
+                runtime
+                    .with_service(|s| {
+                        s.complete_brain(ticket.id, result, ms, &mut |e| broadcast(app, e))
+                    })
+                    .ok()?
+            }
+            Progress::Step(report) => runtime
+                .with_service(|s| s.advance_plan(report.id, &mut |e| broadcast(app, e)))
+                .ok()?,
+        };
+    }
+}
+
 pub fn broadcast(app: &AppHandle, event: ServiceEvent) {
     // Emission only fails if the app is shutting down; nothing to recover.
     let _ = match event {
         ServiceEvent::State(snapshot) => app.emit(STATE_EVENT, snapshot),
         ServiceEvent::Activity(entry) => app.emit(ACTIVITY_EVENT, entry),
+        ServiceEvent::Plan(report) => app.emit_to("main", PLAN_EVENT, report),
     };
 }
 

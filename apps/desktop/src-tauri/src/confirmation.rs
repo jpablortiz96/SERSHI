@@ -21,14 +21,14 @@ use sershi_core::confirmation::{
     ConfirmationId, ConfirmationRequest, SurfaceAction, SurfaceAssignment,
 };
 use sershi_core::ipc::{IpcError, IpcErrorCode};
-use sershi_core::service::{CommandOutcome, ConfirmationChoice, ConfirmationDecision};
+use sershi_core::service::{CommandOutcome, ConfirmationChoice, ConfirmationDecision, Progress};
 use tauri::webview::Url;
 use tauri::{
     AppHandle, Emitter, Manager, UserAttentionType, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, Window,
 };
 
-use crate::runtime::{Runtime, broadcast, schedule_settle};
+use crate::runtime::{Runtime, broadcast, drive, schedule_settle};
 use crate::surfaces::MAIN;
 
 /// The confirmation window's label (stable: one surface at a time).
@@ -181,12 +181,23 @@ fn apply(app: &AppHandle, id: ConfirmationId, choice: ConfirmationChoice) {
         confirmation_id: id,
         decision: choice,
     };
-    if let Ok((outcome, snapshot)) = runtime.with_service(|s| {
-        let outcome = s.decide(&decision, &mut |event| broadcast(app, event));
-        (outcome, s.snapshot())
-    }) {
+    if let Ok(outcome) =
+        runtime.with_service(|s| s.decide(&decision, &mut |event| broadcast(app, event)))
+    {
         emit_outcome(app, &outcome);
-        schedule_settle(app, &snapshot);
+        // An approved plan step: the rest of the plan continues, each step
+        // with its own policy (a later sensitive step opens a new
+        // confirmation of its own).
+        let outcome = match outcome.plan.as_ref().filter(|p| !p.done) {
+            Some(report) => drive(app, Progress::Step(report.clone())),
+            None => None,
+        };
+        if let Some(outcome) = outcome {
+            emit_outcome(app, &outcome);
+        }
+        if let Ok(snapshot) = runtime.with_service(|s| s.snapshot()) {
+            schedule_settle(app, &snapshot);
+        }
     }
     sync(app);
 }
