@@ -202,6 +202,11 @@ its own port and privacy controls.
   never add one. Each target becomes its own plan step, with its own
   policy and, if sensitive, its own confirmation.
 - "Ahora abre Word" names its own action; "¿Y Outlook?" takes the last one.
+- **Closing several applications** (Gate 4.1.1) is one grouped action.
+  Policy is checked per application. Safe ones close now; the rest wait in
+  one trusted confirmation listing exactly them. Cancelling closes none,
+  and nothing waits unseen. "Ciérralos todos" / "close them all" means the
+  applications acted on together in context, never every running app.
 - "I'm done with PowerPoint, please close it": the application named in the
   same request.
 - An expired referent is not resolved ("Ciérralo" ten minutes later is not

@@ -136,8 +136,15 @@ grammar: [SEMANTIC.md](SEMANTIC.md#tier-1--grammar-and-trusted-aliases).
 ## Closing
 
 - `system.close_application` — risk **sensitive**, permission
-  `system.apps.close` (ask by default) ⇒ **always confirmed** today, in the
-  dedicated confirmation window ([SECURITY.md](SECURITY.md#trusted-confirmations-implemented)).
+  `system.apps.close` (ask by default) ⇒ confirmed in the dedicated
+  confirmation window ([SECURITY.md](SECURITY.md#trusted-confirmations-implemented)),
+  except (Gate 4.1.1, user requests only):
+  - applications the trusted close-risk list marks safe (the built-in
+    Calculator);
+  - applications the user set to "Always allow" in Settings › Security.
+
+  Several applications at once are one grouped confirmation for exactly
+  those applications ([ADR 0018](adr/0018-voice-session-authority.md#gate-411--closing-several-applications-close-risk-startup)).
 - `prepare` resolves the application and checks it is running with a window
   SERSHI can close; otherwise it answers "isn't running" / "can't be closed
   safely yet" **without** asking for confirmation.
@@ -148,8 +155,10 @@ grammar: [SEMANTIC.md](SEMANTIC.md#tier-1--grammar-and-trusted-aliases).
   (`TerminateProcess` / `taskkill /F` are not used).
 - Never closable: File Explorer (it hosts the taskbar and desktop), Settings,
   installer-managed shortcuts, SERSHI itself.
-- UWP apps hosted by `ApplicationFrameHost` (e.g. Calculator) usually report
-  "can't be closed safely yet" — honest rather than guessing a window.
+- UWP apps hosted by `ApplicationFrameHost` (e.g. Calculator) are closed
+  through their frame window. It is matched by a child window that belongs
+  to the application's own process (AUMID), never by title (Gate 4.1.1;
+  verified on Windows 11 by the manual `windows_applications` test).
 
 ## Security considerations
 

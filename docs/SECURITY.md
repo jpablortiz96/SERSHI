@@ -371,6 +371,9 @@ Details: [VOICE.md](VOICE.md).
 | SERSHI's own speech heard as a command              | Half duplex: no capture during playback, plus a 350 ms echo guard |
 | A late reply or plan acting after an interruption   | Barge-in abandons the brain ticket and cancels the plan before its next step; late results are discarded and never spoken |
 | Wrong "what did you do?" answers                    | Answered from the action ledger (real tool results), never from the model; failures reported as failures |
+| A second close approval left pending with no window (Gate 4.1.1) | Several closes are one grouped confirmation for exactly those apps (immutable, one-time); the window is destroyed only when nothing is pending; an approval whose window cannot be shown is withdrawn |
+| A grouped approval widened after the fact            | The batch is stored in Rust before the window opens; approval runs only the stored calls, each target re-verified; the id works once |
+| Harmless-sounding apps closed without asking          | Only a curated built-in list is "safe to close" (Calculator); everything else asks; per-app "Always allow" is approved in the trusted window; model-proposed closes always ask |
 
 ## Dependencies with a security role
 

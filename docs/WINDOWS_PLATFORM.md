@@ -769,6 +769,36 @@ question. Everything works.
 video memory, response time, UI responsiveness; the engine below normal
 priority; released 5 minutes after the last use.
 
+## Gate 4.1.1 — Closing and voice startup
+
+**C1.** "Abre Calculadora." · "Cierra Calculadora." → closes with no
+confirmation (Activity: allowed by the safe-to-close list).
+
+**C2.** "Abre Outlook." · "Cierra Outlook." → the confirmation window
+appears, and the conversation says Outlook waits for approval.
+
+**C3.** During C2 say "Sí", "Yes", "Approve" → nothing is approved.
+
+**C4.** Settings › Security › Application permissions › Outlook → Always
+allow (approve in the window). "Cierra Outlook." → closes hands-free.
+Restore "Ask every time".
+
+**C5.** "Abre Chrome y Outlook." · "Ciérralos." → one window listing
+exactly both; approve → both close. Repeat and cancel → neither closes.
+Repeat with Calculator + Outlook → Calculator closes, Outlook waits
+visibly.
+
+**C6.** Start a voice session and stay silent (type a little, cough). It
+stays Listening, never Transcribing.
+
+**C7.** Cold first spoken command (after restarting SERSHI): note
+"Preparing voice…", then time speech end → reply (Developer Mode ›
+Voice).
+
+**C8.** The same command warm. Compare Fast and Accurate.
+
+**C9.** Normal PC load: responsiveness, CPU, RAM, GPU.
+
 ## Gate 4.1 — Voice-first conversation
 
 Start a session with the wave button in the command bar. The indicator

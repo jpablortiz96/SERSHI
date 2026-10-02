@@ -532,6 +532,15 @@ End: "No, gracias" · "That's all" · "É só isso" · End button · Escape
   stay done and are reported). A reply the user talked over is shown, not
   spoken. Interrupting by speaking over SERSHI needs echo cancellation and
   is not done.
+- **Silence never starts recognition** (Gate 4.1.1):
+  - Speech onset needs 200 ms of speech within a 400 ms window. Keyboard
+    clicks, a cough or a fan over a long wait never count.
+  - Recognition starts 300 ms before the detected speech, not at the start
+    of the wait.
+  - A cold speech model shows "Preparing voice…".
+  - A watchdog cancels recognition that exceeds its deadline (15 s on a
+    GPU, 45 s on a CPU, plus 30 s for a cold load), and the session returns
+    to Listening.
 - **Idle timeout: 25 s** after SERSHI finishes. That leaves room to think
   of the next request, and a forgotten session still closes the microphone
   quickly. While listening, only the energy endpoint detector runs, about

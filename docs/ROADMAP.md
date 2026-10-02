@@ -182,6 +182,11 @@ Natural language in, structured intent out, policy still decides
   [Gate 4.1](WINDOWS_PLATFORM.md#gate-41--voice-first-conversation)
 - **Why the wake word waits:** the session must first work reliably once
   SERSHI is listening. Only then is it worth deciding how SERSHI wakes up.
+- 🔧 Gate 4.1.1 (corrective): grouped closes with one exact
+  confirmation; the root cause of the invisible second approval fixed;
+  close risk (Calculator closes without asking) and per-app settings;
+  Store apps closable; silence never starts recognition, "Preparing
+  voice…", recognition watchdog. ⏳ Physical C1–C9.
 - Next (not started): **Gate 4.2** local conversation history · **Gate
   4.3** wake word "Hey SERSHI" · **Gate 4A** persistent personal memory.
 

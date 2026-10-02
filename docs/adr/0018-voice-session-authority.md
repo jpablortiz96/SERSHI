@@ -84,6 +84,67 @@ messages, memory only). Saving conversations is a different trust question
 (what is stored, where, for how long, how to delete it) and belongs to its
 own gate (4.2), as does persistent personal memory (4A).
 
+## Gate 4.1.1 — closing several applications, close risk, startup
+
+Physical testing found three problems:
+- "Ciérralos" left the second close pending with no window.
+- Closing the Calculator asked pointlessly, and then failed.
+- A session could sit in "Transcribing" without any speech.
+
+1. **Root cause of the invisible second approval.** After a decision, the
+   shell destroyed the confirmation window *after* applying it. Applying it
+   had already continued the plan and pointed that same window at the next
+   step's approval, so destroying it left that approval pending with
+   nothing on screen. The window is now hidden, the decision applied, and
+   the window destroyed only if nothing is pending. A health check
+   withdraws an approval whose window cannot be shown
+   (`AssistantService::withdraw_confirmation`): nothing it covered runs,
+   and the conversation says so.
+2. **Grouped closes.** A plan made only of closes ("ciérralos", "close
+   both", "cierra Chrome y Outlook", a model's multi-close) is one grouped
+   action.
+   - Policy is evaluated for each application on its own.
+   - Those allowed by stored policy close at once.
+   - The rest wait in **one** trusted confirmation that lists exactly them:
+     `PendingAction::Batch`, immutable, one-time, short-lived, at most
+     five, each target re-verified on approval. A single remaining
+     application gets an ordinary confirmation.
+   - Cancelling covers them all, and nothing is ever left waiting unseen.
+   - The grouped confirmation authorizes that batch only, never a plan.
+3. **Close risk** (`apps::risk`). Trusted metadata, never model output.
+   Only the built-in Calculator is `SafeToClose`. Everything else is
+   `Unknown` or `MayLoseUserWork` and asks. Precedence for the user's
+   own close requests:
+
+   ```text
+   high-risk / prohibited / denied (never overridable)
+     > per-application setting stored by the user
+     > close-risk metadata (SafeToClose closes without asking)
+     > category setting ("Close applications")
+   ```
+
+   A close proposed by the model always asks. Audits record
+   `Authorization::SafeToClose` or `StoredPermission`.
+4. **Per-application settings.**
+   - "Outlook: Always allow / Ask every time", bounded to 32 entries and
+     stored in `permissions.json`.
+   - Offered for applications SERSHI was asked to close.
+   - "Always allow" is approved in the trusted window; voice and the model
+     cannot change it.
+5. **Packaged apps close through their frame.** UWP apps such as Calculator
+   draw inside an `ApplicationFrameHost.exe` window. That frame is matched
+   through its child window belonging to the app's process, and asked to
+   close (`WM_CLOSE`, never terminated).
+6. **Silence never starts recognition.**
+   - **Speech onset** needs 200 ms of speech within a 400 ms window, so
+     keyboard clicks, coughs and fans over a 25 s wait never add up.
+   - **Leading silence** is skipped: recognition starts 300 ms before the
+     detected speech.
+   - **Cold model:** a first turn waiting for the speech model shows
+     "Preparing voice…".
+   - **Watchdog:** recognition that exceeds its deadline is cancelled, and
+     the session recovers to Listening.
+
 ## Consequences
 
 - Hands-free closing requires one deliberate, approved change in
@@ -91,5 +152,5 @@ own gate (4.2), as does persistent personal memory (4A).
 - Voice barge-in by speaking over SERSHI (open microphone during playback)
   is not done: it needs echo cancellation to avoid self-triggering. The
   microphone button interrupts instead.
-- The confirmation store holds either a tool call or a permission change;
-  both are decided only through `AssistantService::decide`.
+- The confirmation store holds a tool call, a grouped close or a permission
+  change; all are decided only through `AssistantService::decide`.
