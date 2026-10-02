@@ -18,6 +18,7 @@ import type { VoiceStatus } from "./generated/VoiceStatus";
 import type { VoiceUpdate } from "./generated/VoiceUpdate";
 import type { SemanticStatus } from "./generated/SemanticStatus";
 import type { PlanReport } from "./generated/PlanReport";
+import type { AppPermissionStatus } from "./generated/AppPermissionStatus";
 import type { PermissionChange } from "./generated/PermissionChange";
 import type { PermissionStatus } from "./generated/PermissionStatus";
 import type { VoiceSessionStatus } from "./generated/VoiceSessionStatus";
@@ -144,6 +145,32 @@ export function isCommandOutcome(v: unknown): v is CommandOutcome {
     }
   }
   if (isObj(detail) && detail.kind === "brainAnswer" && !isStr(detail.message)) return false;
+  // What waits for approval, and a grouped close: trusted applications
+  // only, bounded (Gate 4.1.1).
+  if (isObj(detail) && detail.kind === "awaitingApproval") {
+    if (
+      !Array.isArray(detail.applications) ||
+      detail.applications.length > 5 ||
+      !detail.applications.every(isApplicationSummary)
+    ) {
+      return false;
+    }
+  }
+  if (isObj(detail) && detail.kind === "closeBatch") {
+    if (
+      !Array.isArray(detail.steps) ||
+      detail.steps.length > 5 ||
+      !detail.steps.every(
+        (s) =>
+          isObj(s) &&
+          isApplicationSummary(s.application) &&
+          isStr(s.status) &&
+          STEP_STATUSES.includes(s.status),
+      )
+    ) {
+      return false;
+    }
+  }
   // A recall reports ledger entries: trusted applications only, bounded.
   if (isObj(detail) && detail.kind === "recall") {
     if (
@@ -236,6 +263,7 @@ const VOICE_UPDATE_KINDS = [
   "heard",
   "answered",
   "prompt",
+  "preparing",
   "noSpeech",
   "unclear",
   "cancelled",
@@ -321,6 +349,7 @@ export function isCaptureStart(v: unknown): v is CaptureStart {
 const SESSION_PHASES = [
   "starting",
   "listening",
+  "preparing",
   "transcribing",
   "understanding",
   "planning",
@@ -361,6 +390,23 @@ export function isPermissionList(v: unknown): v is PermissionStatus[] {
         SETTINGS.includes(p.setting) &&
         isStr(p.defaultSetting) &&
         SETTINGS.includes(p.defaultSetting),
+    )
+  );
+}
+
+/** Per-application close settings: catalog ids and names, nothing else. */
+export function isAppPermissionList(v: unknown): v is AppPermissionStatus[] {
+  return (
+    Array.isArray(v) &&
+    v.length <= 40 &&
+    v.every(
+      (a) =>
+        isObj(a) &&
+        isStr(a.appId) &&
+        /^[a-z0-9.+-]{1,96}$/.test(a.appId) &&
+        isStr(a.displayName) &&
+        (a.setting === null || (isStr(a.setting) && SETTINGS.includes(a.setting))) &&
+        isStr(a.closeRisk),
     )
   );
 }

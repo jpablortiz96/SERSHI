@@ -74,6 +74,7 @@ export const enUS = {
   },
 
   command: {
+    preparingPlaceholder: "Preparing voice…",
     session: "Start a voice session",
     sessionTip: "Voice session — talk hands-free",
     sessionStop: "End the voice session",
@@ -109,7 +110,7 @@ export const enUS = {
     },
     done: {
       open: "Opened {app}.",
-      close: "Asked {app} to close.",
+      close: "Closed {app}.",
     },
     waiting: "“{step}” is waiting for your approval in the confirmation window.",
     failed: "I couldn't do “{step}”.",
@@ -150,6 +151,16 @@ export const enUS = {
   },
 
   reply: {
+    awaiting: {
+      one: "{app} is waiting for your approval to close.",
+      many: "{apps} are waiting for your approval to close.",
+      window: "Approve it in the secure confirmation window.",
+    },
+    batch: {
+      failed: "I couldn't close {app}.",
+      cancelled: "I didn't close {apps}.",
+    },
+    confirmationUnavailable: "I couldn't show the confirmation window, so I didn't do anything.",
     recall: {
       opened: "I opened {apps}.",
       closed: "I asked {apps} to close.",
@@ -160,6 +171,7 @@ export const enUS = {
       noneDid: "I haven't done anything in this conversation yet.",
       did: "Just now: {actions}.",
       didFailed: "Didn't work: {actions}.",
+      didCancelled: "Cancelled: {actions}.",
       and: " and ",
       or: " or ",
     },
@@ -210,7 +222,7 @@ export const enUS = {
         timedOut: "{app} didn't respond in time. It may still be starting.",
         failed: "I found {app}, but Windows couldn't open it.",
       },
-      closeRequested: "Asked {app} to close. It may ask you to save your work first.",
+      closeRequested: "Closed {app}.",
       notRunning: "{app} isn't running.",
       closeUnsupported: "SERSHI can't close {app} safely yet.",
       catalogUnavailable: "I couldn't read the list of installed applications.",
@@ -246,6 +258,7 @@ export const enUS = {
     phase: {
       starting: "Starting",
       listening: "Listening",
+      preparing: "Preparing voice",
       transcribing: "Understanding",
       understanding: "Thinking",
       planning: "Planning",
@@ -500,6 +513,17 @@ export const enUS = {
         alwaysAllow: "Always allow",
         askEveryTime: "Ask every time",
       },
+      apps: {
+        title: "Application permissions",
+        detail:
+          "Closing specific applications. An application appears here after SERSHI has been asked to close it.",
+        empty: "No applications yet. Ask SERSHI to close one first.",
+        default: "Default",
+        safe: "Safe to close — closes without a confirmation by default",
+        alwaysAllowDetail: "Your requests to close it run without asking.",
+        askEveryTimeDetail: "Always ask before closing it.",
+        defaultDetail: "Follow Close applications above.",
+      },
       alwaysAllowDetail:
         "Your typed or spoken requests run without an extra confirmation. Actions proposed by the Agent Brain still ask.",
       askEveryTimeDetail: "Approve each time in the confirmation window.",
@@ -721,6 +745,7 @@ export const enUS = {
           policy: "Default policy",
           storedPermission: "Your setting (Always allow)",
           trustedConfirmation: "Your approval",
+          safeToClose: "Trusted close-risk list (safe to close)",
         },
         voiceSession: "Voice session",
         bargeIns: "Interruptions",
@@ -789,6 +814,17 @@ export const enUS = {
   },
 
   confirm: {
+    closeApplications: {
+      title: "Close {count} applications?",
+      body: "SERSHI will ask exactly these applications to close:",
+      confirm: "Close them",
+    },
+    changeAppPermission: {
+      title: "Close “{app}” without asking?",
+      body: "Your typed or spoken requests to close it will run without this confirmation. You can switch back in Settings › Security at any time.",
+      risk: "Actions proposed by the Agent Brain will still ask.",
+      confirm: "Always allow",
+    },
     changePermission: {
       title: "Allow “{permission}” without asking?",
       body: "Your typed or spoken requests will run without this confirmation. You can switch back to “Ask every time” in Settings › Security at any time.",

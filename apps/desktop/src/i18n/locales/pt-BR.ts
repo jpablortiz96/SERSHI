@@ -73,6 +73,7 @@ export const ptBR: Messages = {
   },
 
   command: {
+    preparingPlaceholder: "Preparando a voz…",
     session: "Iniciar uma sessão de voz",
     sessionTip: "Sessão de voz: fale sem usar as mãos",
     sessionStop: "Encerrar a sessão de voz",
@@ -108,7 +109,7 @@ export const ptBR: Messages = {
     },
     done: {
       open: "Abri {app}.",
-      close: "Pedi ao {app} para fechar.",
+      close: "Fechei {app}.",
     },
     waiting: "“{step}” está aguardando sua aprovação na janela de confirmação.",
     failed: "Não consegui “{step}”.",
@@ -149,6 +150,16 @@ export const ptBR: Messages = {
   },
 
   reply: {
+    awaiting: {
+      one: "{app} está aguardando sua aprovação para fechar.",
+      many: "{apps} estão aguardando sua aprovação para fechar.",
+      window: "Preciso da sua aprovação na janela segura.",
+    },
+    batch: {
+      failed: "Não consegui fechar {app}.",
+      cancelled: "Não fechei {apps}.",
+    },
+    confirmationUnavailable: "Não consegui mostrar a janela de confirmação, então não fiz nada.",
     recall: {
       opened: "Abri {apps}.",
       closed: "Pedi para {apps} fechar.",
@@ -159,6 +170,7 @@ export const ptBR: Messages = {
       noneDid: "Ainda não fiz nada nesta conversa.",
       did: "Agora há pouco: {actions}.",
       didFailed: "Não funcionou: {actions}.",
+      didCancelled: "Cancelado: {actions}.",
       and: " e ",
       or: " nem ",
     },
@@ -213,8 +225,7 @@ export const ptBR: Messages = {
         timedOut: "{app} não respondeu a tempo. Talvez ainda esteja iniciando.",
         failed: "Encontrei {app}, mas o Windows não conseguiu abri-lo.",
       },
-      closeRequested:
-        "Pedi para {app} fechar. Talvez ele peça para você salvar seu trabalho antes.",
+      closeRequested: "Fechei {app}.",
       notRunning: "{app} não está em execução.",
       closeUnsupported: "O SERSHI ainda não consegue fechar {app} com segurança.",
       catalogUnavailable: "Não consegui ler a lista de aplicativos instalados.",
@@ -250,6 +261,7 @@ export const ptBR: Messages = {
     phase: {
       starting: "Iniciando",
       listening: "Ouvindo",
+      preparing: "Preparando a voz",
       transcribing: "Entendendo",
       understanding: "Pensando",
       planning: "Planejando",
@@ -509,6 +521,17 @@ export const ptBR: Messages = {
         alwaysAllow: "Sempre permitir",
         askEveryTime: "Perguntar sempre",
       },
+      apps: {
+        title: "Permissões por aplicativo",
+        detail:
+          "Fechar aplicativos específicos. Um aplicativo aparece aqui depois que você pede ao SERSHI para fechá-lo.",
+        empty: "Ainda não há aplicativos. Peça primeiro ao SERSHI para fechar um.",
+        default: "Padrão",
+        safe: "Seguro para fechar: fecha sem confirmação por padrão",
+        alwaysAllowDetail: "Seus pedidos para fechá-lo são feitos sem perguntar.",
+        askEveryTimeDetail: "Sempre perguntar antes de fechá-lo.",
+        defaultDetail: "Seguir “Fechar aplicativos” acima.",
+      },
       alwaysAllowDetail:
         "O que você pedir digitando ou falando é feito sem uma confirmação extra. Ações propostas pelo Agent Brain continuam perguntando.",
       askEveryTimeDetail: "Aprove cada vez na janela de confirmação.",
@@ -730,6 +753,7 @@ export const ptBR: Messages = {
           policy: "Política padrão",
           storedPermission: "Sua configuração (Sempre permitir)",
           trustedConfirmation: "Sua aprovação",
+          safeToClose: "Lista de fechamento seguro do SERSHI",
         },
         voiceSession: "Sessão de voz",
         bargeIns: "Interrupções",
@@ -798,6 +822,17 @@ export const ptBR: Messages = {
   },
 
   confirm: {
+    closeApplications: {
+      title: "Fechar {count} aplicativos?",
+      body: "O SERSHI vai pedir para exatamente estes aplicativos fecharem:",
+      confirm: "Fechar todos",
+    },
+    changeAppPermission: {
+      title: "Fechar “{app}” sem perguntar?",
+      body: "O que você pedir digitando ou falando para fechá-lo será feito sem esta confirmação. Você pode voltar atrás em Configurações › Segurança a qualquer momento.",
+      risk: "Ações propostas pelo Agent Brain continuarão perguntando.",
+      confirm: "Sempre permitir",
+    },
     changePermission: {
       title: "Permitir “{permission}” sem perguntar?",
       body: "O que você pedir digitando ou falando será feito sem esta confirmação. Você pode voltar para “Perguntar sempre” em Configurações › Segurança a qualquer momento.",

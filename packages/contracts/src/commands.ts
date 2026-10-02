@@ -9,6 +9,7 @@ import type { ConfirmationDecision } from "./generated/ConfirmationDecision";
 import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { IntegrationStatus } from "./generated/IntegrationStatus";
 import type { ModelProgress } from "./generated/ModelProgress";
+import type { AppPermissionStatus } from "./generated/AppPermissionStatus";
 import type { ConfigurablePermission } from "./generated/ConfigurablePermission";
 import type { PermissionChange } from "./generated/PermissionChange";
 import type { PermissionSetting } from "./generated/PermissionSetting";
@@ -94,6 +95,13 @@ export interface CommandMap {
     args: { permission: ConfigurablePermission; setting: PermissionSetting };
     result: PermissionChange;
   };
+  // Per-application close settings (Gate 4.1.1). "Always allow" is decided
+  // only in the trusted confirmation window.
+  get_application_permissions: { args: NoArgs; result: AppPermissionStatus[] };
+  request_app_permission_change: {
+    args: { appId: string; setting: PermissionSetting };
+    result: PermissionChange;
+  };
 }
 
 export type CommandName = keyof CommandMap;
@@ -139,6 +147,8 @@ export const COMMAND_NAMES = [
   "get_voice_session",
   "get_permission_settings",
   "request_permission_change",
+  "get_application_permissions",
+  "request_app_permission_change",
 ] as const satisfies readonly CommandName[];
 
 /** Events broadcast by the core to every window. */
@@ -170,6 +180,8 @@ export const EVENTS = {
   voiceSession: "sershi://voice-session",
   /** Main window only: permission settings after a change (Gate 4.1). */
   permissions: "sershi://permissions",
+  /** Main window only: per-application close settings (Gate 4.1.1). */
+  appPermissions: "sershi://app-permissions",
 } as const;
 
 export interface EventMap {
@@ -186,6 +198,7 @@ export interface EventMap {
   [EVENTS.plan]: PlanReport;
   [EVENTS.voiceSession]: VoiceSessionStatus;
   [EVENTS.permissions]: PermissionStatus[];
+  [EVENTS.appPermissions]: AppPermissionStatus[];
 }
 
 export type EventName = keyof EventMap;

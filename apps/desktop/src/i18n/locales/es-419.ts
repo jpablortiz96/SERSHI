@@ -76,6 +76,7 @@ export const es419: Messages = {
   },
 
   command: {
+    preparingPlaceholder: "Preparando voz…",
     session: "Iniciar una sesión de voz",
     sessionTip: "Sesión de voz: habla sin usar las manos",
     sessionStop: "Terminar la sesión de voz",
@@ -111,7 +112,7 @@ export const es419: Messages = {
     },
     done: {
       open: "Abrí {app}.",
-      close: "Pedí a {app} que se cierre.",
+      close: "Cerré {app}.",
     },
     waiting: "«{step}» espera tu aprobación en la ventana de confirmación.",
     failed: "No pude «{step}».",
@@ -152,6 +153,16 @@ export const es419: Messages = {
   },
 
   reply: {
+    awaiting: {
+      one: "{app} está esperando tu aprobación para cerrarse.",
+      many: "{apps} esperan tu aprobación para cerrarse.",
+      window: "Necesito tu aprobación en la ventana segura.",
+    },
+    batch: {
+      failed: "No pude cerrar {app}.",
+      cancelled: "No cerré {apps}.",
+    },
+    confirmationUnavailable: "No pude mostrar la ventana de confirmación, así que no hice nada.",
     recall: {
       opened: "Abrí {apps}.",
       closed: "Le pedí a {apps} que se cerrara.",
@@ -162,6 +173,7 @@ export const es419: Messages = {
       noneDid: "Todavía no he hecho nada en esta conversación.",
       did: "Hace un momento: {actions}.",
       didFailed: "No funcionó: {actions}.",
+      didCancelled: "Cancelado: {actions}.",
       and: " y ",
       or: " ni ",
     },
@@ -216,8 +228,7 @@ export const es419: Messages = {
         timedOut: "{app} no respondió a tiempo. Puede que todavía se esté iniciando.",
         failed: "Encontré {app}, pero Windows no pudo abrirlo.",
       },
-      closeRequested:
-        "Le pedí a {app} que se cierre. Puede que te pida guardar tu trabajo primero.",
+      closeRequested: "Cerré {app}.",
       notRunning: "{app} no se está ejecutando.",
       closeUnsupported: "SERSHI todavía no puede cerrar {app} de forma segura.",
       catalogUnavailable: "No pude leer la lista de aplicaciones instaladas.",
@@ -253,6 +264,7 @@ export const es419: Messages = {
     phase: {
       starting: "Iniciando",
       listening: "Escuchando",
+      preparing: "Preparando voz",
       transcribing: "Entendiendo",
       understanding: "Pensando",
       planning: "Planificando",
@@ -514,6 +526,17 @@ export const es419: Messages = {
         alwaysAllow: "Permitir siempre",
         askEveryTime: "Preguntar cada vez",
       },
+      apps: {
+        title: "Permisos por aplicación",
+        detail:
+          "Cerrar aplicaciones concretas. Una aplicación aparece aquí después de pedirle a SERSHI que la cierre.",
+        empty: "Todavía no hay aplicaciones. Pídele primero a SERSHI que cierre una.",
+        default: "Predeterminado",
+        safe: "Segura de cerrar: se cierra sin confirmación de forma predeterminada",
+        alwaysAllowDetail: "Lo que pidas para cerrarla se hace sin preguntar.",
+        askEveryTimeDetail: "Preguntar siempre antes de cerrarla.",
+        defaultDetail: "Seguir «Cerrar aplicaciones» de arriba.",
+      },
       alwaysAllowDetail:
         "Lo que pidas escribiendo o hablando se hace sin una confirmación extra. Las acciones propuestas por el Agent Brain siguen preguntando.",
       askEveryTimeDetail: "Apruébalo cada vez en la ventana de confirmación.",
@@ -737,6 +760,7 @@ export const es419: Messages = {
           policy: "Política predeterminada",
           storedPermission: "Tu ajuste (Permitir siempre)",
           trustedConfirmation: "Tu aprobación",
+          safeToClose: "Lista de cierre seguro de SERSHI",
         },
         voiceSession: "Sesión de voz",
         bargeIns: "Interrupciones",
@@ -805,6 +829,17 @@ export const es419: Messages = {
   },
 
   confirm: {
+    closeApplications: {
+      title: "¿Cerrar {count} aplicaciones?",
+      body: "SERSHI pedirá que se cierren exactamente estas aplicaciones:",
+      confirm: "Cerrarlas",
+    },
+    changeAppPermission: {
+      title: "¿Cerrar “{app}” sin preguntar?",
+      body: "Lo que pidas escribiendo o hablando para cerrarla se hará sin esta confirmación. Puedes volver atrás en Configuración › Seguridad cuando quieras.",
+      risk: "Las acciones propuestas por el Agent Brain seguirán preguntando.",
+      confirm: "Permitir siempre",
+    },
     changePermission: {
       title: "¿Permitir “{permission}” sin preguntar?",
       body: "Lo que pidas escribiendo o hablando se hará sin esta confirmación. Puedes volver a “Preguntar cada vez” en Configuración › Seguridad cuando quieras.",

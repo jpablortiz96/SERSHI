@@ -8,6 +8,7 @@ import type {
   ApplicationResult,
   ApplicationSummary,
   AssistantState,
+  BatchStep,
   CapabilityStatus,
   Clarification,
   CommandOutcome,
@@ -175,6 +176,46 @@ function describeEvent(t: Translate, entry: ActivityEntry): string {
   }
 }
 
+/** Joins application names ("Chrome y Outlook"). */
+function names(t: Translate, apps: ApplicationSummary[]): string {
+  return apps.map((a) => applicationName(t, a)).join(t("reply.recall.and"));
+}
+
+/**
+ * What waits for approval, before anything ran (Gate 4.1.1): "Outlook está
+ * esperando tu aprobación para cerrarse. Necesito tu aprobación en la
+ * ventana segura."
+ */
+export function awaitingReply(t: Translate, apps: ApplicationSummary[]): string {
+  const first = apps[0];
+  const waiting =
+    apps.length === 1 && first
+      ? t("reply.awaiting.one", { app: applicationName(t, first) })
+      : t("reply.awaiting.many", { apps: names(t, apps) });
+  return `${waiting} ${t("reply.awaiting.window")}`;
+}
+
+/**
+ * A grouped close, from each application's real state: closed, waiting
+ * for approval, cancelled or failed — never "closed" before it happened.
+ */
+export function batchReply(t: Translate, steps: BatchStep[]): string {
+  const by = (status: BatchStep["status"]) =>
+    steps.filter((s) => s.status === status).map((s) => s.application);
+  const sentences: string[] = [];
+  for (const app of by("completed")) {
+    sentences.push(t("plan.done.close", { app: applicationName(t, app) }));
+  }
+  for (const app of [...by("failed"), ...by("unresolved")]) {
+    sentences.push(t("reply.batch.failed", { app: applicationName(t, app) }));
+  }
+  const cancelled = [...by("cancelled"), ...by("skipped")];
+  if (cancelled.length) sentences.push(t("reply.batch.cancelled", { apps: names(t, cancelled) }));
+  const waiting = by("needsConfirmation");
+  if (waiting.length) sentences.push(awaitingReply(t, waiting));
+  return sentences.join(" ");
+}
+
 /** A configurable permission's name ("Close applications"). */
 export function permissionLabel(t: Translate, permission: ConfigurablePermission): string {
   return t(`settings.security.permissions.${permission}.label`);
@@ -188,7 +229,12 @@ export function recallReply(t: Translate, kind: RecallKind, items: RecallItem[])
   const name = (i: RecallItem) =>
     i.application ? applicationName(t, i.application) : stepLabel(t, i);
   const done = items.filter((i) => i.result === "succeeded");
-  const failed = items.filter((i) => i.result !== "succeeded");
+  const failed = items.filter((i) => i.result === "failed" || i.result === "unresolved");
+  const cancelled = items.filter((i) => i.result === "cancelled");
+  // Only cancelled attempts: nothing was opened or closed.
+  if (kind !== "did" && done.length === 0 && failed.length === 0) {
+    return kind === "opened" ? t("reply.recall.noneOpened") : t("reply.recall.noneClosed");
+  }
   if (items.length === 0) {
     if (kind === "opened") return t("reply.recall.noneOpened");
     if (kind === "closed") return t("reply.recall.noneClosed");
@@ -205,6 +251,13 @@ export function recallReply(t: Translate, kind: RecallKind, items: RecallItem[])
     if (failed.length) {
       sentences.push(
         t("reply.recall.didFailed", { actions: failed.map(label).join(t("reply.recall.and")) }),
+      );
+    }
+    if (cancelled.length) {
+      sentences.push(
+        t("reply.recall.didCancelled", {
+          actions: cancelled.map(label).join(t("reply.recall.and")),
+        }),
       );
     }
     return sentences.join(" ");
@@ -441,6 +494,9 @@ export function composeReply(t: Translate, f: Formatters, outcome: CommandOutcom
   if (detail?.kind === "brainAnswer" || detail?.kind === "brainQuestion") return detail.message;
   if (detail?.kind === "planTooLong") return t("plan.tooLong", { max: f.integer(detail.maxSteps) });
   if (detail?.kind === "recall") return recallReply(t, detail.recall, detail.items);
+  if (detail?.kind === "closeBatch") return batchReply(t, detail.steps);
+  if (detail?.kind === "awaitingApproval") return awaitingReply(t, detail.applications);
+  if (detail?.kind === "confirmationUnavailable") return t("reply.confirmationUnavailable");
   switch (outcome.status) {
     case "partial":
       return outcome.reply;

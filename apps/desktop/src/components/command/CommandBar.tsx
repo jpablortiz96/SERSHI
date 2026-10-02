@@ -127,11 +127,14 @@ export function CommandBar() {
         : interrupting
           ? t("command.interrupt")
           : t("command.voice");
+  const preparing = useVoice((s) => s.preparing);
   const placeholder = listening
     ? t("command.listeningPlaceholder")
-    : transcribing
-      ? t("command.transcribingPlaceholder")
-      : t("command.placeholder");
+    : transcribing && preparing
+      ? t("command.preparingPlaceholder")
+      : transcribing
+        ? t("command.transcribingPlaceholder")
+        : t("command.placeholder");
 
   return (
     <form className={styles.form} onSubmit={send}>

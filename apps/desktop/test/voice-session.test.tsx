@@ -5,6 +5,7 @@
  * trusted window's permission-change copy. Nothing here can approve.
  */
 import type {
+  AppPermissionStatus,
   CommandOutcome,
   ConfirmationChoice,
   ConfirmationRequest,
@@ -32,6 +33,19 @@ const requestPermissionChange = vi.fn<
   (permission: string, setting: string) => Promise<"needsConfirmation">
 >(() => Promise.resolve("needsConfirmation"));
 let permissionHandler: ((settings: PermissionStatus[]) => void) | null = null;
+let appHandler: ((apps: AppPermissionStatus[]) => void) | null = null;
+const requestAppPermissionChange = vi.fn<
+  (appId: string, setting: string) => Promise<"needsConfirmation">
+>(() => Promise.resolve("needsConfirmation"));
+const appDefaults: AppPermissionStatus[] = [
+  {
+    appId: "windows.calculator",
+    displayName: "Calculator",
+    setting: null,
+    closeRisk: "safeToClose",
+  },
+  { appId: "outlook", displayName: "Outlook", setting: null, closeRisk: "unknown" },
+];
 
 const defaults: PermissionStatus[] = [
   { permission: "openApplications", setting: "alwaysAllow", defaultSetting: "alwaysAllow" },
@@ -53,6 +67,14 @@ vi.mock("../src/ipc", async (importOriginal) => {
       requestPermissionChange,
       stopSpeaking: () => Promise.resolve(null),
       getPermissionSettings: () => Promise.resolve(defaults),
+      getApplicationPermissions: () => Promise.resolve(appDefaults),
+      requestAppPermissionChange,
+      onAppPermissions: (handler: (apps: AppPermissionStatus[]) => void) => {
+        appHandler = handler;
+        return () => {
+          appHandler = null;
+        };
+      },
       onPermissions: (handler: (settings: PermissionStatus[]) => void) => {
         permissionHandler = handler;
         return () => {
@@ -78,7 +100,7 @@ const { usePermissions } = await import("../src/state/permissions");
 const { SecuritySettings } = await import("../src/surfaces/command-center/SecuritySettings");
 const { HomeView } = await import("../src/surfaces/command-center/HomeView");
 const { ConfirmationSurface } = await import("../src/surfaces/confirmation/ConfirmationSurface");
-const { recallReply } = await import("../src/i18n/domain");
+const { recallReply, batchReply, awaitingReply } = await import("../src/i18n/domain");
 const { createTranslator } = await import("../src/i18n/translate");
 const { useLocaleStore } = await import("../src/i18n");
 const { DEFAULT_PREFERENCES } = await import("../src/i18n/preferences");
@@ -414,5 +436,180 @@ describe("the trusted window explains a permission change", () => {
     expect(screen.getByText("Allow “Close applications” without asking?")).toBeTruthy();
     expect(screen.getByText("Actions proposed by the Agent Brain will still ask.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Always allow" })).toBeTruthy();
+  });
+});
+
+// ── Gate 4.1.1: grouped closes, per-application settings, cold start ──
+
+describe("closing several applications", () => {
+  const calc = { id: "windows.calculator", displayName: "Calculator", source: "builtIn" as const };
+  const outlook = { id: "outlook", displayName: "Outlook", source: "startMenu" as const };
+
+  it("says what closed, what waits and never claims a close before it happened", () => {
+    const es = createTranslator("es-419");
+    expect(
+      batchReply(es, [
+        { application: calc, status: "completed" },
+        { application: outlook, status: "needsConfirmation" },
+      ]),
+    ).toBe(
+      "Cerré Calculadora. Outlook está esperando tu aprobación para cerrarse. Necesito tu aprobación en la ventana segura.",
+    );
+    expect(
+      batchReply(es, [
+        { application: chrome, status: "cancelled" },
+        { application: outlook, status: "cancelled" },
+      ]),
+    ).toBe("No cerré Google Chrome y Outlook.");
+    expect(batchReply(es, [{ application: outlook, status: "failed" }])).toBe(
+      "No pude cerrar Outlook.",
+    );
+    expect(awaitingReply(es, [chrome, outlook])).toBe(
+      "Google Chrome y Outlook esperan tu aprobación para cerrarse. Necesito tu aprobación en la ventana segura.",
+    );
+  });
+
+  it("phrases a single close only after it happened", () => {
+    const awaiting = outcome({
+      status: "needsConfirmation",
+      data: null,
+      detail: { kind: "awaitingApproval", applications: [outlook] },
+    });
+    handleVoiceUpdate({ kind: "answered", outcome: awaiting, speak: true, anythingElse: false });
+    expect(speakReply).toHaveBeenCalledWith(
+      "Outlook está esperando tu aprobación para cerrarse. Necesito tu aprobación en la ventana segura.",
+      "es-419",
+    );
+    speakReply.mockClear();
+    const closed = outcome({
+      toolId: "system.close_application",
+      data: { kind: "closeRequested", application: outlook, windows: 1 },
+    });
+    handleVoiceUpdate({ kind: "answered", outcome: closed, speak: true, anythingElse: false });
+    expect(speakReply).toHaveBeenCalledWith("Cerré Outlook.", "es-419");
+  });
+
+  it("an unshown confirmation is reported, never left waiting", () => {
+    const failed = outcome({
+      status: "failed",
+      toolId: null,
+      data: null,
+      detail: { kind: "confirmationUnavailable" },
+    });
+    handleVoiceUpdate({ kind: "answered", outcome: failed, speak: true, anythingElse: false });
+    expect(speakReply).toHaveBeenCalledWith(
+      "No pude mostrar la ventana de confirmación, así que no hice nada.",
+      "es-419",
+    );
+  });
+
+  it("guards accept grouped closes of trusted applications only, bounded", () => {
+    const batch = (steps: unknown) =>
+      outcome({
+        status: "needsConfirmation",
+        data: null,
+        detail: { kind: "closeBatch", steps } as CommandOutcome["detail"],
+      });
+    expect(isCommandOutcome(batch([{ application: outlook, status: "needsConfirmation" }]))).toBe(
+      true,
+    );
+    expect(
+      isCommandOutcome(batch([{ application: { path: "C:\\x.exe" }, status: "completed" }])),
+    ).toBe(false);
+    expect(
+      isCommandOutcome(
+        batch(Array.from({ length: 6 }, () => ({ application: outlook, status: "completed" }))),
+      ),
+    ).toBe(false);
+  });
+
+  it("the trusted window lists exactly the applications of a group", async () => {
+    useLocaleStore.setState({ preference: "auto", systemLocale: "en-US", locale: "en-US" });
+    getContext.mockResolvedValue({
+      ...(fixture as ConfirmationRequest),
+      action: "closeApplications",
+      subject: { kind: "applications", applications: [chrome, outlook] },
+      expiresAtMs: Date.now() + 60_000,
+    });
+    render(<ConfirmationSurface />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText("Close 2 applications?")).toBeTruthy();
+    const list = screen.getByRole("list", { name: "Close 2 applications?" });
+    expect([...list.querySelectorAll("li")].map((li) => li.textContent)).toEqual([
+      "Google Chrome",
+      "Outlook",
+    ]);
+    expect(screen.getByRole("button", { name: "Close them" })).toBeTruthy();
+  });
+});
+
+describe("per-application close settings", () => {
+  it("shows the safe Calculator and asks the trusted window for Always allow", async () => {
+    usePermissions.setState({ settings: null, apps: [], pending: null, notice: null });
+    render(<SecuritySettings />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText(/Segura de cerrar/)).toBeTruthy();
+    const group = screen.getByRole("radiogroup", { name: "Outlook" });
+    const always = group.querySelector<HTMLInputElement>('input[value="alwaysAllow"]');
+    await act(async () => {
+      if (always) fireEvent.click(always);
+      await Promise.resolve();
+    });
+    expect(requestAppPermissionChange).toHaveBeenCalledWith("outlook", "alwaysAllow");
+    expect(screen.getByText("Aprueba este cambio en la ventana de confirmación.")).toBeTruthy();
+    act(() => {
+      appHandler?.(
+        appDefaults.map((a) => (a.appId === "outlook" ? { ...a, setting: "alwaysAllow" } : a)),
+      );
+    });
+    expect(group.querySelector<HTMLInputElement>('input[value="alwaysAllow"]')?.checked).toBe(true);
+  });
+
+  it("the window explains one application's setting", async () => {
+    useLocaleStore.setState({ preference: "auto", systemLocale: "en-US", locale: "en-US" });
+    getContext.mockResolvedValue({
+      ...(fixture as ConfirmationRequest),
+      toolId: "settings.permissions",
+      action: "changePermission",
+      subject: {
+        kind: "applicationPermission",
+        appId: "outlook",
+        displayName: "Outlook",
+        setting: "alwaysAllow",
+      },
+      reason: "permissionChange",
+      expiresAtMs: Date.now() + 60_000,
+    });
+    render(<ConfirmationSurface />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText("Close “Outlook” without asking?")).toBeTruthy();
+  });
+});
+
+describe("voice session cold start", () => {
+  it("says it is preparing voice instead of pretending to transcribe", () => {
+    useAssistantStore.setState({
+      snapshot: { state: "transcribing", previewState: null, revision: 2 },
+    });
+    render(<CommandBar />);
+    act(() => {
+      handleVoiceUpdate({ kind: "preparing" });
+    });
+    expect(screen.getByPlaceholderText("Preparando voz…")).toBeTruthy();
+    act(() => {
+      handleVoiceSession(session({ phase: "preparing" }));
+    });
+    expect(screen.getByText("Preparando voz")).toBeTruthy();
+    act(() => {
+      handleVoiceUpdate({ kind: "heard", text: "Abre Excel", language: "es", firstHeard: null });
+    });
+    expect(useVoice.getState().preparing).toBe(false);
   });
 });

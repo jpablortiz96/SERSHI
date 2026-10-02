@@ -19,7 +19,7 @@ const SETTINGS = ["askEveryTime", "alwaysAllow"] as const satisfies readonly Per
  */
 export function SecuritySettings() {
   const { t } = useI18n();
-  const { settings, pending, notice, request } = usePermissions();
+  const { settings, pending, notice, request, apps, pendingApp, requestApp } = usePermissions();
 
   useEffect(connectPermissions, []);
 
@@ -59,6 +59,50 @@ export function SecuritySettings() {
           </div>
         ))
       )}
+      {desktopRuntime && settings && (
+        <div className={styles.rowStacked} data-section="application-permissions">
+          <div>
+            <p className={styles.rowLabel}>{t("settings.security.apps.title")}</p>
+            <p className={styles.rowDetail}>{t("settings.security.apps.detail")}</p>
+          </div>
+        </div>
+      )}
+      {desktopRuntime && settings && apps.length === 0 && (
+        <p className={styles.empty}>{t("settings.security.apps.empty")}</p>
+      )}
+      {desktopRuntime &&
+        settings &&
+        apps.map((app) => (
+          <div key={app.appId} data-app={app.appId}>
+            <Choices<PermissionSetting>
+              name={`app-permission-${app.appId}`}
+              label={app.displayName}
+              detail={
+                app.closeRisk === "safeToClose"
+                  ? t("settings.security.apps.safe")
+                  : app.setting === null
+                    ? t("settings.security.apps.defaultDetail")
+                    : t("settings.security.permissions.closeApplications.label")
+              }
+              options={SETTINGS}
+              value={app.setting ?? "askEveryTime"}
+              onChange={(setting) => {
+                void requestApp(app.appId, setting);
+              }}
+              optionLabel={(setting) => t(`settings.security.settings.${setting}`)}
+              optionDetail={(setting) =>
+                setting === "alwaysAllow"
+                  ? t("settings.security.apps.alwaysAllowDetail")
+                  : t("settings.security.apps.askEveryTimeDetail")
+              }
+            />
+            {pendingApp === app.appId && notice === "pending" && (
+              <p className={styles.rowDetail} role="status">
+                <Pill tone="neutral">{t("settings.security.pending")}</Pill>
+              </p>
+            )}
+          </div>
+        ))}
       {notice === "busy" && (
         <p className={styles.rowDetail} role="alert">
           <Pill tone="warning">{t("settings.security.busy")}</Pill>

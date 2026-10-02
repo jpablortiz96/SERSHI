@@ -230,8 +230,9 @@ describe("the Command Center has no approval power", () => {
       />,
     );
     expect(
+      // Gate 4.1.1: it names the application, before anything ran.
       screen.getByText(
-        "Close application is waiting for your approval in the confirmation window.",
+        "Spotify is waiting for your approval to close. Approve it in the secure confirmation window.",
       ),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /close spotify|approve|allow/i })).toBeNull();

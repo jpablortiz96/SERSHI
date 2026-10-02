@@ -94,3 +94,7 @@ export type { SessionEndReason } from "./generated/SessionEndReason";
 export type { SessionTrace } from "./generated/SessionTrace";
 export type { VoiceSessionPhase } from "./generated/VoiceSessionPhase";
 export type { VoiceSessionStatus } from "./generated/VoiceSessionStatus";
+export type { AppPermission } from "./generated/AppPermission";
+export type { AppPermissionStatus } from "./generated/AppPermissionStatus";
+export type { BatchStep } from "./generated/BatchStep";
+export type { CloseRisk } from "./generated/CloseRisk";

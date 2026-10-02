@@ -6,6 +6,7 @@
  * cannot apply it, and neither can voice or the Agent Brain.
  */
 import type {
+  AppPermissionStatus,
   ConfigurablePermission,
   PermissionSetting,
   PermissionStatus,
@@ -18,6 +19,11 @@ export type PermissionNotice = "pending" | "busy" | null;
 
 interface PermissionStore {
   settings: PermissionStatus[] | null;
+  /** Per-application close settings (Gate 4.1.1). */
+  apps: AppPermissionStatus[];
+  /** The application whose change waits in the confirmation window. */
+  pendingApp: string | null;
+  requestApp: (appId: string, setting: PermissionSetting) => Promise<void>;
   /** The permission whose change waits in the confirmation window. */
   pending: ConfigurablePermission | null;
   notice: PermissionNotice;
@@ -27,15 +33,34 @@ interface PermissionStore {
 
 export const usePermissions = create<PermissionStore>((set) => ({
   settings: null,
+  apps: [],
+  pendingApp: null,
   pending: null,
   notice: null,
 
   refresh: async () => {
     if (!desktopRuntime) return;
     try {
-      set({ settings: await sershi.getPermissionSettings() });
+      set({
+        settings: await sershi.getPermissionSettings(),
+        apps: await sershi.getApplicationPermissions(),
+      });
     } catch {
       // Unknown; the section shows nothing to change.
+    }
+  },
+
+  requestApp: async (appId, setting) => {
+    if (!desktopRuntime) return;
+    try {
+      const change = await sershi.requestAppPermissionChange(appId, setting);
+      if (change === "needsConfirmation") {
+        set({ pendingApp: appId, notice: "pending" });
+      } else {
+        set({ pendingApp: null, notice: null, apps: await sershi.getApplicationPermissions() });
+      }
+    } catch {
+      set({ notice: "busy" });
     }
   },
 
@@ -58,7 +83,14 @@ export const usePermissions = create<PermissionStore>((set) => ({
 export function connectPermissions(): () => void {
   if (!desktopRuntime) return () => undefined;
   void usePermissions.getState().refresh();
-  return sershi.onPermissions((settings) => {
+  const stopSettings = sershi.onPermissions((settings) => {
     usePermissions.setState({ settings, pending: null, notice: null });
   });
+  const stopApps = sershi.onAppPermissions((apps) => {
+    usePermissions.setState({ apps, pendingApp: null, notice: null });
+  });
+  return () => {
+    stopSettings();
+    stopApps();
+  };
 }

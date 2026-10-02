@@ -70,6 +70,27 @@ function copy(t: Translate, request: ConfirmationRequest) {
       confirm: t("confirm.changePermission.confirm"),
     };
   }
+  // A grouped close (Gate 4.1.1): exactly these applications, listed.
+  if (request.action === "closeApplications" && request.subject?.kind === "applications") {
+    const apps = request.subject.applications.map((a) => applicationName(t, a));
+    return {
+      title: t("confirm.closeApplications.title", { count: String(apps.length) }),
+      body: t("confirm.closeApplications.body"),
+      list: apps,
+      risk: t("confirm.closeApplication.risk"),
+      confirm: t("confirm.closeApplications.confirm"),
+    };
+  }
+  // One application's close setting (Gate 4.1.1).
+  if (request.action === "changePermission" && request.subject?.kind === "applicationPermission") {
+    const app = request.subject.displayName;
+    return {
+      title: t("confirm.changeAppPermission.title", { app }),
+      body: t("confirm.changeAppPermission.body"),
+      risk: t("confirm.changeAppPermission.risk"),
+      confirm: t("confirm.changeAppPermission.confirm"),
+    };
+  }
   if (request.action === "closeApplication" && subject) {
     return {
       title: t("confirm.closeApplication.title", { app: subject }),
@@ -298,6 +319,13 @@ function Prompt({ request, busy, onDecide, onExpire }: PromptProps) {
       </h1>
       <div id="confirm-body" className={styles.body}>
         <p>{text.body}</p>
+        {"list" in text && text.list && (
+          <ul className={styles.list} aria-label={text.title}>
+            {text.list.map((name) => (
+              <li key={name}>{name}</li>
+            ))}
+          </ul>
+        )}
         {text.risk && <p className={styles.caution}>{text.risk}</p>}
         <p className={styles.reason}>{t(`confirm.reason.${request.reason}`)}</p>
       </div>

@@ -74,6 +74,8 @@ interface VoiceStore {
   session: VoiceSessionStatus | null;
   /** The last session's interruptions, for diagnostics. */
   lastSession: VoiceSessionStatus | null;
+  /** Speech was heard while the speech model is still loading (cold start). */
+  preparing: boolean;
   startSession: () => Promise<void>;
   stopSession: () => void;
   refresh: () => Promise<void>;
@@ -127,6 +129,7 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   latency: null,
   session: null,
   lastSession: null,
+  preparing: false,
 
   startSession: async () => {
     if (!desktopRuntime) return;
@@ -235,6 +238,7 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
   const conversation = useConversation.getState();
   switch (update.kind) {
     case "heard":
+      useVoice.setState({ preparing: false });
       // "You said …" — shown before the command runs.
       conversation.addHeard(update.text, update.firstHeard);
       if (prefs.voiceResponses) expectSpeech();
@@ -253,6 +257,9 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
       else if (!update.speak) clearSpeechExpectation();
       return;
     }
+    case "preparing":
+      useVoice.setState({ preparing: true });
+      return;
     case "prompt":
       // "Sí" to "anything else?": SERSHI is listening (nothing ran).
       conversation.addReply({ kind: "session", notice: "listening" });
@@ -260,11 +267,13 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
       return;
     case "noSpeech":
     case "unclear":
+      useVoice.setState({ preparing: false });
       conversation.addReply({ kind: "voice", notice: update.kind });
       if (prefs.voiceResponses) speakMessage(`voice.${update.kind}`);
       return;
     case "failed":
       clearSpeechExpectation();
+      useVoice.setState({ preparing: false });
       useVoice.setState({
         notice:
           update.reason === "modelMissing"
@@ -277,6 +286,7 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
       return;
     case "cancelled":
       clearSpeechExpectation();
+      useVoice.setState({ preparing: false });
       return;
     case "timings":
       useVoice.setState({ latency: { timings: update.timings, speechMs: null } });

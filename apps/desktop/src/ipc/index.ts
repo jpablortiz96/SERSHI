@@ -6,6 +6,7 @@ import {
   isCommandOutcome,
   isModelProgress,
   isNullPayload,
+  isAppPermissionList,
   isPermissionChange,
   isPermissionList,
   isPlanReport,
@@ -18,6 +19,7 @@ import {
   isVoiceSessionStatus,
   isVoiceUpdate,
   type ActivityEntry,
+  type AppPermissionStatus,
   type ConfigurablePermission,
   type PermissionSetting,
   type PermissionStatus,
@@ -106,6 +108,9 @@ export const sershi = {
   getPermissionSettings: () => call("get_permission_settings", {}, isPermissionList),
   requestPermissionChange: (permission: ConfigurablePermission, setting: PermissionSetting) =>
     call("request_permission_change", { permission, setting }, isPermissionChange),
+  getApplicationPermissions: () => call("get_application_permissions", {}, isAppPermissionList),
+  requestAppPermissionChange: (appId: string, setting: PermissionSetting) =>
+    call("request_app_permission_change", { appId, setting }, isPermissionChange),
 
   onAssistantState: (handler: (snapshot: AssistantSnapshot) => void) =>
     subscribe(EVENTS.assistantState, isAssistantSnapshot, handler),
@@ -135,4 +140,6 @@ export const sershi = {
     subscribe(EVENTS.voiceSession, isVoiceSessionStatus, handler),
   onPermissions: (handler: (settings: PermissionStatus[]) => void) =>
     subscribe(EVENTS.permissions, isPermissionList, handler),
+  onAppPermissions: (handler: (apps: AppPermissionStatus[]) => void) =>
+    subscribe(EVENTS.appPermissions, isAppPermissionList, handler),
 };

@@ -297,3 +297,14 @@
   outline: 2px solid var(--state-awaiting-confirmation);
   outline-offset: 2px;
 }
+
+/* A grouped close: the exact applications (Gate 4.1.1). */
+.list {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.list li {
+  margin: 2px 0;
+  font-weight: var(--type-label-weight);
+}
