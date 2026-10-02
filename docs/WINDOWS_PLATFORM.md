@@ -769,6 +769,48 @@ question. Everything works.
 video memory, response time, UI responsiveness; the engine below normal
 priority; released 5 minutes after the last use.
 
+## Gate 4.1 — Voice-first conversation
+
+Start a session with the wave button in the command bar. The indicator
+shows the phase. Developer Mode › Understanding shows the conversation id,
+input, entities, ledger size, last action, where a reference came from, why
+an action was allowed, and the session's interruptions.
+
+**V1 · Basic.** "Abre Excel." · "¿Qué acabas de abrir?" (→ Excel) ·
+"Ciérralo." (→ confirmation window for Excel). No clicks between turns.
+
+**V2 · Continuity.** "Open Outlook." · "What did you just open?" · "Open
+Chrome." · "Close it." (→ Chrome).
+
+**V3 · Plural.** "Abre Chrome y Outlook." · "Cierra los dos." (two closes,
+each confirmed separately). Then "Abre Chrome y Outlook." · "Ciérralo." →
+must ask which.
+
+**V4 · Barge-in.** Ask something with a long answer; press the microphone
+while SERSHI speaks and say "Abre la calculadora". Speech stops at once,
+Calculator opens, and the old reply does not resume.
+
+**V5 · End.** "No, gracias." → "Hasta luego", the indicator disappears and
+the microphone is off. Also try staying silent for 25 s.
+
+**V6 · Policy (mandatory).** With the default (Close applications → Ask
+every time): "Cierra Outlook" → confirmation window; say "Sí" / "Yes" → not
+approved. Then in Settings › Security choose Close applications → Always
+allow, approve it in the confirmation window, and try "Cierra Outlook" in a
+session: it closes without confirmation. Activity shows the permission
+change, and Developer Mode shows "Allowed by: your setting". **Restore Ask
+every time afterwards.**
+
+**V7 · Cross-modal.** Type "Abre Excel", say "¿Qué abriste?", type
+"Ciérralo". Then the reverse.
+
+**V8 · Load.** With Chrome, Office and an IDE open: CPU, RAM, GPU and video
+memory while the session is listening idle, during recognition and during a
+brain reply. Check that the brain is released 5 minutes after the session.
+
+**V9 · Language.** In one session: "Abre Excel." · "Open Outlook." · "Abra o
+Chrome." No context loss; replies stay in the interface language.
+
 ## Windows validation record
 
 Copy this block for each validation session. Do not mark an item PASS without

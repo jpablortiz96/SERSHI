@@ -500,9 +500,61 @@ withdraws it, and the transcript that follows is understood by Gate 3C only
 | "Spoken replies aren't available" | No voice for that language: install the language's speech pack (Windows Settings › Time & language › Speech). |
 | Slow recognition | Choose your conversation language instead of Automatic, or the Base model. |
 
+## Voice session (Gate 4.1)
+
+([ADR 0018](adr/0018-voice-session-authority.md)) Push-to-talk still works
+as before. A **voice session** adds hands-free turn-taking once the user
+explicitly starts it with the wave button:
+
+```text
+Start ─► Listening ─ end of speech ─► Transcribing ─► Understanding
+  ─► Planning / Executing ─► Speaking ─► (350 ms echo guard) ─► Listening …
+  ─► WaitingForClarification ─► Listening (answer by voice, no click)
+  ─► WaitingForConfirmation  (microphone closed until the trusted window decides)
+End: "No, gracias" · "That's all" · "É só isso" · End button · Escape
+     · 25 s of silence · 2 unusable turns · 15 minutes
+```
+
+- **Explicit and visible.** It starts only from the button; there is no
+  wake word. An indicator in the Command Center (phase, "say No, thanks to
+  finish", End) and a ring on the companion show it whenever it is active.
+  Outside a session the microphone is off.
+- **Pure core state machine** (`voice::session`): phases, farewells
+  (whole utterance only, so "No, gracias, pero abre Chrome" is a request),
+  the idle timeout, "anything else?" and barge-in counting. The shell only
+  opens the microphone when the session says Listening.
+- **Half duplex.** The microphone is never open while SERSHI speaks, and it
+  waits 350 ms after SERSHI stops. SERSHI's own voice cannot reach the
+  recogniser, so "Opened Outlook" can never become a command.
+- **Barge-in.** While SERSHI speaks or works, the microphone button
+  interrupts. Speech stops, a brain reply still being prepared is discarded
+  when it arrives, and a plan stops before its next step (steps already done
+  stay done and are reported). A reply the user talked over is shown, not
+  spoken. Interrupting by speaking over SERSHI needs echo cancellation and
+  is not done.
+- **Idle timeout: 25 s** after SERSHI finishes. That leaves room to think
+  of the next request, and a forgotten session still closes the microphone
+  quickly. While listening, only the energy endpoint detector runs, about
+  0.004 % of one core for a whole idle timeout
+  (`tests/session_idle_cost.rs`). Whisper never runs over silence.
+- **"¿Necesitas algo más?"** follows a completed multi-step plan or a
+  completed close — never trivial commands, questions or failures, never
+  twice in a row. "Sí" to it only answers "Te escucho".
+- **Models.** Starting a session warms the Agent Brain. After the session
+  the usual idle release applies (speech engines after inactivity, the brain
+  5 minutes after its last use); nothing is pinned.
+- **One conversation.** Typing during a session is a turn too. The session
+  continues after the typed reply, with the same context
+  ([AGENT_BRAIN.md](AGENT_BRAIN.md#session-context)).
+- **Authority.** Nothing changes: "sí", "yes", "approve" never approve.
+  Hands-free closing needs Settings › Security › Close applications →
+  Always allow, itself approved in the trusted confirmation window.
+
 ## Wake word (future, not implemented)
 
-Planned only after Gate 3A passes (Prompt 3B):
+Deferred until the voice session is proven physically (Gate 4.3; see
+[ADR 0018](adr/0018-voice-session-authority.md#why-the-wake-word-is-deferred)).
+Originally planned after Gate 3A (Prompt 3B):
 
 ```text
 user enables it explicitly → local detector (WakeWordPort) inside SERSHI

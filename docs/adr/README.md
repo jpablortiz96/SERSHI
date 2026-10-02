@@ -23,5 +23,6 @@ such.
 | [0015](0015-low-latency-local-voice.md)         | Low-latency voice: Vulkan GPU with CPU fallback, Fast/Accurate, adaptive endpoint, early decode | Accepted |
 | [0016](0016-semantic-router-trust-boundary.md)  | Semantic understanding: deterministic tiers first, a local model behind a narrow port, interpretation is not authority | Accepted |
 | [0017](0017-agent-brain-trust-boundary.md)      | Agent Brain: a decision port, bounded plans, per-step authority, ephemeral context | Accepted |
+| [0018](0018-voice-session-authority.md)         | Voice sessions, one conversation and an action ledger; hands-free only by stored, approved policy | Accepted |
 
 Template: `Status · Context · Decision · Alternatives · Consequences`.

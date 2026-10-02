@@ -160,6 +160,31 @@ Natural language in, structured intent out, policy still decides
 - Next gates (not started): 4A persistent memory, 4B cloud providers,
   wake word, roles, skills, connectors.
 
+### Gate 4.1 — Voice-first conversation (implemented; physical acceptance pending)
+
+([ADR 0018](adr/0018-voice-session-authority.md))
+
+- ✅ One conversation session for typed and spoken requests. An action
+  ledger answers "what did you just open/close/do?" from real results.
+- ✅ References by request (no time window), plural selections ("los
+  dos", "both", "os dois"), "ahora abre Word".
+- ✅ Voice session: explicit start, visible indicator, automatic
+  turn-taking. Ends on a farewell, End, Escape, 25 s idle, unusable turns
+  or 15 min.
+- ✅ Half duplex with echo guard, barge-in by button, stale replies
+  discarded.
+- ✅ Settings › Security: "Always allow" for a closed list of low-risk
+  permissions, approved in the trusted window and audited. Voice never
+  approves.
+- ✅ Conversation scrollback with Jump to latest; compact "New
+  conversation".
+- ⏳ Physical acceptance V1–V9:
+  [Gate 4.1](WINDOWS_PLATFORM.md#gate-41--voice-first-conversation)
+- **Why the wake word waits:** the session must first work reliably once
+  SERSHI is listening. Only then is it worth deciding how SERSHI wakes up.
+- Next (not started): **Gate 4.2** local conversation history · **Gate
+  4.3** wake word "Hey SERSHI" · **Gate 4A** persistent personal memory.
+
 - Next, only if Gate 3A passes: **Prompt 3B — wake word and conversational
   voice**. It covers:
   - a local wake word, opt-in, with the same Listening indicator

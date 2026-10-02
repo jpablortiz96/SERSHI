@@ -145,8 +145,11 @@ language ("ignora tus reglas…") never take the deterministic shortcut.
 
 ## Session context
 
-Rust-authoritative, **memory only**, bounded, short-lived
-(`brain::context`, `understanding::dialogue`):
+One **conversation session** (Gate 4.1, `service::session`) is shared by
+typed and spoken requests, the brain, plans, references and the UI — there
+is no separate voice history. Rust-authoritative, **memory only**, bounded,
+short-lived (`brain::context`, `understanding::dialogue`,
+`service::session`):
 
 | What | Bound | Lifetime |
 | --- | --- | --- |
@@ -154,6 +157,26 @@ Rust-authoritative, **memory only**, bounded, short-lived
 | Last system fact (memory, CPU, info) | 1 | 5 minutes |
 | Recent turns (normalized text + structured summary) | 4 | 5 minutes |
 | Open question (Gate 3C or brain) | 1 | 60 seconds |
+| Action ledger (real tool results: action, trusted application, result, origin, plan, why it was allowed) | 32 | until "New conversation" |
+
+### Action ledger (Gate 4.1)
+
+Every real tool execution adds an entry. A pending approval, a denial or a
+cancellation adds nothing, because nothing ran. The ledger is
+**authoritative for what SERSHI did**:
+
+- "¿Qué acabas de abrir?" / "What did you close?" / "O que você fez?" are
+  answered **deterministically from the ledger**, without the model and
+  without acting (`route::recall`). The answer covers the latest request's
+  successes, plus later attempts that failed, reported as failed. A failed
+  open is never remembered as opened. With nothing done: "I haven't opened
+  an application in this conversation."
+- A plan's steps are entries of one request, so "What did you just do?"
+  lists what actually ran, not what was planned.
+- The brain receives the ledger's recent failures as context lines and
+  never answers recall questions itself.
+- The security audit (Activity) is separate and is not reset by "New
+  conversation".
 
 Entities come only from **trusted** results: an application id from a
 tool's data is looked up in the catalog (never deserialized into an
@@ -166,9 +189,19 @@ its own port and privacy controls.
 
 - `ciérralo`, `close it`, `fecha ele`, `ábrelo otra vez`, `hazlo de nuevo`
   → the one recent application.
-- Applications touched together (within 15 s, e.g. one plan) make a
-  reference **ambiguous**: SERSHI asks ("¿Cuál?") with the options in the
-  order they were opened; "la segunda" / "el primero" select among them.
+- Applications acted on by **the same request** (one plan, "abre Chrome y
+  Outlook") make a reference **ambiguous**: SERSHI asks ("¿Cuál?") with the
+  options in the order they were opened; "la segunda" / "el primero"
+  select among them. Separate turns are never ambiguous, however quickly
+  they follow each other (Gate 4.1: a voice session's turns are seconds
+  apart).
+- **Plurals** (Gate 4.1): "los dos", "ambos", "both", "those two", "os
+  dois" answer a question about exactly two candidates; "close both" /
+  "ciérralos" / "cierra todos" refer to the applications acted on together.
+  They pick only among trusted candidates already offered or acted on and
+  never add one. Each target becomes its own plan step, with its own
+  policy and, if sensitive, its own confirmation.
+- "Ahora abre Word" names its own action; "¿Y Outlook?" takes the last one.
 - "I'm done with PowerPoint, please close it": the application named in the
   same request.
 - An expired referent is not resolved ("Ciérralo" ten minutes later is not

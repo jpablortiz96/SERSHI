@@ -366,6 +366,11 @@ Details: [VOICE.md](VOICE.md).
 | Stale or cancelled model output acting late         | Decisions are tied to a ticket; a dismissed or replaced request's decision is discarded; plans advance only by current id |
 | Commands, paths or scripts requested in chat        | Refused deterministically before any model ("I can't run commands…"); no tool can run them |
 | Tampered inference engine executable                | Installer builds compile in the engine's SHA-256; a mismatching engine is never started |
+| Spoken "yes" in a hands-free voice session (Gate 4.1) | The microphone is closed while a confirmation is pending; opening it withdraws the approval; no intent approves |
+| Voice or the model granting itself hands-free authority | Only a closed list of low-risk permissions is configurable; loosening one waits in the trusted confirmation window; audited; high-risk tools never configurable; model-proposed sensitive steps still confirm ([ADR 0018](adr/0018-voice-session-authority.md)) |
+| SERSHI's own speech heard as a command              | Half duplex: no capture during playback, plus a 350 ms echo guard |
+| A late reply or plan acting after an interruption   | Barge-in abandons the brain ticket and cancels the plan before its next step; late results are discarded and never spoken |
+| Wrong "what did you do?" answers                    | Answered from the action ledger (real tool results), never from the model; failures reported as failures |
 
 ## Dependencies with a security role
 
