@@ -19,6 +19,7 @@ use thiserror::Error;
 
 use crate::apps::ApplicationSummary;
 use crate::ids::ToolId;
+use crate::permission::{ConfigurablePermission, PermissionSetting};
 use crate::policy::ConfirmationReason;
 use crate::tool::{RiskLevel, ToolCall};
 
@@ -36,6 +37,8 @@ pub const CONFIRMATION_ID_BYTES: usize = 16;
 #[serde(rename_all = "camelCase")]
 pub enum ConfirmationAction {
     CloseApplication,
+    /// Settings asked to stop confirming a permission (Gate 4.1).
+    ChangePermission,
     /// Generic fallback for tools without a dedicated confirmation.
     RunTool,
 }
@@ -74,8 +77,18 @@ impl ConfirmationLevel {
     tag = "kind"
 )]
 pub enum ConfirmationSubject {
-    Application { application: ApplicationSummary },
+    Application {
+        application: ApplicationSummary,
+    },
+    /// A permission and the setting it would get.
+    Permission {
+        permission: ConfigurablePermission,
+        setting: PermissionSetting,
+    },
 }
+
+/// Display id of a permission change in the confirmation window.
+pub const PERMISSION_CHANGE_TOOL: &str = "settings.permissions";
 
 /// A one-time identifier: 128 bits from the OS CSPRNG, as 32 lowercase hex
 /// characters.
@@ -166,11 +179,32 @@ pub struct ConfirmationDraft {
     pub reason: ConfirmationReason,
 }
 
+/// What runs on approval: stored in the core, never sent by a surface.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PendingAction {
+    /// The exact tool call.
+    Tool(ToolCall),
+    /// A less restrictive permission setting, requested in Settings.
+    Permission {
+        permission: ConfigurablePermission,
+        setting: PermissionSetting,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingConfirmation {
     pub request: ConfirmationRequest,
-    /// The exact call that runs on approval.
-    pub call: ToolCall,
+    pub action: PendingAction,
+}
+
+impl PendingConfirmation {
+    /// The stored tool call, for a tool confirmation.
+    pub fn call(&self) -> Option<&ToolCall> {
+        match &self.action {
+            PendingAction::Tool(call) => Some(call),
+            PendingAction::Permission { .. } => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -211,7 +245,42 @@ impl ConfirmationStore {
         };
         let replaced = self.pending.replace(PendingConfirmation {
             request: request.clone(),
-            call: draft.call,
+            action: PendingAction::Tool(draft.call),
+        });
+        Ok((request, replaced))
+    }
+
+    /// Stores a request to make a permission less restrictive (Gate 4.1).
+    /// Like any approval, it is decided only in the trusted window.
+    pub fn create_permission(
+        &mut self,
+        permission: ConfigurablePermission,
+        setting: PermissionSetting,
+        now_ms: u64,
+    ) -> Result<(ConfirmationRequest, Option<PendingConfirmation>), ConfirmationError> {
+        let id = ConfirmationId::generate()?;
+        let tool_id =
+            ToolId::new(PERMISSION_CHANGE_TOOL).map_err(|_| ConfirmationError::Unknown)?;
+        let request = ConfirmationRequest {
+            id,
+            tool_id,
+            action: ConfirmationAction::ChangePermission,
+            subject: Some(ConfirmationSubject::Permission {
+                permission,
+                setting,
+            }),
+            risk: RiskLevel::Sensitive,
+            level: ConfirmationLevel::Standard,
+            reason: ConfirmationReason::PermissionChange,
+            can_remember: false,
+            expires_at_ms: now_ms.saturating_add(CONFIRMATION_TTL_MS),
+        };
+        let replaced = self.pending.replace(PendingConfirmation {
+            request: request.clone(),
+            action: PendingAction::Permission {
+                permission,
+                setting,
+            },
         });
         Ok((request, replaced))
     }
@@ -375,8 +444,8 @@ mod tests {
         let request = create(&mut store, "Spotify", 0);
         let taken = store.take(&request.id, 1);
         assert_eq!(
-            taken.map(|p| p.call.input),
-            Ok(json!({"application": "Spotify"}))
+            taken.map(|p| p.call().map(|c| c.input.clone())),
+            Ok(Some(json!({"application": "Spotify"})))
         );
         assert_eq!(store.take(&request.id, 2), Err(ConfirmationError::Unknown));
     }

@@ -169,7 +169,12 @@ fn actions(outcome: &CommandOutcome, service: &AssistantService) -> Steps {
             service
                 .pending_confirmation()
                 .and_then(|c| c.subject)
-                .map(|ConfirmationSubject::Application { application }| application.display_name)
+                .and_then(|s| match s {
+                    ConfirmationSubject::Application { application } => {
+                        Some(application.display_name)
+                    }
+                    ConfirmationSubject::Permission { .. } => None,
+                })
         });
     vec![(name.to_owned(), app)]
 }

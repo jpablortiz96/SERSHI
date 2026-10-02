@@ -17,7 +17,7 @@ use crate::activity::{ActivityKind, ActivityLog, NewActivity};
 use crate::confirmation::{ConfirmationDraft, ConfirmationSubject};
 use crate::ids::ToolId;
 use crate::permission::PermissionGrants;
-use crate::policy::{DenialReason, PolicyDecision, PolicyEngine};
+use crate::policy::{Authorization, DenialReason, PolicyDecision, PolicyEngine};
 use crate::tool::{Prepared, Severity, Tool, ToolCall, ToolError, ToolOutput, ToolRegistry};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,6 +26,8 @@ pub enum ExecutionOutcome {
         tool_id: ToolId,
         output: ToolOutput,
         duration_ms: u32,
+        /// Why it was allowed to run.
+        authorization: Authorization,
     },
     /// Policy requires approval; nothing ran.
     ConfirmationRequired(ConfirmationDraft),
@@ -103,8 +105,22 @@ impl ToolExecutor {
             }
             // `plan` already returned denials.
             PolicyDecision::Allow | PolicyDecision::Deny(_) => {
+                // Allowed without asking: by default policy, or because the
+                // user stored "Always allow" for a permission it needs. How
+                // the request arrived (typed, spoken) plays no part.
+                let authorization = if planned
+                    .tool
+                    .definition()
+                    .permissions
+                    .iter()
+                    .any(|p| grants.granted_by_user(p))
+                {
+                    Authorization::StoredPermission
+                } else {
+                    Authorization::Policy
+                };
                 on_execute();
-                self.run(&planned.tool, call, activity, now_ms)
+                self.run(&planned.tool, call, authorization, activity, now_ms)
             }
         }
     }
@@ -137,7 +153,13 @@ impl ToolExecutor {
                 tool_id: call.tool_id.clone(),
             };
         }
-        self.run(&planned.tool, call, activity, now_ms)
+        self.run(
+            &planned.tool,
+            call,
+            Authorization::TrustedConfirmation,
+            activity,
+            now_ms,
+        )
     }
 
     /// Registry lookup, policy, then `prepare`. Returns the terminal outcome
@@ -196,6 +218,7 @@ impl ToolExecutor {
                 &name,
                 Err(error),
                 0,
+                Authorization::Policy,
                 activity,
                 now_ms,
             ))),
@@ -206,6 +229,7 @@ impl ToolExecutor {
         &self,
         tool: &Arc<dyn Tool>,
         call: &ToolCall,
+        authorization: Authorization,
         activity: &mut ActivityLog,
         now_ms: u64,
     ) -> ExecutionOutcome {
@@ -218,6 +242,7 @@ impl ToolExecutor {
             &name,
             result,
             duration_ms,
+            authorization,
             activity,
             now_ms,
         )
@@ -225,8 +250,9 @@ impl ToolExecutor {
 }
 
 fn subject_name(subject: &Option<ConfirmationSubject>) -> Option<String> {
-    subject.as_ref().map(|s| match s {
-        ConfirmationSubject::Application { application } => application.display_name.clone(),
+    subject.as_ref().and_then(|s| match s {
+        ConfirmationSubject::Application { application } => Some(application.display_name.clone()),
+        ConfirmationSubject::Permission { .. } => None,
     })
 }
 
@@ -235,6 +261,7 @@ fn finish(
     name: &str,
     result: Result<ToolOutput, ToolError>,
     duration_ms: u32,
+    authorization: Authorization,
     activity: &mut ActivityLog,
     now_ms: u64,
 ) -> ExecutionOutcome {
@@ -245,12 +272,14 @@ fn finish(
                 NewActivity::new(ActivityKind::ToolCompleted, format!("{name} completed"))
                     .tool(&tool_id)
                     .subject_opt(output.subject.clone())
-                    .duration(duration_ms),
+                    .duration(duration_ms)
+                    .authorization(authorization),
             );
             ExecutionOutcome::Completed {
                 tool_id,
                 output,
                 duration_ms,
+                authorization,
             }
         }
         Err(ToolError::Declined { output, severity }) => {

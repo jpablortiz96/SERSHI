@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::session::{RecallItem, RecallKind, SessionTrace};
 use crate::activity::ActivityEntry;
 use crate::apps::ApplicationSummary;
 use crate::assistant::AssistantSnapshot;
@@ -10,6 +11,7 @@ use crate::brain::route::UnderstandingRoute;
 use crate::confirmation::ConfirmationId;
 use crate::ids::ToolId;
 use crate::intent::AnswerTopic;
+use crate::permission::{ConfigurablePermission, PermissionSetting};
 use crate::policy::DenialReason;
 use crate::understanding::{Clarification, UnderstandingTrace, UnderstoodAs};
 
@@ -131,6 +133,19 @@ pub enum OutcomeDetail {
         #[cfg_attr(feature = "ts", ts(type = "number"))]
         max_steps: usize,
     },
+    /// "What did you just open?": answered from the action ledger — real
+    /// tool results, in the order they ran. Empty: nothing of that kind was
+    /// done in this conversation.
+    Recall {
+        recall: RecallKind,
+        items: Vec<RecallItem>,
+    },
+    /// A permission setting decided in the trusted window (Gate 4.1).
+    Permission {
+        permission: ConfigurablePermission,
+        setting: PermissionSetting,
+        applied: bool,
+    },
 }
 
 /// What one plan step does (no paths, ids or arguments beyond the trusted
@@ -244,6 +259,8 @@ pub struct CommandOutcome {
     pub plan: Option<PlanReport>,
     /// Routing and brain diagnostics (transient; never stored).
     pub brain: Option<BrainTrace>,
+    /// Conversation-session diagnostics (transient; never stored).
+    pub session: Option<Box<SessionTrace>>,
 }
 
 impl CommandOutcome {
@@ -259,6 +276,7 @@ impl CommandOutcome {
             understanding: None,
             plan: None,
             brain: None,
+            session: None,
         }
     }
 

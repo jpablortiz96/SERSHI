@@ -43,6 +43,28 @@ pub enum ConfirmationReason {
     HighRisk,
     PermissionUndecided,
     AgentInitiatedSensitiveAction,
+    /// The user asked in Settings to stop being asked for a permission
+    /// ("Always allow"): granting more authority is itself approved in the
+    /// trusted window (Gate 4.1).
+    PermissionChange,
+}
+
+/// Why an action that ran was allowed (audit and the action ledger, Gate
+/// 4.1). Recorded so that "SERSHI closed Outlook hands-free" can always be
+/// traced to a stored setting the user chose in Settings — never to the
+/// words that asked for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum Authorization {
+    /// SERSHI's default policy allows it (a safe action whose permission is
+    /// granted by default).
+    Policy,
+    /// Allowed because the user set the permission to "Always allow" in
+    /// Settings › Security (a stored, revocable decision).
+    StoredPermission,
+    /// Approved by the user in the trusted confirmation window.
+    TrustedConfirmation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

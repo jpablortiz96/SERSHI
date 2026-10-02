@@ -10,6 +10,7 @@ use std::collections::VecDeque;
 use serde::Serialize;
 
 use crate::ids::ToolId;
+use crate::policy::Authorization;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
@@ -47,6 +48,14 @@ pub enum ActivityKind {
     PlanFinished,
     /// A plan stopped early (cancelled, replaced, approval declined).
     PlanCancelled,
+    /// A hands-free voice session started (Gate 4.1).
+    VoiceSessionStarted,
+    /// A voice session ended; the summary says why (the user ended it,
+    /// silence, a timeout), never what was said.
+    VoiceSessionEnded,
+    /// The user changed a permission in Settings (Gate 4.1). The summary
+    /// names the permission and both settings.
+    PermissionChanged,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -67,6 +76,9 @@ pub struct ActivityEntry {
     pub summary: String,
     /// Wall time of a completed or failed tool execution.
     pub duration_ms: Option<u32>,
+    /// Why an action that ran was allowed (default policy, a permission the
+    /// user stored in Settings, or the trusted confirmation). Never voice.
+    pub authorization: Option<Authorization>,
 }
 
 /// Default number of entries kept in memory.
@@ -93,6 +105,7 @@ pub struct NewActivity {
     pub subject: Option<String>,
     pub summary: String,
     pub duration_ms: Option<u32>,
+    pub authorization: Option<Authorization>,
 }
 
 impl NewActivity {
@@ -103,7 +116,13 @@ impl NewActivity {
             subject: None,
             summary: summary.into(),
             duration_ms: None,
+            authorization: None,
         }
+    }
+
+    pub fn authorization(mut self, authorization: Authorization) -> Self {
+        self.authorization = Some(authorization);
+        self
     }
 
     pub fn tool(mut self, tool_id: &ToolId) -> Self {
@@ -140,6 +159,7 @@ impl ActivityLog {
             subject: activity.subject,
             summary: activity.summary,
             duration_ms: activity.duration_ms,
+            authorization: activity.authorization,
         };
         self.next_id += 1;
         if self.entries.len() == self.capacity {

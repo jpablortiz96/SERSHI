@@ -559,12 +559,20 @@ fn a_voice_request_runs_exactly_the_typed_pipeline() {
     let (outcome, events) = say(&mut spoken, "Abre Spotify");
     let outcome = outcome.expect("submitted");
 
-    // Identical except the (timed) understanding diagnostics.
+    // Identical except the (timed) understanding diagnostics and the
+    // recorded input modality.
     let strip = |o: &CommandOutcome| CommandOutcome {
         understanding: None,
+        session: o.session.clone().map(|t| {
+            Box::new(SessionTrace {
+                modality: Modality::Typed,
+                ..*t
+            })
+        }),
         ..o.clone()
     };
     assert_eq!(strip(&outcome), strip(&typed_outcome));
+    assert_eq!(outcome.session.map(|t| t.modality), Some(Modality::Voice));
     assert_eq!(
         states(&events),
         [
@@ -1646,5 +1654,548 @@ mod agent {
             Some(OutcomeDetail::PlanTooLong { max_steps: 5 })
         ));
         assert_eq!(h.apps.launches(), 0);
+    }
+}
+
+// ── Gate 4.1: one session, the action ledger, plurals, permissions ───────
+
+mod gate41 {
+    use std::sync::Mutex;
+
+    use super::*;
+    use crate::brain::{AgentBrainPort, BrainDecision, BrainError, BrainRequest, BrainStep};
+    use crate::confirmation::{ConfirmationAction, ConfirmationSubject};
+    use crate::permission::{ConfigurablePermission, PermissionSetting};
+    use crate::policy::Authorization;
+    use crate::ports::ApplicationError;
+    use crate::service::{
+        ActionResult, PermissionChange, PermissionChangeError, Progress, RecallKind,
+        ReferenceSource, StepStatus,
+    };
+    use crate::tool::RiskLevel;
+
+    /// A brain that answers once with its decision; asked again (or with
+    /// none), the test fails.
+    #[derive(Debug)]
+    struct Once(Mutex<Option<BrainDecision>>);
+
+    impl AgentBrainPort for Once {
+        fn decide(&self, request: &BrainRequest) -> Result<BrainDecision, BrainError> {
+            match self.0.lock().unwrap().take() {
+                Some(decision) => Ok(decision),
+                None => panic!("the brain was consulted for {:?}", request.text),
+            }
+        }
+    }
+
+    fn with_brain(decision: Option<BrainDecision>) -> Harness {
+        let mut h = understanding();
+        h.service
+            .set_agent_brain(Some(Arc::new(Once(Mutex::new(decision)))), Vec::new());
+        h
+    }
+
+    fn typed(h: &mut Harness, text: &str) -> CommandOutcome {
+        submit(&mut h.service, text).0
+    }
+
+    fn spoken(h: &mut Harness, text: &str) -> CommandOutcome {
+        say(h, text).0.expect("submitted")
+    }
+
+    fn recalled(outcome: &CommandOutcome) -> (RecallKind, Vec<(String, ActionResult)>) {
+        match &outcome.detail {
+            Some(OutcomeDetail::Recall { recall, items }) => (
+                *recall,
+                items
+                    .iter()
+                    .map(|i| {
+                        (
+                            i.application
+                                .as_ref()
+                                .map_or_else(String::new, |a| a.display_name.clone()),
+                            i.result,
+                        )
+                    })
+                    .collect(),
+            ),
+            other => panic!("expected a recall, got {other:?} ({outcome:?})"),
+        }
+    }
+
+    fn subject(h: &Harness) -> String {
+        match h.service.pending_confirmation().and_then(|r| r.subject) {
+            Some(ConfirmationSubject::Application { application }) => application.display_name,
+            other => panic!("expected an application confirmation, got {other:?}"),
+        }
+    }
+
+    fn always_allow_close(h: &mut Harness) {
+        // As stored by the user in Settings (loaded at start-up).
+        h.service.load_permission_settings(&[(
+            ConfigurablePermission::CloseApplications,
+            PermissionSetting::AlwaysAllow,
+        )]);
+    }
+
+    fn setting_of(h: &Harness, permission: ConfigurablePermission) -> PermissionSetting {
+        h.service
+            .permission_settings()
+            .into_iter()
+            .find(|s| s.permission == permission)
+            .map(|s| s.setting)
+            .expect("listed")
+    }
+
+    #[test]
+    fn what_was_just_opened_comes_from_the_ledger_never_the_model() {
+        // The brain is installed but must not be asked.
+        let mut h = with_brain(None);
+        assert_eq!(typed(&mut h, "Abre Excel").status, CommandStatus::Completed);
+        for text in [
+            "¿Qué acabas de abrir?",
+            "What did you just open?",
+            "O que você abriu?",
+        ] {
+            let outcome = typed(&mut h, text);
+            assert_eq!(outcome.status, CommandStatus::Answered, "{text}");
+            assert_eq!(
+                recalled(&outcome),
+                (
+                    RecallKind::Opened,
+                    vec![("Excel".to_owned(), ActionResult::Succeeded)]
+                ),
+                "{text}"
+            );
+            assert_eq!(
+                outcome.session.and_then(|s| s.reference),
+                Some(ReferenceSource::Ledger)
+            );
+        }
+        assert_eq!(h.apps.launches(), 1, "recall never acts");
+    }
+
+    #[test]
+    fn a_failed_open_is_never_reported_as_opened() {
+        let mut h = understanding();
+        typed(&mut h, "Abre Google Chrome");
+        *h.apps.launch_result.lock().unwrap() = Err(ApplicationError::TargetMissing);
+        assert_ne!(typed(&mut h, "Abre Excel").status, CommandStatus::Completed);
+        let (_, items) = recalled(&typed(&mut h, "¿Qué acabas de abrir?"));
+        assert_eq!(
+            items,
+            vec![
+                ("Google Chrome".to_owned(), ActionResult::Succeeded),
+                ("Excel".to_owned(), ActionResult::Failed)
+            ]
+        );
+        // "What did you just do?" reports the latest request as it ended.
+        let (kind, items) = recalled(&typed(&mut h, "What did you just do?"));
+        assert_eq!(kind, RecallKind::Did);
+        assert_eq!(items, vec![("Excel".to_owned(), ActionResult::Failed)]);
+    }
+
+    #[test]
+    fn nothing_done_is_answered_honestly() {
+        let mut h = understanding();
+        let outcome = typed(&mut h, "¿Qué acabas de abrir?");
+        assert_eq!(outcome.status, CommandStatus::Answered);
+        assert!(recalled(&outcome).1.is_empty());
+        assert_eq!(
+            outcome.reply,
+            "I haven't opened an application in this conversation."
+        );
+    }
+
+    #[test]
+    fn a_plan_is_recalled_from_what_actually_ran() {
+        let mut h = understanding();
+        let outcome = typed(&mut h, "Abre Excel y dime cuánta memoria uso");
+        assert_eq!(outcome.status, CommandStatus::Completed);
+        let (_, items) = recalled(&typed(&mut h, "¿Qué acabas de hacer?"));
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().all(|(_, r)| *r == ActionResult::Succeeded));
+        assert!(h.service.ledger().entries().all(|e| e.plan.is_some()));
+    }
+
+    #[test]
+    fn typed_and_spoken_requests_share_one_session() {
+        // Typed, then voice.
+        let mut h = understanding();
+        typed(&mut h, "Abre Excel");
+        let outcome = spoken(&mut h, "¿Qué acabas de abrir?");
+        assert_eq!(recalled(&outcome).1[0].0, "Excel");
+        let outcome = spoken(&mut h, "Ciérralo");
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        assert_eq!(subject(&h), "Excel");
+
+        // Voice, then typed.
+        let mut h = understanding();
+        spoken(&mut h, "Abre Word");
+        let outcome = typed(&mut h, "Close it");
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        assert_eq!(subject(&h), "Word");
+        assert_eq!(h.apps.closes(), 0, "policy still applies");
+    }
+
+    #[test]
+    fn a_spoken_reply_does_not_change_what_it_refers_to() {
+        let mut h = understanding();
+        typed(&mut h, "Abre Excel");
+        // SERSHI says "Abrí Excel": speech is output, never an entity.
+        assert!(h.service.begin_speaking(&mut |_| {}));
+        assert!(h.service.end_speaking(&mut |_| {}));
+        spoken(&mut h, "Ciérralo");
+        assert_eq!(subject(&h), "Excel");
+    }
+
+    #[test]
+    fn natural_follow_ups_stay_coherent() {
+        let mut h = understanding();
+        always_allow_close(&mut h);
+        spoken(&mut h, "Abre Excel");
+        assert_eq!(recalled(&spoken(&mut h, "¿Qué abriste?")).1[0].0, "Excel");
+        assert_eq!(spoken(&mut h, "Ciérralo").status, CommandStatus::Completed);
+        assert_eq!(
+            spoken(&mut h, "Ahora abre Word").status,
+            CommandStatus::Completed
+        );
+        assert_eq!(
+            spoken(&mut h, "Ciérralo también").status,
+            CommandStatus::Completed
+        );
+        let closed: Vec<String> = h
+            .service
+            .ledger()
+            .entries()
+            .filter(|e| e.action == StepAction::Close)
+            .filter_map(|e| e.application.as_ref().map(|a| a.display_name.clone()))
+            .collect();
+        assert_eq!(closed, ["Word", "Excel"]);
+    }
+
+    #[test]
+    fn it_after_two_applications_asks_instead_of_guessing() {
+        let mut h = understanding();
+        typed(&mut h, "Abre Google Chrome y Excel");
+        let outcome = spoken(&mut h, "Ciérralo");
+        assert_eq!(outcome.status, CommandStatus::NeedsClarification);
+        assert_eq!(
+            question(&outcome).1,
+            ["Google Chrome".to_owned(), "Excel".to_owned()]
+        );
+        assert_eq!(h.apps.closes(), 0);
+    }
+
+    #[test]
+    fn both_answers_a_question_about_two_and_each_close_is_confirmed_on_its_own() {
+        let mut h = understanding();
+        typed(&mut h, "Abre Google Chrome y Excel");
+        typed(&mut h, "Cierra eso");
+        let outcome = spoken(&mut h, "Los dos");
+        // A plan of two closes; the first waits for its own approval.
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        assert_eq!(outcome.plan.as_ref().expect("plan").steps.len(), 2);
+        assert_eq!(
+            outcome.session.and_then(|s| s.reference),
+            Some(ReferenceSource::Clarification)
+        );
+        let first = h.service.pending_confirmation().expect("first");
+        let (approved, _) = decide(&mut h.service, &first, true);
+        assert_eq!(h.apps.closes(), 1);
+        // The plan continues (the shell advances it); one approval never
+        // covers the second close.
+        let plan = approved.plan.expect("plan");
+        assert!(!plan.done);
+        let Progress::Done(next) = h.service.advance_plan(plan.id, &mut |_| {}) else {
+            panic!("the second close waits");
+        };
+        assert_eq!(next.status, CommandStatus::NeedsConfirmation);
+        let second = h.service.pending_confirmation().expect("second");
+        assert_ne!(first.id, second.id);
+        assert_eq!(subject(&h), "Excel");
+        decide(&mut h.service, &second, false);
+        assert_eq!(h.apps.closes(), 1);
+    }
+
+    #[test]
+    fn both_selects_only_among_the_offered_candidates() {
+        let mut h = understanding();
+        let outcome = typed(&mut h, "Abrir PowerShell");
+        assert_eq!(question(&outcome).1.len(), 2);
+        let outcome = spoken(&mut h, "Ambos");
+        assert_eq!(outcome.status, CommandStatus::Completed);
+        assert_eq!(launched(&h).len(), 2);
+        // "Both" with nothing acted on together picks nothing.
+        let mut h = understanding();
+        typed(&mut h, "Abre Excel");
+        assert_ne!(
+            typed(&mut h, "Cierra los dos").status,
+            CommandStatus::Completed
+        );
+        assert_eq!(h.apps.closes(), 0);
+    }
+
+    #[test]
+    fn close_both_follows_policy_for_each_application() {
+        let mut h = understanding();
+        always_allow_close(&mut h);
+        typed(&mut h, "Abre Google Chrome y Excel");
+        let outcome = spoken(&mut h, "Cierra los dos");
+        assert_eq!(outcome.status, CommandStatus::Completed);
+        assert_eq!(h.apps.closes(), 2);
+        let auth: Vec<Option<Authorization>> = h
+            .service
+            .ledger()
+            .entries()
+            .filter(|e| e.action == StepAction::Close)
+            .map(|e| e.authorization)
+            .collect();
+        assert_eq!(auth, [Some(Authorization::StoredPermission); 2]);
+    }
+
+    #[test]
+    fn a_new_conversation_forgets_every_reference() {
+        let mut h = understanding();
+        typed(&mut h, "Abre Excel");
+        let before = h.service.conversation_id();
+        let audited = h.service.recent_activity(200).len();
+        h.service.reset_conversation(&mut |_| {});
+        assert_ne!(h.service.conversation_id(), before);
+        assert!(h.service.ledger().is_empty());
+        let outcome = spoken(&mut h, "Ciérralo");
+        assert_ne!(outcome.status, CommandStatus::NeedsConfirmation);
+        assert!(h.service.pending_confirmation().is_none());
+        assert!(recalled(&typed(&mut h, "¿Qué abriste?")).1.is_empty());
+        // The security audit is not conversation context: it survives.
+        assert!(h.service.recent_activity(200).len() > audited);
+    }
+
+    #[test]
+    fn barge_in_discards_a_brain_reply_still_being_prepared() {
+        let mut h = with_brain(None);
+        let Progress::Think(ticket) = h.service.begin_request(
+            &CommandRequest {
+                text: "¿Qué es Excel exactamente?".into(),
+            },
+            &mut |_| {},
+        ) else {
+            panic!("the brain should be asked");
+        };
+        // The user starts speaking before the model answers.
+        h.service.begin_listening(&mut |_| {}).expect("barge-in");
+        let late = h.service.complete_brain(
+            ticket.id,
+            Ok(BrainDecision::Act {
+                message: "Abro Excel.".into(),
+                steps: vec![BrainStep {
+                    capability: "open_application",
+                    app: Some(0),
+                }],
+            }),
+            10,
+            &mut |_| {},
+        );
+        let Progress::Done(late) = late else {
+            panic!("a late decision never continues");
+        };
+        assert_eq!(late.status, CommandStatus::Cancelled);
+        assert_eq!(h.apps.launches(), 0);
+        assert_eq!(h.service.snapshot().state, S::Listening);
+    }
+
+    #[test]
+    fn barge_in_stops_a_plan_between_steps_and_keeps_what_ran() {
+        let mut h = understanding();
+        let Progress::Step(report) = h.service.begin_request(
+            &CommandRequest {
+                text: "Abre Google Chrome, Excel y Word".into(),
+            },
+            &mut |_| {},
+        ) else {
+            panic!("a plan");
+        };
+        let Progress::Step(report) = h.service.advance_plan(report.id, &mut |_| {}) else {
+            panic!("more steps");
+        };
+        assert_eq!(report.steps[0].status, StepStatus::Completed);
+        // "Stop": the user presses to talk over the plan.
+        h.service.begin_listening(&mut |_| {}).expect("barge-in");
+        let Progress::Done(after) = h.service.advance_plan(report.id, &mut |_| {}) else {
+            panic!("a cancelled plan never resumes");
+        };
+        assert_eq!(after.status, CommandStatus::Cancelled);
+        assert_eq!(launched(&h).len(), 1, "Chrome opened; nothing else");
+        assert_eq!(h.service.ledger().len(), 1);
+        assert!(h.service.plan_active().is_none());
+    }
+
+    #[test]
+    fn spoken_yes_never_approves_by_default() {
+        let mut h = understanding();
+        let outcome = spoken(&mut h, "Cierra Excel");
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        for word in ["Sí", "Yes", "Approve", "Aprobar"] {
+            let outcome = spoken(&mut h, word);
+            assert_ne!(outcome.status, CommandStatus::Completed, "{word}");
+        }
+        assert_eq!(h.apps.closes(), 0);
+    }
+
+    #[test]
+    fn a_stored_always_allow_closes_hands_free_and_the_audit_says_why() {
+        let mut h = understanding();
+        always_allow_close(&mut h);
+        let (outcome, events) = say(&mut h, "Cierra Excel");
+        let outcome = outcome.expect("submitted");
+        assert_eq!(outcome.status, CommandStatus::Completed);
+        assert_eq!(h.apps.closes(), 1);
+        // Allowed by the stored setting, not by the voice that asked.
+        assert_eq!(
+            outcome.session.and_then(|s| s.authorization),
+            Some(Authorization::StoredPermission)
+        );
+        let completed: Vec<Option<Authorization>> = events
+            .iter()
+            .filter_map(|e| match e {
+                ServiceEvent::Activity(a) if a.kind == ActivityKind::ToolCompleted => {
+                    Some(a.authorization)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(completed, [Some(Authorization::StoredPermission)]);
+        // Opening uses the default policy.
+        let outcome = spoken(&mut h, "Abre Word");
+        assert_eq!(
+            outcome.session.and_then(|s| s.authorization),
+            Some(Authorization::Policy)
+        );
+    }
+
+    #[test]
+    fn a_model_proposed_close_still_needs_the_trusted_window() {
+        let mut h = with_brain(Some(BrainDecision::Act {
+            message: "Cierro Excel.".into(),
+            steps: vec![BrainStep {
+                capability: "close_application",
+                app: Some(0),
+            }],
+        }));
+        always_allow_close(&mut h);
+        typed(&mut h, "Abre Excel");
+        let outcome = typed(
+            &mut h,
+            "Ya terminé con la hoja de cálculo, gracias por todo",
+        );
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        let pending = h.service.pending_confirmation().expect("pending");
+        assert_eq!(
+            pending.reason,
+            crate::policy::ConfirmationReason::AgentInitiatedSensitiveAction
+        );
+        assert_eq!(h.apps.closes(), 0);
+    }
+
+    #[test]
+    fn loosening_a_permission_is_itself_approved_in_the_trusted_window() {
+        let mut h = understanding();
+        let close = ConfigurablePermission::CloseApplications;
+        let change =
+            h.service
+                .request_permission_change(close, PermissionSetting::AlwaysAllow, &mut |_| {});
+        assert_eq!(change, Ok(PermissionChange::NeedsConfirmation));
+        // Nothing changed yet.
+        assert_eq!(setting_of(&h, close), PermissionSetting::AskEveryTime);
+        let request = h.service.pending_confirmation().expect("pending");
+        assert_eq!(request.action, ConfirmationAction::ChangePermission);
+        assert_eq!(h.service.snapshot().state, S::Idle, "not busy");
+
+        // Declined: unchanged.
+        let (outcome, _) = decide(&mut h.service, &request, false);
+        assert!(matches!(
+            outcome.detail,
+            Some(OutcomeDetail::Permission { applied: false, .. })
+        ));
+        assert_eq!(setting_of(&h, close), PermissionSetting::AskEveryTime);
+
+        // Approved in the trusted window: applied and audited.
+        h.service
+            .request_permission_change(close, PermissionSetting::AlwaysAllow, &mut |_| {})
+            .unwrap();
+        let request = h.service.pending_confirmation().expect("pending");
+        let (outcome, events) = decide(&mut h.service, &request, true);
+        assert!(matches!(
+            outcome.detail,
+            Some(OutcomeDetail::Permission { applied: true, .. })
+        ));
+        assert_eq!(setting_of(&h, close), PermissionSetting::AlwaysAllow);
+        assert!(kinds(&events).contains(&ActivityKind::PermissionChanged));
+
+        // Back to "Ask every time": immediate, no approval needed.
+        let change = h.service.request_permission_change(
+            close,
+            PermissionSetting::AskEveryTime,
+            &mut |_| {},
+        );
+        assert_eq!(change, Ok(PermissionChange::Applied));
+        assert!(h.service.pending_confirmation().is_none());
+        assert_eq!(setting_of(&h, close), PermissionSetting::AskEveryTime);
+        let audit = h.service.recent_activity(1);
+        assert_eq!(audit[0].kind, ActivityKind::PermissionChanged);
+        assert_eq!(
+            audit[0].summary,
+            "Close applications: Always allow → Ask every time"
+        );
+    }
+
+    #[test]
+    fn a_request_in_the_meantime_cancels_a_pending_permission_change() {
+        let mut h = understanding();
+        let close = ConfigurablePermission::CloseApplications;
+        h.service
+            .request_permission_change(close, PermissionSetting::AlwaysAllow, &mut |_| {})
+            .unwrap();
+        // Voice cannot reach it: opening the microphone withdraws it.
+        spoken(&mut h, "Sí");
+        assert!(h.service.pending_confirmation().is_none());
+        assert_eq!(setting_of(&h, close), PermissionSetting::AskEveryTime);
+        // Nor can it be requested while another approval is waiting.
+        typed(&mut h, "Cierra Excel");
+        assert_eq!(
+            h.service
+                .request_permission_change(close, PermissionSetting::AlwaysAllow, &mut |_| {}),
+            Err(PermissionChangeError::Busy)
+        );
+    }
+
+    #[test]
+    fn a_permission_a_high_risk_tool_uses_can_never_be_configured() {
+        let mut registry = ToolRegistry::default();
+        registry
+            .register(Arc::new(crate::tool::test_support::FakeTool::new(
+                "files.delete",
+                RiskLevel::HighRisk,
+                &["system.apps.close"],
+            )))
+            .unwrap();
+        let mut service = AssistantService::new(
+            ToolExecutor::new(registry, PolicyEngine::new(Platform::Windows)),
+            Box::new(KeywordIntentResolver),
+            PermissionGrants::default(),
+            clock,
+        );
+        let close = ConfigurablePermission::CloseApplications;
+        assert_eq!(
+            service.request_permission_change(close, PermissionSetting::AlwaysAllow, &mut |_| {}),
+            Err(PermissionChangeError::NotConfigurable)
+        );
+        service.load_permission_settings(&[(close, PermissionSetting::AlwaysAllow)]);
+        assert!(
+            service
+                .permission_settings()
+                .iter()
+                .all(|s| s.setting == s.default_setting)
+        );
     }
 }

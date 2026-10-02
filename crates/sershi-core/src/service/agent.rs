@@ -23,6 +23,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
+use super::session::{ActionResult, Modality, RecallItem, RecallKind, ReferenceSource};
 use super::types::{
     BrainTrace, BrainUse, CommandOutcome, CommandStatus, OutcomeDetail, PlanReport, PlanStepReport,
     ServiceEvent, StepAction, StepStatus,
@@ -127,7 +128,7 @@ enum Resolved {
     TooLong,
 }
 
-fn step_action(tool_id: &ToolId) -> StepAction {
+pub(super) fn step_action(tool_id: &ToolId) -> StepAction {
     match tool_id.as_str() {
         OPEN_APPLICATION => StepAction::Open,
         CLOSE_APPLICATION => StepAction::Close,
@@ -209,13 +210,18 @@ impl AssistantService {
         }
     }
 
-    /// Forgets the conversation (entities, turns, open questions). Keeps
-    /// preferences; cancels a pending approval and any running plan.
+    /// "New conversation": forgets the conversation — entities, the action
+    /// ledger, turns, open questions, the current plan — under a new
+    /// session id, so nothing said before can be referred to. Keeps
+    /// preferences, permissions and models; the security audit is separate
+    /// and unaffected. Cancels a pending approval and any running plan.
     pub fn reset_conversation(&mut self, notify: Notify<'_>) -> Option<CommandOutcome> {
         let cancelled = self.dismiss(notify);
-        self.session.reset();
+        self.conversation.reset();
         self.dialogue.reset();
         self.brain_question = None;
+        self.reference = None;
+        self.authorized = None;
         cancelled
     }
 
@@ -230,6 +236,14 @@ impl AssistantService {
             return Progress::Done(rejected);
         }
         let watermark = self.watermark();
+        // One conversation for typed and spoken requests (Gate 4.1).
+        self.conversation.request += 1;
+        self.modality = match utterance.source {
+            InputSource::Typed => Modality::Typed,
+            InputSource::Voice => Modality::Voice,
+        };
+        self.reference = None;
+        self.authorized = None;
         // A new request replaces any pending approval, plan or brain
         // decision: none of them can continue afterwards.
         let replaced = self.cancel_confirmations();
@@ -291,6 +305,43 @@ impl AssistantService {
             return Progress::Done(self.finish(outcome, text, None, watermark, notify));
         }
 
+        // Recall ("what did you just open?"): answered from the action
+        // ledger — what really ran — never from a model's recollection.
+        // Acts on nothing, so it is safe in every mode.
+        if !had_question && let Some(kind) = route::recall(text) {
+            return Progress::Done(self.recall(kind, text, watermark, notify));
+        }
+
+        // Plural selections: "los dos" answering "which one?", or "close
+        // both" after opening two. Only among trusted candidates already
+        // offered or acted on; each action is its own plan step, with its
+        // own policy and confirmation.
+        if conversational && !tampering_or_brain_question(text, self.brain_question.is_some()) {
+            let selected = if had_question {
+                self.plural_answer(text, now)
+            } else {
+                self.plural_reference(text, now)
+            };
+            if let Some((calls, source)) = selected {
+                self.reference = Some(source);
+                if had_question {
+                    self.dialogue.clear_pending();
+                    self.record(NewActivity::new(
+                        ActivityKind::CommandInterpreted,
+                        "Understood the answer to a question",
+                    ));
+                }
+                let trace = BrainTrace {
+                    route: UnderstandingRoute::AgentBrain,
+                    brain: Some(BrainUse::Deterministic),
+                    model_ms: None,
+                    prompt_version: BRAIN_PROMPT_VERSION,
+                    steps: calls.len(),
+                };
+                return self.start_plan(calls, trace, text, watermark, notify);
+            }
+        }
+
         // 1. Compound commands: every part resolved by the trusted tiers
         //    becomes a plan — before the whole-sentence fast path, which
         //    would otherwise silently drop the later parts.
@@ -334,7 +385,11 @@ impl AssistantService {
 
         // 2. References and follow-ups (no model).
         if conversational && !had_question && !deterministic && self.brain_question.is_none() {
-            match self.conversational(text, now) {
+            let resolved = self.conversational(text, now);
+            if resolved.is_some() {
+                self.reference = Some(ReferenceSource::Entities);
+            }
+            match resolved {
                 Some(Resolved::Intent(intent, understood)) => {
                     let trace = BrainTrace {
                         route: UnderstandingRoute::AgentBrain,
@@ -517,12 +572,16 @@ impl AssistantService {
         if route::has_reference(text) {
             let action = route::reference_action(text).or_else(|| {
                 // "Hazlo de nuevo": repeat what happened last.
-                self.session.apps(now).next().map(|a| match a.event {
-                    AppEvent::CloseRequested => AppAction::Close,
-                    AppEvent::Opened | AppEvent::Mentioned => AppAction::Open,
-                })
+                self.conversation
+                    .entities
+                    .apps(now)
+                    .next()
+                    .map(|a| match a.event {
+                        AppEvent::CloseRequested => AppAction::Close,
+                        AppEvent::Opened | AppEvent::Mentioned => AppAction::Open,
+                    })
             })?;
-            let referent = self.session.referent(now);
+            let referent = self.conversation.entities.referent(now);
             if referent == Referent::None {
                 // "I'm done with PowerPoint, please close it": the one
                 // application the request itself names.
@@ -577,14 +636,21 @@ impl AssistantService {
 
         // Elliptical follow-ups: "ahora PowerPoint", "¿y Outlook?".
         if let Some(rest) = route::follow_up(text)
-            && let Some(last) = self.session.apps(now).next()
+            && let Some(last) = self.conversation.entities.apps(now).next()
         {
-            let verb = match last.event {
-                AppEvent::CloseRequested => "cierra",
-                AppEvent::Opened | AppEvent::Mentioned => "abre",
+            // "Ahora abre Word" names its own action; "¿Y Outlook?" takes
+            // the last one.
+            let request = if route::has_action_verb(&rest) {
+                rest.clone()
+            } else {
+                let verb = match last.event {
+                    AppEvent::CloseRequested => "cierra",
+                    AppEvent::Opened | AppEvent::Mentioned => "abre",
+                };
+                format!("{verb} {rest}")
             };
             let interpretation = self.understanding.interpret_deterministic(
-                &Utterance::typed(&format!("{verb} {rest}")),
+                &Utterance::typed(&request),
                 &self.dialogue,
                 now,
             );
@@ -598,6 +664,115 @@ impl AssistantService {
             }
         }
         None
+    }
+
+    /// Answers a recall question from the action ledger.
+    fn recall(
+        &mut self,
+        kind: RecallKind,
+        text: &str,
+        watermark: u64,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        self.reference = Some(ReferenceSource::Ledger);
+        let items = self.conversation.ledger.recall(kind);
+        // "What did you open?" → "Excel" → "close it": the one application
+        // recalled becomes the one a reference means.
+        let recalled: Vec<&ApplicationSummary> = items
+            .iter()
+            .filter(|i| i.result == ActionResult::Succeeded)
+            .filter_map(|i| i.application.as_ref())
+            .collect();
+        if let [app] = recalled.as_slice() {
+            let now = (self.clock)();
+            let event = match kind {
+                RecallKind::Closed => AppEvent::CloseRequested,
+                _ => AppEvent::Opened,
+            };
+            if self
+                .conversation
+                .entities
+                .apps(now)
+                .next()
+                .is_none_or(|a| a.app.id != app.id)
+            {
+                self.conversation.entities.record_app(
+                    (*app).clone(),
+                    event,
+                    now,
+                    self.conversation.request,
+                );
+            }
+        }
+        self.transition(AssistantEvent::Completed, notify);
+        let reply = recall_reply(kind, &items);
+        let outcome = CommandOutcome {
+            detail: Some(OutcomeDetail::Recall {
+                recall: kind,
+                items,
+            }),
+            ..CommandOutcome::new(CommandStatus::Answered, reply)
+        };
+        let trace = BrainTrace {
+            route: UnderstandingRoute::AgentBrain,
+            brain: Some(BrainUse::Deterministic),
+            model_ms: None,
+            prompt_version: BRAIN_PROMPT_VERSION,
+            steps: 0,
+        };
+        self.finish(outcome, text, Some(trace), watermark, notify)
+    }
+
+    /// "Los dos" / "both" answering an open question about exactly two
+    /// trusted candidates ("todos"/"them": all of them, at most a plan).
+    fn plural_answer(&self, text: &str, now: u64) -> Option<(Vec<ToolCall>, ReferenceSource)> {
+        let plural = route::plural(text)?;
+        let pending = self.dialogue.pending(now)?;
+        let c = &pending.clarification;
+        if !matches!(
+            c.kind,
+            ClarificationKind::ChooseApplication | ClarificationKind::MultipleTargets
+        ) {
+            return None;
+        }
+        let n = c.candidates.len();
+        let fits = match plural {
+            route::Plural::Two => n == 2,
+            route::Plural::All => (2..=MAX_PLAN_STEPS).contains(&n),
+        };
+        if !fits {
+            return None;
+        }
+        let calls = c
+            .candidates
+            .iter()
+            .map(|app| app_call(c.action, app, CallOrigin::User))
+            .collect::<Option<Vec<_>>>()?;
+        Some((calls, ReferenceSource::Clarification))
+    }
+
+    /// "Close both" / "ciérralos" after acting on several applications
+    /// together: the applications of that group, oldest first. "Both"
+    /// needs exactly two.
+    fn plural_reference(&self, text: &str, now: u64) -> Option<(Vec<ToolCall>, ReferenceSource)> {
+        let plural = route::plural(text)?;
+        let action = route::reference_action(text)?;
+        let group: Vec<ApplicationSummary> = match self.conversation.entities.referent(now) {
+            Referent::Ambiguous(apps) => apps.iter().rev().map(|a| a.app.clone()).collect(),
+            Referent::One(_) | Referent::None => return None,
+        };
+        let fits = match plural {
+            route::Plural::Two => group.len() == 2,
+            route::Plural::All => (2..=MAX_PLAN_STEPS).contains(&group.len()),
+        };
+        if !fits {
+            return None;
+        }
+        let calls = group
+            .iter()
+            .map(|app| app_call(action, app, CallOrigin::User))
+            .collect::<Option<Vec<_>>>()?;
+        Some((calls, ReferenceSource::Entities))
     }
 
     /// Trusted applications whose name appears in `text` as whole words.
@@ -627,7 +802,7 @@ impl AssistantService {
     }
 
     /// The trusted application a call names, if it is a catalog entry.
-    fn call_app(&self, call: &ToolCall) -> Option<ApplicationSummary> {
+    pub(super) fn call_app(&self, call: &ToolCall) -> Option<ApplicationSummary> {
         let id = call.input.get("application")?.as_str()?;
         self.understanding
             .catalog_names()
@@ -659,7 +834,30 @@ impl AssistantService {
                 .position(|o| o.id == app.id)
                 .map(crate::brain::contract::handle)
         };
-        let mut context = self.session.lines(now, handle_of);
+        let mut context = self.conversation.entities.lines(now, handle_of);
+        // What did not work, from the ledger: the brain never reports a
+        // failed action as done (successes are the entity lines above).
+        for entry in self
+            .conversation
+            .ledger
+            .entries()
+            .filter(|e| e.result != ActionResult::Succeeded)
+            .filter(|e| now.saturating_sub(e.at_ms) < crate::brain::context::ENTITY_TTL_MS)
+            .take(2)
+        {
+            let what = entry
+                .application
+                .as_ref()
+                .map_or_else(String::new, |a| format!(" {}", a.display_name));
+            let verb = match entry.action {
+                StepAction::Open => "open",
+                StepAction::Close => "close",
+                StepAction::Memory => "check memory",
+                StepAction::Cpu => "check the processor",
+                StepAction::SystemInfo => "show system information",
+            };
+            context.push(format!("tried to {verb}{what}: it did not work"));
+        }
         for turn in self.dialogue.recent(now) {
             if let Some(summary) = &turn.summary {
                 context.push(format!(
@@ -722,7 +920,7 @@ impl AssistantService {
                 push(o.clone(), &mut out);
             }
         }
-        for a in self.session.apps(now) {
+        for a in self.conversation.entities.apps(now) {
             push(a.app.clone(), &mut out);
         }
         if let Some((_, options)) = self.understanding.semantic_request(u, &self.dialogue, now) {
@@ -1055,6 +1253,7 @@ impl AssistantService {
             return Progress::Done(CommandOutcome {
                 plan: Some(report),
                 brain: Some(trace),
+                session: Some(Box::new(self.session_trace())),
                 ..outcome
             });
         }
@@ -1147,6 +1346,7 @@ impl AssistantService {
         CommandOutcome {
             plan: Some(report),
             brain: Some(plan.trace),
+            session: Some(Box::new(self.session_trace())),
             ..CommandOutcome::new(
                 status,
                 format!("Plan finished: {done} of {} steps done.", plan.steps.len()),
@@ -1207,26 +1407,39 @@ impl AssistantService {
         match (call.tool_id.as_str(), outcome.status) {
             (OPEN_APPLICATION, CommandStatus::Completed) => {
                 if let Some(app) = app_in_data() {
-                    self.session.record_app(app, AppEvent::Opened, now);
+                    let request = self.conversation.request;
+                    self.conversation
+                        .entities
+                        .record_app(app, AppEvent::Opened, now, request);
                 }
             }
             (CLOSE_APPLICATION, CommandStatus::Completed) => {
                 if let Some(app) = app_in_data() {
-                    self.session.record_app(app, AppEvent::CloseRequested, now);
+                    let request = self.conversation.request;
+                    self.conversation.entities.record_app(
+                        app,
+                        AppEvent::CloseRequested,
+                        now,
+                        request,
+                    );
                 }
             }
             (CLOSE_APPLICATION, CommandStatus::NeedsConfirmation) => {
                 if let Some(ConfirmationSubject::Application { application }) =
                     self.confirmations.current().and_then(|c| c.subject.clone())
                 {
-                    self.session
-                        .record_app(application, AppEvent::CloseRequested, now);
+                    self.conversation.entities.record_app(
+                        application,
+                        AppEvent::CloseRequested,
+                        now,
+                        self.conversation.request,
+                    );
                 }
             }
             ("system.get_memory", CommandStatus::Completed) => {
                 let n = |k: &str| data.and_then(|d| d.get(k)).and_then(Value::as_u64);
                 if let (Some(used), Some(total)) = (n("usedBytes"), n("totalBytes")) {
-                    self.session.record_fact(
+                    self.conversation.entities.record_fact(
                         SystemFact::Memory {
                             used_bytes: used,
                             total_bytes: total,
@@ -1240,7 +1453,7 @@ impl AssistantService {
                     .and_then(|d| d.get("usagePercent"))
                     .and_then(Value::as_f64)
                     .map(|v| v as f32);
-                self.session.record_fact(
+                self.conversation.entities.record_fact(
                     SystemFact::Cpu {
                         usage_percent: usage,
                     },
@@ -1248,9 +1461,73 @@ impl AssistantService {
                 );
             }
             ("system.get_info", CommandStatus::Completed) => {
-                self.session.record_fact(SystemFact::Info, now);
+                self.conversation
+                    .entities
+                    .record_fact(SystemFact::Info, now);
             }
             _ => {}
         }
     }
+}
+
+/// A plural shortcut is never taken over tampering words or while the
+/// brain's own question is open (the brain owns that exchange).
+fn tampering_or_brain_question(text: &str, brain_question: bool) -> bool {
+    brain_question || route::tampering(text)
+}
+
+/// Canonical English for a recall answer (surfaces phrase it themselves
+/// from the structured items).
+fn recall_reply(kind: RecallKind, items: &[RecallItem]) -> String {
+    let names = |want: ActionResult| -> Vec<String> {
+        items
+            .iter()
+            .filter(|i| (i.result == ActionResult::Succeeded) == (want == ActionResult::Succeeded))
+            .map(|i| {
+                i.application
+                    .as_ref()
+                    .map_or_else(|| "that".to_owned(), |a| a.display_name.clone())
+            })
+            .collect()
+    };
+    let done = names(ActionResult::Succeeded);
+    let failed = names(ActionResult::Failed);
+    let (verb, none) = match kind {
+        RecallKind::Opened => (
+            "opened",
+            "I haven't opened an application in this conversation.",
+        ),
+        RecallKind::Closed => (
+            "closed",
+            "I haven't closed an application in this conversation.",
+        ),
+        RecallKind::Did => ("did", "I haven't done anything in this conversation yet."),
+    };
+    if items.is_empty() {
+        return none.to_owned();
+    }
+    if kind == RecallKind::Did {
+        return format!(
+            "{} action(s): {} done, {} not done.",
+            items.len(),
+            done.len(),
+            failed.len()
+        );
+    }
+    let mut out = String::new();
+    if !done.is_empty() {
+        out.push_str(&format!("I {verb} {}.", done.join(" and ")));
+    }
+    if !failed.is_empty() {
+        let attempt = if kind == RecallKind::Opened {
+            "open"
+        } else {
+            "close"
+        };
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&format!("I couldn't {attempt} {}.", failed.join(" or ")));
+    }
+    out
 }

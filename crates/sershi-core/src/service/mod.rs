@@ -45,8 +45,13 @@ mod types;
 mod tests;
 
 mod agent;
+mod session;
 
 pub use agent::{BrainTicket, Progress};
+pub use session::{
+    ActionLedger, ActionResult, ConversationSession, LedgerEntry, MAX_LEDGER_ENTRIES, Modality,
+    RecallItem, RecallKind, ReferenceSource, SessionTrace,
+};
 pub use types::{
     BrainTrace, BrainUse, Clock, CommandOutcome, CommandRequest, CommandStatus, ConfirmationChoice,
     ConfirmationDecision, MAX_COMMAND_CHARS, OutcomeDetail, PlanReport, PlanStepReport,
@@ -58,17 +63,20 @@ use crate::assistant::{
     AssistantEvent, AssistantSnapshot, AssistantState, StateMachine, TransitionError,
 };
 use crate::confirmation::{
-    ConfirmationError, ConfirmationRequest, ConfirmationStore, ConfirmationSubject,
+    ConfirmationError, ConfirmationRequest, ConfirmationStore, ConfirmationSubject, PendingAction,
     PendingConfirmation,
 };
 use crate::executor::{ExecutionOutcome, ToolExecutor};
 use crate::ids::ToolId;
 use std::sync::Arc;
 
-use crate::brain::{AgentBrainPort, SessionContext};
+use crate::brain::AgentBrainPort;
 use crate::intent::{Intent, IntentResolver};
-use crate::permission::PermissionGrants;
-use crate::policy::DenialReason;
+use crate::permission::{
+    ConfigurablePermission, PermissionGrants, PermissionSetting, PermissionStatus,
+};
+use crate::policy::{Authorization, DenialReason};
+use crate::tool::RiskLevel;
 use crate::tool::{Severity, ToolCall, ToolDefinition};
 use crate::understanding::{
     ApplicationDirectory, Clarification, Dialogue, InputSource, Interpretation, PendingChange,
@@ -92,8 +100,14 @@ pub struct AssistantService {
     unavailable: Vec<String>,
     /// The interface language replies are written in.
     response_language: String,
-    /// Recent applications and system facts (references, follow-ups).
-    session: SessionContext,
+    /// The conversation: recent entities and the action ledger (Gate 4.1),
+    /// shared by typed and spoken requests.
+    conversation: ConversationSession,
+    /// How the current request arrived, what its reference resolved from
+    /// and why its action ran (diagnostics).
+    modality: Modality,
+    reference: Option<ReferenceSource>,
+    authorized: Option<Authorization>,
     plan: Option<agent::ActivePlan>,
     thinking: Option<agent::Thinking>,
     brain_question: Option<agent::BrainQuestion>,
@@ -126,7 +140,10 @@ impl AssistantService {
             brain: None,
             unavailable: Vec::new(),
             response_language: "en-US".to_owned(),
-            session: SessionContext::default(),
+            conversation: ConversationSession::default(),
+            modality: Modality::Typed,
+            reference: None,
+            authorized: None,
             plan: None,
             thinking: None,
             brain_question: None,
@@ -228,10 +245,19 @@ impl AssistantService {
         notify: Notify<'_>,
     ) -> Result<Option<CommandOutcome>, VoiceBusy> {
         let state = self.machine.state();
-        if state.is_busy() || state.is_voice_input() {
+        if state.is_voice_input() {
             return Err(VoiceBusy);
         }
         let watermark = self.watermark();
+        if state.is_busy() {
+            // Barge-in (Gate 4.1): the user speaks over work in progress. A
+            // brain decision still being prepared is abandoned (its late
+            // result is discarded) and a plan stops before its next step;
+            // steps that already ran stay done and stay in the ledger.
+            self.thinking = None;
+            self.cancel_plan();
+            self.transition(AssistantEvent::Dismiss, notify);
+        }
         let cancelled = self.cancel_confirmations();
         self.withdrew_approval = cancelled.is_some();
         if state == AssistantState::AwaitingConfirmation {
@@ -534,6 +560,7 @@ impl AssistantService {
         notify: Notify<'_>,
     ) -> CommandOutcome {
         outcome.brain = brain;
+        outcome.session = Some(Box::new(self.session_trace()));
         self.dialogue
             .record((self.clock)(), text, turn_summary(&outcome));
         self.flush_activity(watermark, notify);
@@ -554,11 +581,14 @@ impl AssistantService {
         if let Some(expired) = self.confirmations.expire(now) {
             self.record_pending(ActivityKind::ConfirmationExpired, &expired);
             self.settle_if_no_pending(notify);
-            let outcome = self.with_plan(
-                expired_outcome(Some(&expired.request.tool_id)),
-                false,
-                notify,
-            );
+            let outcome = match permission_outcome(&expired, false) {
+                Some(outcome) => outcome,
+                None => self.with_plan(
+                    expired_outcome(Some(&expired.request.tool_id)),
+                    false,
+                    notify,
+                ),
+            };
             if expired.request.id == decision.confirmation_id {
                 self.flush_activity(watermark, notify);
                 return outcome;
@@ -573,6 +603,9 @@ impl AssistantService {
                 RejectionReason::UnknownConfirmation,
                 "That request is no longer waiting for approval.",
             ),
+            Ok(pending) if pending.call().is_none() => {
+                self.decide_permission(&pending, decision.decision)
+            }
             Ok(pending) => match decision.decision {
                 ConfirmationChoice::Cancel => {
                     self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
@@ -616,11 +649,14 @@ impl AssistantService {
         let expired = self.confirmations.expire((self.clock)())?;
         self.record_pending(ActivityKind::ConfirmationExpired, &expired);
         self.settle_if_no_pending(notify);
-        let outcome = self.with_plan(
-            expired_outcome(Some(&expired.request.tool_id)),
-            false,
-            notify,
-        );
+        let outcome = match permission_outcome(&expired, false) {
+            Some(outcome) => outcome,
+            None => self.with_plan(
+                expired_outcome(Some(&expired.request.tool_id)),
+                false,
+                notify,
+            ),
+        };
         self.flush_activity(watermark, notify);
         Some(outcome)
     }
@@ -675,8 +711,10 @@ impl AssistantService {
             self.executor
                 .execute(call, &self.grants, &mut self.activity, now, &mut on_execute)
         };
+        let authorization = authorization_of(&outcome);
         let outcome = self.conclude(outcome, in_plan, notify);
         self.note_result(call, &outcome);
+        self.record_action(call, &outcome, authorization);
         outcome
     }
 
@@ -692,15 +730,23 @@ impl AssistantService {
         self.transition(AssistantEvent::ConfirmationApproved, notify);
         let now = (self.clock)();
         let in_plan = self.plan.is_some();
+        let PendingAction::Tool(call) = &pending.action else {
+            return CommandOutcome::rejected(
+                RejectionReason::UnknownConfirmation,
+                "That request is no longer waiting for approval.",
+            );
+        };
         let execution = self.executor.execute_approved(
-            &pending.call,
+            call,
             &pending.request.subject,
             &self.grants,
             &mut self.activity,
             now,
         );
+        let authorization = authorization_of(&execution);
         let outcome = self.conclude(execution, in_plan, notify);
-        self.note_result(&pending.call, &outcome);
+        self.note_result(call, &outcome);
+        self.record_action(call, &outcome, authorization);
         outcome
     }
 
@@ -723,6 +769,7 @@ impl AssistantService {
                 tool_id,
                 output,
                 duration_ms,
+                ..
             } => {
                 end(self, AssistantEvent::Completed, notify);
                 CommandOutcome {
@@ -846,8 +893,11 @@ impl AssistantService {
     }
 
     fn record_pending(&mut self, kind: ActivityKind, pending: &PendingConfirmation) {
-        let subject = pending.request.subject.as_ref().map(|s| match s {
-            ConfirmationSubject::Application { application } => application.display_name.clone(),
+        let subject = pending.request.subject.as_ref().and_then(|s| match s {
+            ConfirmationSubject::Application { application } => {
+                Some(application.display_name.clone())
+            }
+            ConfirmationSubject::Permission { .. } => None,
         });
         self.record_confirmation(kind, subject, Some(&pending.request.tool_id));
     }
@@ -890,6 +940,200 @@ impl AssistantService {
         }
     }
 
+    // ── Gate 4.1: the conversation session and permissions ──────────────
+
+    /// The conversation's id (changes with "New conversation").
+    pub fn conversation_id(&self) -> u64 {
+        self.conversation.id
+    }
+
+    /// The action ledger (memory only; what SERSHI actually did).
+    pub fn ledger(&self) -> &ActionLedger {
+        &self.conversation.ledger
+    }
+
+    pub(super) fn session_trace(&self) -> SessionTrace {
+        let now = (self.clock)();
+        SessionTrace {
+            session: self.conversation.id,
+            modality: self.modality,
+            active_entities: self.conversation.entities.apps(now).count(),
+            ledger_entries: self.conversation.ledger.len(),
+            last_action: self.conversation.ledger.last_success().map(|e| RecallItem {
+                action: e.action,
+                application: e.application.clone(),
+                result: e.result,
+            }),
+            reference: self.reference,
+            authorization: self.authorized,
+        }
+    }
+
+    /// Records a real tool execution in the action ledger. Nothing that did
+    /// not run (pending approval, denied, cancelled) is recorded.
+    fn record_action(
+        &mut self,
+        call: &ToolCall,
+        outcome: &CommandOutcome,
+        authorization: Option<Authorization>,
+    ) {
+        let Some(result) = ActionResult::from_status(outcome.status) else {
+            return;
+        };
+        let application = self.call_app(call).or_else(|| {
+            let id = outcome
+                .data
+                .as_ref()?
+                .get("application")?
+                .get("id")?
+                .as_str()?;
+            self.understanding
+                .catalog_names()
+                .into_iter()
+                .map(|n| n.application)
+                .find(|a| a.id == id)
+        });
+        if authorization.is_some() {
+            self.authorized = authorization;
+        }
+        let plan = self.plan_active();
+        self.conversation.ledger.record(
+            (self.clock)(),
+            self.conversation.request,
+            call.tool_id.clone(),
+            agent::step_action(&call.tool_id),
+            application,
+            result,
+            call.origin,
+            plan,
+            authorization,
+        );
+    }
+
+    /// The configurable permissions and their current settings.
+    pub fn permission_settings(&self) -> Vec<PermissionStatus> {
+        ConfigurablePermission::ALL
+            .into_iter()
+            .map(|permission| PermissionStatus {
+                permission,
+                setting: self.grants.setting(permission),
+                default_setting: permission.default_setting(),
+            })
+            .collect()
+    }
+
+    /// Whether a high-risk tool uses this permission. Such a permission is
+    /// never configurable (and none is today).
+    fn guards_high_risk(&self, permission: ConfigurablePermission) -> bool {
+        let id = permission.permission_id();
+        self.executor
+            .registry()
+            .definitions()
+            .any(|d| d.risk == RiskLevel::HighRisk && d.permissions.contains(&id))
+    }
+
+    /// Applies settings the user stored earlier (start-up). A setting for
+    /// a permission a high-risk tool uses is ignored.
+    pub fn load_permission_settings(
+        &mut self,
+        settings: &[(ConfigurablePermission, PermissionSetting)],
+    ) {
+        for &(permission, setting) in settings {
+            if !self.guards_high_risk(permission) {
+                self.grants.configure(permission, setting);
+            }
+        }
+    }
+
+    /// A permission change requested in Settings. Making a permission more
+    /// restrictive applies at once. Making it less restrictive ("Always
+    /// allow") is itself an approval: it waits in the trusted confirmation
+    /// window like a sensitive action, and only [`Self::decide`] applies it.
+    /// Neither voice, a model nor the Command Center can grant it.
+    pub fn request_permission_change(
+        &mut self,
+        permission: ConfigurablePermission,
+        setting: PermissionSetting,
+        notify: Notify<'_>,
+    ) -> Result<PermissionChange, PermissionChangeError> {
+        if self.guards_high_risk(permission) {
+            return Err(PermissionChangeError::NotConfigurable);
+        }
+        let current = self.grants.setting(permission);
+        if current == setting {
+            return Ok(PermissionChange::Unchanged);
+        }
+        let watermark = self.watermark();
+        if !setting.loosens(current) {
+            self.apply_permission(permission, setting);
+            self.flush_activity(watermark, notify);
+            return Ok(PermissionChange::Applied);
+        }
+        let state = self.machine.state();
+        if state.is_busy()
+            || state.is_voice_input()
+            || state == AssistantState::AwaitingConfirmation
+            || self.plan.is_some()
+            || self.thinking.is_some()
+        {
+            return Err(PermissionChangeError::Busy);
+        }
+        // One pending confirmation at a time.
+        self.cancel_confirmations();
+        self.confirmations
+            .create_permission(permission, setting, (self.clock)())
+            .map_err(|_| PermissionChangeError::Unavailable)?;
+        self.record(NewActivity::new(
+            ActivityKind::ConfirmationRequired,
+            "A permission change is waiting for your approval",
+        ));
+        self.flush_activity(watermark, notify);
+        Ok(PermissionChange::NeedsConfirmation)
+    }
+
+    fn apply_permission(&mut self, permission: ConfigurablePermission, setting: PermissionSetting) {
+        let before = self.grants.setting(permission);
+        self.grants.configure(permission, setting);
+        self.record(NewActivity::new(
+            ActivityKind::PermissionChanged,
+            format!(
+                "{}: {} → {}",
+                permission_label(permission),
+                setting_label(before),
+                setting_label(setting)
+            ),
+        ));
+    }
+
+    fn decide_permission(
+        &mut self,
+        pending: &PendingConfirmation,
+        choice: ConfirmationChoice,
+    ) -> CommandOutcome {
+        let PendingAction::Permission {
+            permission,
+            setting,
+        } = pending.action
+        else {
+            return CommandOutcome::rejected(
+                RejectionReason::UnknownConfirmation,
+                "That request is no longer waiting for approval.",
+            );
+        };
+        match choice {
+            ConfirmationChoice::Approve => {
+                self.record_pending(ActivityKind::ConfirmationApproved, pending);
+                self.apply_permission(permission, setting);
+            }
+            ConfirmationChoice::Cancel => {
+                self.record_pending(ActivityKind::ConfirmationCancelled, pending);
+            }
+        }
+        permission_outcome(pending, choice == ConfirmationChoice::Approve).unwrap_or_else(|| {
+            CommandOutcome::new(CommandStatus::Cancelled, "Nothing was changed.")
+        })
+    }
+
     fn transition(&mut self, event: AssistantEvent, notify: Notify<'_>) {
         // Every transition used here is valid from the state the service
         // leaves the machine in; a rejected one indicates a logic error and
@@ -927,9 +1171,81 @@ fn turn_summary(outcome: &CommandOutcome) -> Option<String> {
 }
 
 fn cancelled_outcome(pending: &PendingConfirmation) -> CommandOutcome {
+    if let Some(outcome) = permission_outcome(pending, false) {
+        return outcome;
+    }
     CommandOutcome {
         tool_id: Some(pending.request.tool_id.clone()),
         ..CommandOutcome::new(CommandStatus::Cancelled, "Cancelled. Nothing was changed.")
+    }
+}
+
+/// What a permission request in Settings led to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub enum PermissionChange {
+    /// More restrictive: applied immediately.
+    Applied,
+    /// Already set that way.
+    Unchanged,
+    /// Less restrictive: waiting in the trusted confirmation window.
+    NeedsConfirmation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionChangeError {
+    /// SERSHI is working or another approval is pending; try again.
+    Busy,
+    /// A high-risk tool uses it: never configurable.
+    NotConfigurable,
+    /// No secure confirmation could be created.
+    Unavailable,
+}
+
+fn permission_label(permission: ConfigurablePermission) -> &'static str {
+    match permission {
+        ConfigurablePermission::OpenApplications => "Open applications",
+        ConfigurablePermission::CloseApplications => "Close applications",
+        ConfigurablePermission::SystemInformation => "System information",
+    }
+}
+
+fn setting_label(setting: PermissionSetting) -> &'static str {
+    match setting {
+        PermissionSetting::AlwaysAllow => "Always allow",
+        PermissionSetting::AskEveryTime => "Ask every time",
+    }
+}
+
+/// The outcome of a permission confirmation (`None` for a tool one).
+fn permission_outcome(pending: &PendingConfirmation, applied: bool) -> Option<CommandOutcome> {
+    let PendingAction::Permission {
+        permission,
+        setting,
+    } = pending.action
+    else {
+        return None;
+    };
+    let (status, reply) = if applied {
+        (CommandStatus::Completed, "Permission updated.")
+    } else {
+        (CommandStatus::Cancelled, "Nothing was changed.")
+    };
+    Some(CommandOutcome {
+        detail: Some(OutcomeDetail::Permission {
+            permission,
+            setting,
+            applied,
+        }),
+        ..CommandOutcome::new(status, reply)
+    })
+}
+
+fn authorization_of(outcome: &ExecutionOutcome) -> Option<Authorization> {
+    match outcome {
+        ExecutionOutcome::Completed { authorization, .. } => Some(*authorization),
+        _ => None,
     }
 }
 

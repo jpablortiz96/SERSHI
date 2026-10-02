@@ -257,6 +257,99 @@ pub fn hypothetical(text: &str) -> bool {
     })
 }
 
+// ── Gate 4.1: recall, plurals ────────────────────────────────────────────
+
+/// Past forms of "open", "close" and "do" (EN/ES/PT, normalized).
+#[rustfmt::skip]
+const OPENED: &[&str] = &[
+    "abriste", "abrio", "abierto", "abrimos", "abriu", "aberto", "abriste", "opened",
+];
+#[rustfmt::skip]
+const CLOSED: &[&str] = &[
+    "cerraste", "cerro", "cerrado", "fechou", "fechado", "fechaste", "closed",
+];
+#[rustfmt::skip]
+const DID: &[&str] = &["hiciste", "hizo", "hecho", "fez", "feito", "fizeste", "done"];
+/// "Just" markers: "acabas de abrir", "acabou de fechar", "you just did".
+const JUST: &[&str] = &["acabas", "acaba", "acabou", "acabaste", "just", "did"];
+
+/// "What did you just open?", "¿Qué cerraste?", "O que você fez?": a
+/// question about what SERSHI did, answered from the action ledger (never
+/// a model's recollection). `None` for anything else, including "what can
+/// you open?" (no past) or "did you open Excel?" (no "what").
+pub fn recall(text: &str) -> Option<crate::service::RecallKind> {
+    use crate::service::RecallKind;
+    let k = keys(text);
+    if k.is_empty() || k.len() > 9 || !k.iter().any(|w| matches!(w.as_str(), "que" | "what")) {
+        return None;
+    }
+    let has = |set: &[&str]| k.iter().any(|w| set.contains(&w.as_str()));
+    let just = has(JUST);
+    let verb = |past: &[&str], present: &[&str]| has(past) || (just && has(present));
+    if verb(OPENED, &["abrir", "open", "abriu"]) {
+        Some(RecallKind::Opened)
+    } else if verb(CLOSED, &["cerrar", "close", "fechar"]) {
+        Some(RecallKind::Closed)
+    } else if verb(DID, &["hacer", "do", "fazer"]) {
+        Some(RecallKind::Did)
+    } else {
+        None
+    }
+}
+
+/// Words that pick two at once: "both", "los dos", "os dois".
+#[rustfmt::skip]
+const BOTH: &[&[&str]] = &[
+    &["both"], &["the", "two"], &["those", "two"], &["these", "two"],
+    &["ambos"], &["ambas"], &["los", "dos"], &["las", "dos"], &["esos", "dos"], &["esas", "dos"],
+    &["estos", "dos"], &["estas", "dos"],
+    &["os", "dois"], &["as", "duas"], &["esses", "dois"], &["essas", "duas"], &["estes", "dois"],
+    &["estas", "duas"],
+];
+/// Words that pick every recent one: "them", "todos".
+#[rustfmt::skip]
+const ALL_OF_THEM: &[&[&str]] = &[
+    &["them"], &["all", "of", "them"], &["todos"], &["todas"], &["ellos"], &["ellas"],
+    &["eles"], &["elas"], &["all"],
+];
+
+fn has_phrase(k: &[String], phrases: &[&[&str]]) -> bool {
+    phrases.iter().any(|p| {
+        k.windows(p.len())
+            .any(|w| w.iter().zip(p.iter()).all(|(a, b)| a == b))
+    })
+}
+
+/// How many a plural reference picks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Plural {
+    /// "both", "los dos", "os dois": exactly two.
+    Two,
+    /// "them", "ciérralos", "todos": all the recent ones together.
+    All,
+}
+
+/// A plural selection: "both", "those two", "ambos", "los dos", "esses
+/// dois" (also "ciérralos", "close them"). Picks only among trusted
+/// candidates already offered or recently acted on; it never adds one.
+pub fn plural(text: &str) -> Option<Plural> {
+    let k = keys(text);
+    if k.len() > 8 {
+        return None;
+    }
+    if has_phrase(&k, BOTH) {
+        return Some(Plural::Two);
+    }
+    // A plural clitic on an action verb: "ciérralos", "ábrelas".
+    let clitic = k
+        .iter()
+        .any(|w| (w.ends_with("los") || w.ends_with("las")) && clitic_verb(w).is_some());
+    if clitic || has_phrase(&k, ALL_OF_THEM) {
+        return Some(Plural::All);
+    }
+    None
+}
+
 /// Whether the request is a question rather than a command.
 pub fn is_question(text: &str) -> bool {
     let trimmed = text.trim();
@@ -372,6 +465,70 @@ pub fn split_parts(text: &str) -> Option<Vec<Part>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recall_questions_in_three_languages() {
+        use crate::service::RecallKind;
+        for (text, kind) in [
+            ("¿Qué acabas de abrir?", RecallKind::Opened),
+            ("¿Qué abriste?", RecallKind::Opened),
+            ("Qué has abierto", RecallKind::Opened),
+            ("What did you just open?", RecallKind::Opened),
+            ("What have you opened?", RecallKind::Opened),
+            ("O que você acabou de abrir?", RecallKind::Opened),
+            ("O que você abriu?", RecallKind::Opened),
+            ("¿Qué cerraste?", RecallKind::Closed),
+            ("What did you close?", RecallKind::Closed),
+            ("O que você fechou?", RecallKind::Closed),
+            ("¿Qué acabas de hacer?", RecallKind::Did),
+            ("What did you just do?", RecallKind::Did),
+            ("O que você fez?", RecallKind::Did),
+        ] {
+            assert_eq!(recall(text), Some(kind), "{text}");
+        }
+        for text in [
+            "¿Qué puedes abrir?",
+            "What can you do?",
+            "Abre Excel",
+            "¿Abriste Excel?",
+            "¿Qué es la memoria RAM?",
+            "Open what I had before",
+        ] {
+            assert_eq!(recall(text), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn plural_selections_in_three_languages() {
+        for text in [
+            "Both",
+            "Both of them",
+            "Close both",
+            "Those two",
+            "The two",
+            "Ambos",
+            "Los dos",
+            "Esos dos",
+            "Las dos",
+            "Cierra los dos",
+            "Os dois",
+            "Esses dois",
+            "Fecha os dois",
+        ] {
+            assert_eq!(plural(text), Some(Plural::Two), "{text}");
+        }
+        for text in [
+            "Ciérralos",
+            "Close them",
+            "Cierra todos",
+            "Close all of them",
+        ] {
+            assert_eq!(plural(text), Some(Plural::All), "{text}");
+        }
+        for text in ["Ciérralo", "Close it", "El primero", "Abre Excel", "Dos"] {
+            assert_eq!(plural(text), None, "{text}");
+        }
+    }
 
     #[test]
     fn references_in_three_languages() {

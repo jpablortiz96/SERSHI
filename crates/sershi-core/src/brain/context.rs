@@ -51,6 +51,9 @@ pub struct ActiveApp {
     pub app: ApplicationSummary,
     pub event: AppEvent,
     pub at: u64,
+    /// The request (turn) that touched it: applications touched by one
+    /// request ("abre Chrome y Outlook") are referred to together.
+    pub request: u64,
 }
 
 /// The last system fact a tool returned (trusted numbers, no text).
@@ -92,12 +95,13 @@ pub struct SessionContext {
 
 impl SessionContext {
     /// Records an application a tool acted on (newest first, deduplicated).
-    pub fn record_app(&mut self, app: ApplicationSummary, event: AppEvent, now: u64) {
+    pub fn record_app(&mut self, app: ApplicationSummary, event: AppEvent, now: u64, request: u64) {
         self.apps.retain(|a| a.app.id != app.id);
         self.apps.push_front(ActiveApp {
             app,
             event,
             at: now,
+            request,
         });
         self.apps.truncate(MAX_APPS);
     }
@@ -114,8 +118,11 @@ impl SessionContext {
     }
 
     /// The single application a reference ("it", "lo", "ele") can mean:
-    /// the most recent one, unless another one was touched in the same
-    /// breath (then the reference is ambiguous and SERSHI asks).
+    /// the most recent one, unless the same request touched another one too
+    /// ("abre Chrome y Outlook" → "ciérralo" is ambiguous and SERSHI asks).
+    /// Separate turns are not ambiguous however quickly they follow each
+    /// other: in a voice session "abre Word" right after closing Excel
+    /// makes Word "it" (Gate 4.1).
     pub fn referent(&self, now: u64) -> Referent<'_> {
         let recent: Vec<&ActiveApp> = self.apps(now).collect();
         match recent.as_slice() {
@@ -123,11 +130,11 @@ impl SessionContext {
             [only] => Referent::One(only),
             [first, second, ..] => {
                 // Touched together (one plan, or one request): ambiguous.
-                if first.at.saturating_sub(second.at) < SAME_BREATH_MS {
+                if first.request == second.request {
                     Referent::Ambiguous(
                         recent
                             .iter()
-                            .take_while(|a| first.at.saturating_sub(a.at) < SAME_BREATH_MS)
+                            .take_while(|a| a.request == first.request)
                             .copied()
                             .collect(),
                     )
@@ -175,9 +182,6 @@ impl SessionContext {
         self.fact = None;
     }
 }
-
-/// Applications touched within this window count as "together".
-pub const SAME_BREATH_MS: u64 = 15_000;
 
 /// What a reference can mean.
 #[derive(Debug, Clone, PartialEq, Eq)]
