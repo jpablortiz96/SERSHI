@@ -1440,36 +1440,16 @@ mod agent {
         assert!(approved.plan.expect("plan").done);
         assert!(h.service.plan_active().is_none());
 
-        // Two closes: approving the first does not approve the second.
+        // Two closes (Gate 4.1.1): one grouped approval that covers exactly
+        // Excel and Word — never a second approval left waiting unseen.
         let outcome = say_text(&mut h, "Cierra Excel y Word");
         assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
-        let first = h.service.pending_confirmation().expect("first");
-        let (after_first, _) = decide(&mut h.service, &first, true);
-        assert_eq!(h.apps.closes(), 2);
-        let report = after_first.plan.expect("plan continues");
-        assert!(!report.done);
-        let mut progress = Progress::Step(report);
-        while let Progress::Step(r) = progress {
-            progress = h.service.advance_plan(r.id, &mut |_| {});
-        }
-        let Progress::Done(second) = progress else {
-            panic!("done")
-        };
-        assert_eq!(second.status, CommandStatus::NeedsConfirmation);
-        let pending = h
-            .service
-            .pending_confirmation()
-            .expect("a new, separate approval");
-        assert_ne!(pending.id, first.id);
-        assert_eq!(
-            h.apps.closes(),
-            2,
-            "the second close waits for its own approval"
-        );
-        // Declining it cancels the rest of the plan.
-        let (declined, _) = decide(&mut h.service, &pending, false);
+        let request = h.service.pending_confirmation().expect("grouped");
+        assert_eq!(request.action, ConfirmationAction::CloseApplications);
+        let (declined, _) = decide(&mut h.service, &request, false);
         assert_eq!(declined.status, CommandStatus::Cancelled);
-        assert_eq!(h.apps.closes(), 2);
+        assert_eq!(h.apps.closes(), 1, "a declined group closes nothing");
+        assert!(h.service.pending_confirmation().is_none());
         assert!(h.service.plan_active().is_none());
     }
 
@@ -1670,7 +1650,7 @@ mod gate41 {
     use crate::ports::ApplicationError;
     use crate::service::{
         ActionResult, PermissionChange, PermissionChangeError, Progress, RecallKind,
-        ReferenceSource, StepStatus,
+        ReferenceSource, StepAction, StepStatus,
     };
     use crate::tool::RiskLevel;
 
@@ -1888,34 +1868,35 @@ mod gate41 {
     }
 
     #[test]
-    fn both_answers_a_question_about_two_and_each_close_is_confirmed_on_its_own() {
+    fn both_answers_a_question_about_two_with_one_exact_grouped_approval() {
         let mut h = understanding();
         typed(&mut h, "Abre Google Chrome y Excel");
         typed(&mut h, "Cierra eso");
         let outcome = spoken(&mut h, "Los dos");
-        // A plan of two closes; the first waits for its own approval.
+        // One grouped confirmation for exactly the two candidates.
         assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
-        assert_eq!(outcome.plan.as_ref().expect("plan").steps.len(), 2);
         assert_eq!(
-            outcome.session.and_then(|s| s.reference),
+            outcome.session.as_ref().and_then(|s| s.reference),
             Some(ReferenceSource::Clarification)
         );
-        let first = h.service.pending_confirmation().expect("first");
-        let (approved, _) = decide(&mut h.service, &first, true);
-        assert_eq!(h.apps.closes(), 1);
-        // The plan continues (the shell advances it); one approval never
-        // covers the second close.
-        let plan = approved.plan.expect("plan");
-        assert!(!plan.done);
-        let Progress::Done(next) = h.service.advance_plan(plan.id, &mut |_| {}) else {
-            panic!("the second close waits");
-        };
-        assert_eq!(next.status, CommandStatus::NeedsConfirmation);
-        let second = h.service.pending_confirmation().expect("second");
-        assert_ne!(first.id, second.id);
-        assert_eq!(subject(&h), "Excel");
-        decide(&mut h.service, &second, false);
-        assert_eq!(h.apps.closes(), 1);
+        assert_eq!(
+            batch(&outcome),
+            [
+                ("Google Chrome".to_owned(), StepStatus::NeedsConfirmation),
+                ("Excel".to_owned(), StepStatus::NeedsConfirmation),
+            ]
+        );
+        let request = h.service.pending_confirmation().expect("grouped");
+        assert_eq!(group(&h), ["Google Chrome", "Excel"]);
+        let (approved, _) = decide(&mut h.service, &request, true);
+        assert_eq!(h.apps.closes(), 2);
+        assert_eq!(approved.status, CommandStatus::Completed);
+        assert!(
+            h.service.pending_confirmation().is_none(),
+            "nothing left waiting"
+        );
+        let (_, closed) = recalled(&typed(&mut h, "¿Qué cerraste?"));
+        assert_eq!(closed.len(), 2);
     }
 
     #[test]
@@ -2197,5 +2178,331 @@ mod gate41 {
                 .iter()
                 .all(|s| s.setting == s.default_setting)
         );
+    }
+
+    // ── Gate 4.1.1: grouped closes, close risk, per-application settings ──
+
+    /// A grouped close's applications and their state.
+    fn batch(outcome: &CommandOutcome) -> Vec<(String, StepStatus)> {
+        match &outcome.detail {
+            Some(OutcomeDetail::CloseBatch { steps }) => steps
+                .iter()
+                .map(|s| (s.application.display_name.clone(), s.status))
+                .collect(),
+            other => panic!("expected a grouped close, got {other:?} ({outcome:?})"),
+        }
+    }
+
+    /// The applications the pending grouped confirmation covers.
+    fn group(h: &Harness) -> Vec<String> {
+        let request = h.service.pending_confirmation().expect("pending");
+        assert_eq!(request.action, ConfirmationAction::CloseApplications);
+        match request.subject {
+            Some(ConfirmationSubject::Applications { applications }) => {
+                applications.into_iter().map(|a| a.display_name).collect()
+            }
+            other => panic!("expected applications, got {other:?}"),
+        }
+    }
+
+    /// The understanding harness plus a closable built-in Calculator.
+    fn with_calculator() -> Harness {
+        let h = understanding();
+        h.apps
+            .apps
+            .lock()
+            .unwrap()
+            .push(crate::apps::ApplicationDescriptor {
+                close: crate::apps::CloseSupport::PackagedApp(
+                    "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App".into(),
+                ),
+                ..crate::apps::catalog::fixtures::builtin(
+                    "windows.calculator",
+                    "Calculator",
+                    &["calculator", "calculadora", "calc"],
+                )
+            });
+        h
+    }
+
+    #[test]
+    fn the_calculator_closes_without_a_pointless_confirmation() {
+        let mut h = with_calculator();
+        spoken(&mut h, "Abre la calculadora");
+        let (outcome, events) = say(&mut h, "Cierra la calculadora");
+        let outcome = outcome.expect("submitted");
+        assert_eq!(outcome.status, CommandStatus::Completed);
+        assert_eq!(h.apps.closes(), 1);
+        assert!(h.service.pending_confirmation().is_none());
+        // Allowed by the trusted close-risk list, not by the words.
+        let audit: Vec<Option<Authorization>> = events
+            .iter()
+            .filter_map(|e| match e {
+                ServiceEvent::Activity(a) if a.kind == ActivityKind::ToolCompleted => {
+                    Some(a.authorization)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(audit, [Some(Authorization::SafeToClose)]);
+    }
+
+    #[test]
+    fn unknown_applications_stay_conservative() {
+        let mut h = with_calculator();
+        for app in ["Excel", "Word", "Google Chrome"] {
+            let outcome = spoken(&mut h, &format!("Cierra {app}"));
+            assert_eq!(outcome.status, CommandStatus::NeedsConfirmation, "{app}");
+            // The conversation names what waits, before anything ran.
+            assert!(matches!(
+                &outcome.detail,
+                Some(OutcomeDetail::AwaitingApproval { applications })
+                    if applications.len() == 1 && applications[0].display_name == app
+            ));
+        }
+        assert_eq!(h.apps.closes(), 0);
+    }
+
+    #[test]
+    fn a_model_proposed_close_asks_even_for_the_calculator() {
+        let mut h = with_calculator();
+        h.service.set_agent_brain(
+            Some(Arc::new(Once(Mutex::new(Some(BrainDecision::Act {
+                message: "Cierro la calculadora.".into(),
+                steps: vec![BrainStep {
+                    capability: "close_application",
+                    app: Some(0),
+                }],
+            }))))),
+            Vec::new(),
+        );
+        typed(&mut h, "Abre la calculadora");
+        let outcome = typed(&mut h, "Ya terminé con las cuentas, gracias por todo");
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        assert_eq!(h.apps.closes(), 0);
+    }
+
+    #[test]
+    fn a_per_application_setting_wins_over_the_defaults() {
+        let mut h = with_calculator();
+        h.service.load_application_permissions(&[
+            (
+                "excel".into(),
+                "Excel".into(),
+                PermissionSetting::AlwaysAllow,
+            ),
+            (
+                "windows.calculator".into(),
+                "Calculator".into(),
+                PermissionSetting::AskEveryTime,
+            ),
+        ]);
+        // Excel: stored Always allow → hands-free.
+        let outcome = spoken(&mut h, "Cierra Excel");
+        assert_eq!(outcome.status, CommandStatus::Completed);
+        assert_eq!(
+            outcome.session.and_then(|s| s.authorization),
+            Some(Authorization::StoredPermission)
+        );
+        // Calculator: the user's Ask every time wins over "safe to close".
+        let outcome = spoken(&mut h, "Cierra la calculadora");
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        assert_eq!(h.apps.closes(), 1);
+    }
+
+    #[test]
+    fn a_per_application_always_allow_is_approved_in_the_trusted_window() {
+        let mut h = understanding();
+        // Unknown to SERSHI: not configurable.
+        assert_eq!(
+            h.service.request_app_permission_change(
+                "excel",
+                PermissionSetting::AlwaysAllow,
+                &mut |_| {}
+            ),
+            Err(PermissionChangeError::NotConfigurable)
+        );
+        // Asked to close once, it is offered in Settings.
+        let outcome = typed(&mut h, "Cierra Excel");
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        typed(&mut h, "Cancelar");
+        let offered = h.service.application_permissions();
+        assert!(
+            offered
+                .iter()
+                .any(|a| a.app_id == "excel" && a.setting.is_none())
+        );
+        let change = h.service.request_app_permission_change(
+            "excel",
+            PermissionSetting::AlwaysAllow,
+            &mut |_| {},
+        );
+        assert_eq!(change, Ok(PermissionChange::NeedsConfirmation));
+        // Voice cannot reach it: the microphone withdraws it.
+        spoken(&mut h, "Sí");
+        assert!(h.service.pending_confirmation().is_none());
+        assert!(
+            h.service
+                .application_permissions()
+                .iter()
+                .all(|a| a.setting.is_none())
+        );
+        // Approved in the trusted window: applied, audited, hands-free.
+        h.service
+            .request_app_permission_change("excel", PermissionSetting::AlwaysAllow, &mut |_| {})
+            .unwrap();
+        let request = h.service.pending_confirmation().expect("pending");
+        assert!(matches!(
+            request.subject,
+            Some(ConfirmationSubject::ApplicationPermission { ref app_id, .. }) if app_id == "excel"
+        ));
+        let (approved, events) = decide(&mut h.service, &request, true);
+        assert!(matches!(
+            approved.detail,
+            Some(OutcomeDetail::ApplicationPermission { applied: true, .. })
+        ));
+        assert!(kinds(&events).contains(&ActivityKind::PermissionChanged));
+        assert_eq!(
+            spoken(&mut h, "Cierra Excel").status,
+            CommandStatus::Completed
+        );
+    }
+
+    #[test]
+    fn close_them_waits_in_one_grouped_confirmation_for_exactly_those_apps() {
+        for phrase in [
+            "Ciérralos",
+            "Close both",
+            "Close them",
+            "Cierra los dos",
+            "Fecha os dois",
+        ] {
+            let mut h = understanding();
+            typed(&mut h, "Abre Google Chrome y Excel");
+            let outcome = spoken(&mut h, phrase);
+            assert_eq!(outcome.status, CommandStatus::NeedsConfirmation, "{phrase}");
+            assert_eq!(group(&h), ["Google Chrome", "Excel"], "{phrase}");
+            assert_eq!(h.apps.closes(), 0, "{phrase}");
+        }
+    }
+
+    #[test]
+    fn a_mixed_group_closes_the_safe_app_and_asks_for_the_other() {
+        let mut h = with_calculator();
+        typed(&mut h, "Abre la calculadora y Excel");
+        let outcome = spoken(&mut h, "Ciérralos");
+        assert_eq!(outcome.status, CommandStatus::NeedsConfirmation);
+        assert_eq!(
+            batch(&outcome),
+            [
+                ("Calculator".to_owned(), StepStatus::Completed),
+                ("Excel".to_owned(), StepStatus::NeedsConfirmation),
+            ]
+        );
+        assert_eq!(h.apps.closes(), 1);
+        // Only Excel waits — in an ordinary, visible confirmation.
+        assert_eq!(subject(&h), "Excel");
+        let request = h.service.pending_confirmation().expect("pending");
+        decide(&mut h.service, &request, true);
+        assert_eq!(h.apps.closes(), 2);
+        assert!(h.service.pending_confirmation().is_none());
+    }
+
+    #[test]
+    fn close_them_all_means_the_applications_in_context_only() {
+        for phrase in ["Ciérralos todos", "Close them all", "Fecha todos"] {
+            let mut h = understanding();
+            typed(&mut h, "Abre Word");
+            typed(&mut h, "Abre Google Chrome, Excel y Visual Studio Code");
+            let outcome = spoken(&mut h, phrase);
+            assert_eq!(outcome.status, CommandStatus::NeedsConfirmation, "{phrase}");
+            // Exactly the three opened together; never Word, never "every
+            // running application".
+            assert_eq!(
+                group(&h),
+                ["Google Chrome", "Excel", "Visual Studio Code"],
+                "{phrase}"
+            );
+            assert_eq!(h.apps.closes(), 0);
+        }
+    }
+
+    #[test]
+    fn a_cancelled_group_closes_nothing_and_the_ledger_says_so() {
+        let mut h = understanding();
+        typed(&mut h, "Abre Google Chrome y Excel");
+        spoken(&mut h, "Ciérralos");
+        let request = h.service.pending_confirmation().expect("pending");
+        let (cancelled, _) = decide(&mut h.service, &request, false);
+        assert_eq!(cancelled.status, CommandStatus::Cancelled);
+        assert_eq!(h.apps.closes(), 0);
+        assert!(h.service.pending_confirmation().is_none());
+        assert!(
+            h.service
+                .ledger()
+                .entries()
+                .filter(|e| e.action == StepAction::Close)
+                .all(|e| e.result == ActionResult::Cancelled)
+        );
+        // "What did you close?": nothing, honestly.
+        assert!(recalled(&typed(&mut h, "¿Qué cerraste?")).1.is_empty());
+    }
+
+    #[test]
+    fn spoken_approval_never_decides_a_group() {
+        for word in ["Sí", "Yes", "Approve", "Aprobar", "Ciérralos", "Hazlo"] {
+            let mut h = understanding();
+            typed(&mut h, "Abre Google Chrome y Excel");
+            spoken(&mut h, "Ciérralos");
+            spoken(&mut h, word);
+            assert_eq!(h.apps.closes(), 0, "{word}");
+            assert!(
+                h.service.pending_confirmation().is_none(),
+                "{word} withdraws it"
+            );
+        }
+    }
+
+    #[test]
+    fn an_approved_group_runs_exactly_the_stored_calls() {
+        let mut h = understanding();
+        typed(&mut h, "Abre Google Chrome y Excel");
+        spoken(&mut h, "Ciérralos");
+        let request = h.service.pending_confirmation().expect("pending");
+        let (approved, _) = decide(&mut h.service, &request, true);
+        assert_eq!(approved.status, CommandStatus::Completed);
+        assert_eq!(h.apps.closes(), 2);
+        // The same id cannot run again.
+        let (again, _) = decide(&mut h.service, &request, true);
+        assert_eq!(again.status, CommandStatus::Rejected);
+        assert_eq!(h.apps.closes(), 2);
+        let (_, closed) = recalled(&typed(&mut h, "¿Qué cerraste?"));
+        assert_eq!(
+            closed,
+            [
+                ("Google Chrome".to_owned(), ActionResult::Succeeded),
+                ("Excel".to_owned(), ActionResult::Succeeded)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_confirmation_nobody_can_see_is_withdrawn_and_nothing_runs() {
+        let mut h = understanding();
+        typed(&mut h, "Abre Google Chrome y Excel");
+        spoken(&mut h, "Ciérralos");
+        let request = h.service.pending_confirmation().expect("pending");
+        // The shell could not show the trusted window.
+        let outcome = h
+            .service
+            .withdraw_confirmation(&mut |_| {})
+            .expect("withdrawn");
+        assert_eq!(outcome.status, CommandStatus::Failed);
+        assert_eq!(outcome.detail, Some(OutcomeDetail::ConfirmationUnavailable));
+        assert!(h.service.pending_confirmation().is_none());
+        assert_ne!(h.service.snapshot().state, S::AwaitingConfirmation);
+        let (late, _) = decide(&mut h.service, &request, true);
+        assert_eq!(late.status, CommandStatus::Rejected);
+        assert_eq!(h.apps.closes(), 0);
     }
 }

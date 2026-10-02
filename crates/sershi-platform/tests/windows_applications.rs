@@ -111,3 +111,40 @@ fn print_catalog_inventory() {
         println!("{q:?} → {:?}", catalog.resolve(q));
     }
 }
+
+/// Gate 4.1.1: Calculator (a packaged app drawn inside an
+/// ApplicationFrameHost frame) can be found and politely closed. Manual — it
+/// opens a window: `cargo test -p sershi-platform --test windows_applications
+/// -- --ignored calculator --nocapture`.
+#[test]
+#[ignore = "opens and closes Calculator on this machine"]
+fn calculator_can_be_closed_through_its_frame_window() {
+    let platform = sershi_platform::application_platform();
+    let catalog = ApplicationCatalog::build(platform.discover().expect("discovery"));
+    let Resolution::Found {
+        application: descriptor,
+        ..
+    } = catalog.resolve("calculadora")
+    else {
+        panic!("Calculator is in the catalog");
+    };
+    platform.launch(&descriptor.target).expect("launch");
+    let wait = |want: fn(&RunningState) -> bool| {
+        let started = Instant::now();
+        loop {
+            let state = platform.running_state(&descriptor.close);
+            if state.as_ref().is_ok_and(want) || started.elapsed().as_secs() > 10 {
+                return state;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+    };
+    let running = wait(|s| matches!(s, RunningState::Running { .. }));
+    println!("calculator after launch: {running:?}");
+    assert!(matches!(running, Ok(RunningState::Running { .. })));
+    let closed = platform.close(&descriptor.close);
+    println!("close request: {closed:?}");
+    let after = wait(|s| *s == RunningState::NotRunning);
+    println!("calculator after close: {after:?}");
+    assert_eq!(after, Ok(RunningState::NotRunning));
+}

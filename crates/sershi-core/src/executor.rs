@@ -14,11 +14,17 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::activity::{ActivityKind, ActivityLog, NewActivity};
+use crate::apps::risk::{CloseRisk, close_risk};
+use crate::apps::tools::CLOSE_APPLICATION;
 use crate::confirmation::{ConfirmationDraft, ConfirmationSubject};
 use crate::ids::ToolId;
-use crate::permission::PermissionGrants;
-use crate::policy::{Authorization, DenialReason, PolicyDecision, PolicyEngine};
-use crate::tool::{Prepared, Severity, Tool, ToolCall, ToolError, ToolOutput, ToolRegistry};
+use crate::permission::{PermissionGrants, PermissionSetting};
+use crate::policy::{
+    Authorization, ConfirmationReason, DenialReason, PolicyDecision, PolicyEngine,
+};
+use crate::tool::{
+    CallOrigin, Prepared, RiskLevel, Severity, Tool, ToolCall, ToolError, ToolOutput, ToolRegistry,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionOutcome {
@@ -83,7 +89,8 @@ impl ToolExecutor {
             Ok(planned) => planned,
             Err(outcome) => return *outcome,
         };
-        match planned.decision {
+        let (decision, decided_by) = close_policy(call, &planned, grants);
+        match decision {
             PolicyDecision::Confirm { reason, .. } => {
                 let definition = planned.tool.definition();
                 activity.record(
@@ -108,7 +115,9 @@ impl ToolExecutor {
                 // Allowed without asking: by default policy, or because the
                 // user stored "Always allow" for a permission it needs. How
                 // the request arrived (typed, spoken) plays no part.
-                let authorization = if planned
+                let authorization = if let Some(by) = decided_by {
+                    by
+                } else if planned
                     .tool
                     .definition()
                     .permissions
@@ -249,9 +258,59 @@ impl ToolExecutor {
     }
 }
 
+/// Gate 4.1.1: the application-specific part of the policy for closing.
+/// Applies to the user's own close requests only (a model's proposal always
+/// asks) and never overrides a denial or a high-risk tool. Precedence:
+/// the user's per-application setting, then the trusted close-risk list
+/// (see [`crate::apps::risk`]), then the category decision.
+fn close_policy(
+    call: &ToolCall,
+    planned: &Planned,
+    grants: &PermissionGrants,
+) -> (PolicyDecision, Option<Authorization>) {
+    let decision = planned.decision.clone();
+    let definition = planned.tool.definition();
+    if call.tool_id.as_str() != CLOSE_APPLICATION
+        || call.origin != CallOrigin::User
+        || definition.risk == RiskLevel::HighRisk
+        || matches!(decision, PolicyDecision::Deny(_))
+    {
+        return (decision, None);
+    }
+    let Some(ConfirmationSubject::Application { application }) = &planned.prepared.subject else {
+        return (decision, None);
+    };
+    match grants.app_close(&application.id) {
+        Some(PermissionSetting::AlwaysAllow) => {
+            (PolicyDecision::Allow, Some(Authorization::StoredPermission))
+        }
+        Some(PermissionSetting::AskEveryTime) => (
+            PolicyDecision::Confirm {
+                reason: ConfirmationReason::PermissionUndecided,
+                can_remember: false,
+            },
+            None,
+        ),
+        None if close_risk(application) == CloseRisk::SafeToClose => {
+            (PolicyDecision::Allow, Some(Authorization::SafeToClose))
+        }
+        None => (decision, None),
+    }
+}
+
 fn subject_name(subject: &Option<ConfirmationSubject>) -> Option<String> {
     subject.as_ref().and_then(|s| match s {
         ConfirmationSubject::Application { application } => Some(application.display_name.clone()),
+        ConfirmationSubject::Applications { applications } => Some(
+            applications
+                .iter()
+                .map(|a| a.display_name.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
+        ConfirmationSubject::ApplicationPermission { display_name, .. } => {
+            Some(display_name.clone())
+        }
         ConfirmationSubject::Permission { .. } => None,
     })
 }

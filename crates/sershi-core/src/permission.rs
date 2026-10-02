@@ -117,9 +117,37 @@ pub struct PermissionStatus {
     pub default_setting: PermissionSetting,
 }
 
+/// A user's stored close setting for one application (Gate 4.1.1),
+/// e.g. "Outlook: Always allow". Applies to the user's own requests only;
+/// a close proposed by a language model always asks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct AppPermission {
+    /// The trusted catalog id (never a path).
+    pub app_id: String,
+    /// Name as Windows presents it (for display).
+    pub display_name: String,
+    pub close: PermissionSetting,
+}
+
+/// Most per-application settings kept.
+pub const MAX_APP_PERMISSIONS: usize = 32;
+
+/// A catalog id: lowercase letters, digits, `.`, `-`, `+`; bounded.
+pub fn valid_app_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 96
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '-' | '+'))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PermissionGrants {
     decisions: BTreeMap<PermissionId, PermissionState>,
+    /// Per-application close settings, by catalog id.
+    apps: BTreeMap<String, AppPermission>,
 }
 
 impl Default for PermissionGrants {
@@ -129,7 +157,10 @@ impl Default for PermissionGrants {
             .filter_map(|p| PermissionId::new(*p).ok())
             .map(|p| (p, PermissionState::Granted))
             .collect();
-        Self { decisions }
+        Self {
+            decisions,
+            apps: BTreeMap::new(),
+        }
     }
 }
 
@@ -138,6 +169,7 @@ impl PermissionGrants {
     pub fn empty() -> Self {
         Self {
             decisions: BTreeMap::new(),
+            apps: BTreeMap::new(),
         }
     }
 
@@ -163,6 +195,42 @@ impl PermissionGrants {
 
     pub fn configure(&mut self, permission: ConfigurablePermission, setting: PermissionSetting) {
         self.set(permission.permission_id(), setting.state());
+    }
+
+    /// The user's stored close setting for one application, if any.
+    pub fn app_close(&self, app_id: &str) -> Option<PermissionSetting> {
+        self.apps.get(app_id).map(|a| a.close)
+    }
+
+    /// Stores a per-application close setting. Refused (false) for an
+    /// invalid id or name, or when the bounded list is full.
+    pub fn set_app_close(
+        &mut self,
+        app_id: &str,
+        display_name: &str,
+        setting: PermissionSetting,
+    ) -> bool {
+        let name: String = display_name.trim().chars().take(128).collect();
+        if !valid_app_id(app_id) || name.is_empty() {
+            return false;
+        }
+        if !self.apps.contains_key(app_id) && self.apps.len() >= MAX_APP_PERMISSIONS {
+            return false;
+        }
+        self.apps.insert(
+            app_id.to_owned(),
+            AppPermission {
+                app_id: app_id.to_owned(),
+                display_name: name,
+                close: setting,
+            },
+        );
+        true
+    }
+
+    /// Per-application settings, by id.
+    pub fn app_permissions(&self) -> Vec<AppPermission> {
+        self.apps.values().cloned().collect()
     }
 
     /// Whether `permission` is granted because the user chose so (it is not
@@ -222,6 +290,30 @@ mod tests {
             );
         }
         assert!(serde_json::from_str::<PermissionSetting>("\"granted\"").is_err());
+    }
+
+    #[test]
+    fn per_application_settings_are_bounded_and_validated() {
+        let mut grants = PermissionGrants::default();
+        assert!(grants.set_app_close("outlook", "Outlook", PermissionSetting::AlwaysAllow));
+        assert_eq!(
+            grants.app_close("outlook"),
+            Some(PermissionSetting::AlwaysAllow)
+        );
+        assert_eq!(grants.app_close("excel"), None);
+        for bad in ["", r"C:\x.exe", "Outlook", "../x", "a b", &"a".repeat(97)] {
+            assert!(
+                !grants.set_app_close(bad, "X", PermissionSetting::AlwaysAllow),
+                "{bad}"
+            );
+        }
+        for i in 0..MAX_APP_PERMISSIONS {
+            grants.set_app_close(&format!("app-{i}"), "App", PermissionSetting::AskEveryTime);
+        }
+        assert!(!grants.set_app_close("one-more", "App", PermissionSetting::AlwaysAllow));
+        // An existing entry can still change.
+        assert!(grants.set_app_close("outlook", "Outlook", PermissionSetting::AskEveryTime));
+        assert!(grants.app_permissions().len() <= MAX_APP_PERMISSIONS);
     }
 
     #[test]

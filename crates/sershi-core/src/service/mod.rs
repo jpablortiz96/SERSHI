@@ -53,9 +53,9 @@ pub use session::{
     RecallItem, RecallKind, ReferenceSource, SessionTrace,
 };
 pub use types::{
-    BrainTrace, BrainUse, Clock, CommandOutcome, CommandRequest, CommandStatus, ConfirmationChoice,
-    ConfirmationDecision, MAX_COMMAND_CHARS, OutcomeDetail, PlanReport, PlanStepReport,
-    RejectionReason, ServiceEvent, StepAction, StepStatus, VoiceBusy,
+    BatchStep, BrainTrace, BrainUse, Clock, CommandOutcome, CommandRequest, CommandStatus,
+    ConfirmationChoice, ConfirmationDecision, MAX_COMMAND_CHARS, OutcomeDetail, PlanReport,
+    PlanStepReport, RejectionReason, ServiceEvent, StepAction, StepStatus, VoiceBusy,
 };
 
 use crate::activity::{ActivityEntry, ActivityKind, ActivityLog, NewActivity};
@@ -70,6 +70,8 @@ use crate::executor::{ExecutionOutcome, ToolExecutor};
 use crate::ids::ToolId;
 use std::sync::Arc;
 
+use crate::apps::ApplicationSummary;
+use crate::apps::risk::{CloseRisk, close_risk};
 use crate::brain::AgentBrainPort;
 use crate::intent::{Intent, IntentResolver};
 use crate::permission::{
@@ -82,6 +84,7 @@ use crate::understanding::{
     ApplicationDirectory, Clarification, Dialogue, InputSource, Interpretation, PendingChange,
     ResolutionTier, SemanticRouterPort, Understanding, Utterance,
 };
+use std::collections::VecDeque;
 
 #[derive(Debug)]
 pub struct AssistantService {
@@ -108,6 +111,9 @@ pub struct AssistantService {
     modality: Modality,
     reference: Option<ReferenceSource>,
     authorized: Option<Authorization>,
+    /// Applications recently asked to close (memory only, bounded), so
+    /// Settings can offer per-application settings for them.
+    close_candidates: VecDeque<ApplicationSummary>,
     plan: Option<agent::ActivePlan>,
     thinking: Option<agent::Thinking>,
     brain_question: Option<agent::BrainQuestion>,
@@ -144,6 +150,7 @@ impl AssistantService {
             modality: Modality::Typed,
             reference: None,
             authorized: None,
+            close_candidates: VecDeque::new(),
             plan: None,
             thinking: None,
             brain_question: None,
@@ -581,14 +588,7 @@ impl AssistantService {
         if let Some(expired) = self.confirmations.expire(now) {
             self.record_pending(ActivityKind::ConfirmationExpired, &expired);
             self.settle_if_no_pending(notify);
-            let outcome = match permission_outcome(&expired, false) {
-                Some(outcome) => outcome,
-                None => self.with_plan(
-                    expired_outcome(Some(&expired.request.tool_id)),
-                    false,
-                    notify,
-                ),
-            };
+            let outcome = self.withdrawn_outcome(&expired, CommandStatus::Expired, notify);
             if expired.request.id == decision.confirmation_id {
                 self.flush_activity(watermark, notify);
                 return outcome;
@@ -603,6 +603,9 @@ impl AssistantService {
                 RejectionReason::UnknownConfirmation,
                 "That request is no longer waiting for approval.",
             ),
+            Ok(pending) if matches!(pending.action, PendingAction::Batch(_)) => {
+                self.decide_batch(pending, decision.decision, notify)
+            }
             Ok(pending) if pending.call().is_none() => {
                 self.decide_permission(&pending, decision.decision)
             }
@@ -610,8 +613,7 @@ impl AssistantService {
                 ConfirmationChoice::Cancel => {
                     self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
                     self.settle_if_no_pending(notify);
-                    let outcome = cancelled_outcome(&pending);
-                    self.with_plan(outcome, false, notify)
+                    self.withdrawn_outcome(&pending, CommandStatus::Cancelled, notify)
                 }
                 ConfirmationChoice::Approve => {
                     let outcome = self.run_approved(pending, notify);
@@ -649,14 +651,7 @@ impl AssistantService {
         let expired = self.confirmations.expire((self.clock)())?;
         self.record_pending(ActivityKind::ConfirmationExpired, &expired);
         self.settle_if_no_pending(notify);
-        let outcome = match permission_outcome(&expired, false) {
-            Some(outcome) => outcome,
-            None => self.with_plan(
-                expired_outcome(Some(&expired.request.tool_id)),
-                false,
-                notify,
-            ),
-        };
+        let outcome = self.withdrawn_outcome(&expired, CommandStatus::Expired, notify);
         self.flush_activity(watermark, notify);
         Some(outcome)
     }
@@ -782,6 +777,14 @@ impl AssistantService {
             ExecutionOutcome::ConfirmationRequired(draft) => {
                 let tool_id = draft.call.tool_id.clone();
                 let tool_name = self.tool_name(&tool_id);
+                let awaiting = match &draft.subject {
+                    Some(ConfirmationSubject::Application { application }) => {
+                        Some(OutcomeDetail::AwaitingApproval {
+                            applications: vec![application.clone()],
+                        })
+                    }
+                    _ => None,
+                };
                 // One pending confirmation at a time.
                 self.cancel_confirmations();
                 match self.confirmations.create(draft, (self.clock)()) {
@@ -791,6 +794,7 @@ impl AssistantService {
                         // pending; the id goes to the trusted surface alone.
                         CommandOutcome {
                             tool_id: Some(tool_id),
+                            detail: awaiting,
                             ..CommandOutcome::new(
                                 CommandStatus::NeedsConfirmation,
                                 format!(
@@ -889,6 +893,17 @@ impl AssistantService {
     fn cancel_confirmations(&mut self) -> Option<PendingConfirmation> {
         let pending = self.confirmations.cancel_all()?;
         self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
+        // What it covered did not run: the ledger says so.
+        let ended = CommandOutcome::new(CommandStatus::Cancelled, "");
+        match &pending.action {
+            PendingAction::Tool(call) => self.record_action(call, &ended, None),
+            PendingAction::Batch(items) => {
+                for item in items {
+                    self.record_action(&item.call, &ended, None);
+                }
+            }
+            PendingAction::Permission { .. } | PendingAction::ApplicationPermission { .. } => {}
+        }
         Some(pending)
     }
 
@@ -896,6 +911,16 @@ impl AssistantService {
         let subject = pending.request.subject.as_ref().and_then(|s| match s {
             ConfirmationSubject::Application { application } => {
                 Some(application.display_name.clone())
+            }
+            ConfirmationSubject::Applications { applications } => Some(
+                applications
+                    .iter()
+                    .map(|a| a.display_name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+            ConfirmationSubject::ApplicationPermission { display_name, .. } => {
+                Some(display_name.clone())
             }
             ConfirmationSubject::Permission { .. } => None,
         });
@@ -1110,28 +1135,294 @@ impl AssistantService {
         pending: &PendingConfirmation,
         choice: ConfirmationChoice,
     ) -> CommandOutcome {
-        let PendingAction::Permission {
-            permission,
-            setting,
-        } = pending.action
-        else {
-            return CommandOutcome::rejected(
-                RejectionReason::UnknownConfirmation,
-                "That request is no longer waiting for approval.",
-            );
-        };
-        match choice {
-            ConfirmationChoice::Approve => {
-                self.record_pending(ActivityKind::ConfirmationApproved, pending);
-                self.apply_permission(permission, setting);
-            }
-            ConfirmationChoice::Cancel => {
-                self.record_pending(ActivityKind::ConfirmationCancelled, pending);
+        let approve = choice == ConfirmationChoice::Approve;
+        self.record_pending(
+            if approve {
+                ActivityKind::ConfirmationApproved
+            } else {
+                ActivityKind::ConfirmationCancelled
+            },
+            pending,
+        );
+        match &pending.action {
+            PendingAction::Permission {
+                permission,
+                setting,
+            } if approve => self.apply_permission(*permission, *setting),
+            PendingAction::ApplicationPermission {
+                app_id,
+                display_name,
+                setting,
+            } if approve => self.apply_app_permission(app_id, display_name, *setting),
+            PendingAction::Permission { .. } | PendingAction::ApplicationPermission { .. } => {}
+            PendingAction::Tool(_) | PendingAction::Batch(_) => {
+                return CommandOutcome::rejected(
+                    RejectionReason::UnknownConfirmation,
+                    "That request is no longer waiting for approval.",
+                );
             }
         }
         permission_outcome(pending, choice == ConfirmationChoice::Approve).unwrap_or_else(|| {
             CommandOutcome::new(CommandStatus::Cancelled, "Nothing was changed.")
         })
+    }
+
+    /// The outcome of a confirmation that ended without approval
+    /// (cancelled, expired, withdrawn): what it covered did not run, and
+    /// the ledger says so.
+    fn withdrawn_outcome(
+        &mut self,
+        pending: &PendingConfirmation,
+        status: CommandStatus,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        if let Some(outcome) = permission_outcome(pending, false) {
+            return outcome;
+        }
+        let ended = CommandOutcome::new(status, "");
+        match &pending.action {
+            PendingAction::Tool(call) => {
+                self.record_action(call, &ended, None);
+                let outcome = if status == CommandStatus::Expired {
+                    expired_outcome(Some(&pending.request.tool_id))
+                } else {
+                    cancelled_outcome(pending)
+                };
+                self.with_plan(outcome, false, notify)
+            }
+            PendingAction::Batch(items) => {
+                let steps = items
+                    .iter()
+                    .filter_map(|item| {
+                        self.record_action(&item.call, &ended, None);
+                        batch_app(&item.subject).map(|application| BatchStep {
+                            application,
+                            status: StepStatus::Cancelled,
+                        })
+                    })
+                    .collect();
+                CommandOutcome {
+                    detail: Some(OutcomeDetail::CloseBatch { steps }),
+                    ..CommandOutcome::new(status, "Cancelled. Nothing was changed.")
+                }
+            }
+            PendingAction::Permission { .. } | PendingAction::ApplicationPermission { .. } => {
+                cancelled_outcome(pending)
+            }
+        }
+    }
+
+    /// The trusted confirmation window could not be shown: the pending
+    /// approval is withdrawn (an approval nobody can see must not wait),
+    /// whatever it covered does not run, and SERSHI says so.
+    pub fn withdraw_confirmation(&mut self, notify: Notify<'_>) -> Option<CommandOutcome> {
+        let watermark = self.watermark();
+        let pending = self.confirmations.cancel_all()?;
+        self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
+        self.settle_if_no_pending(notify);
+        let withdrawn = self.withdrawn_outcome(&pending, CommandStatus::Cancelled, notify);
+        self.cancel_plan();
+        self.flush_activity(watermark, notify);
+        Some(CommandOutcome {
+            detail: Some(OutcomeDetail::ConfirmationUnavailable),
+            plan: withdrawn.plan,
+            ..CommandOutcome::new(
+                CommandStatus::Failed,
+                "The confirmation window couldn't be shown, so nothing was done.",
+            )
+        })
+    }
+
+    /// A decision on a grouped close: approved, exactly the stored calls run
+    /// (each target re-verified); cancelled, none of them do.
+    fn decide_batch(
+        &mut self,
+        pending: PendingConfirmation,
+        choice: ConfirmationChoice,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        if choice == ConfirmationChoice::Cancel {
+            self.record_pending(ActivityKind::ConfirmationCancelled, &pending);
+            self.settle_if_no_pending(notify);
+            return self.withdrawn_outcome(&pending, CommandStatus::Cancelled, notify);
+        }
+        let PendingAction::Batch(items) = &pending.action else {
+            return CommandOutcome::rejected(
+                RejectionReason::UnknownConfirmation,
+                "That request is no longer waiting for approval.",
+            );
+        };
+        if self.machine.state() != AssistantState::AwaitingConfirmation {
+            return CommandOutcome::rejected(
+                RejectionReason::UnknownConfirmation,
+                "That request is no longer waiting for approval.",
+            );
+        }
+        self.record_pending(ActivityKind::ConfirmationApproved, &pending);
+        self.transition(AssistantEvent::ConfirmationApproved, notify);
+        let mut steps = Vec::with_capacity(items.len());
+        for item in items {
+            let now = (self.clock)();
+            let execution = self.executor.execute_approved(
+                &item.call,
+                &item.subject,
+                &self.grants,
+                &mut self.activity,
+                now,
+            );
+            let authorization = authorization_of(&execution);
+            let outcome = self.conclude(execution, true, notify);
+            self.note_result(&item.call, &outcome);
+            self.record_action(&item.call, &outcome, authorization);
+            if let Some(application) = batch_app(&item.subject) {
+                steps.push(BatchStep {
+                    application,
+                    status: step_status(outcome.status),
+                });
+            }
+        }
+        self.finish_batch(steps, notify)
+    }
+
+    /// Ends a grouped close whose every step has run or been decided.
+    pub(super) fn finish_batch(
+        &mut self,
+        steps: Vec<BatchStep>,
+        notify: Notify<'_>,
+    ) -> CommandOutcome {
+        let done = steps
+            .iter()
+            .filter(|s| s.status == StepStatus::Completed)
+            .count();
+        let (status, event) = if done == steps.len() {
+            (CommandStatus::Completed, AssistantEvent::Completed)
+        } else if done > 0 {
+            (CommandStatus::Partial, AssistantEvent::AttentionNeeded)
+        } else {
+            (CommandStatus::Failed, AssistantEvent::Failed)
+        };
+        if self.machine.state().is_busy() {
+            self.transition(event, notify);
+        }
+        CommandOutcome {
+            detail: Some(OutcomeDetail::CloseBatch { steps }),
+            ..CommandOutcome::new(status, format!("Closed {done} application(s)."))
+        }
+    }
+
+    /// Per-application close settings, plus applications recently asked to
+    /// close (so Settings can offer them). Trusted names only.
+    pub fn application_permissions(&self) -> Vec<AppPermissionStatus> {
+        let mut out: Vec<AppPermissionStatus> = self
+            .grants
+            .app_permissions()
+            .into_iter()
+            .map(|p| AppPermissionStatus {
+                close_risk: CloseRisk::Unknown,
+                app_id: p.app_id,
+                display_name: p.display_name,
+                setting: Some(p.close),
+            })
+            .collect();
+        for app in &self.close_candidates {
+            if let Some(existing) = out.iter_mut().find(|o| o.app_id == app.id) {
+                existing.close_risk = close_risk(app);
+            } else {
+                out.push(AppPermissionStatus {
+                    app_id: app.id.clone(),
+                    display_name: app.display_name.clone(),
+                    setting: None,
+                    close_risk: close_risk(app),
+                });
+            }
+        }
+        out
+    }
+
+    /// Applies per-application settings the user stored earlier.
+    pub fn load_application_permissions(
+        &mut self,
+        settings: &[(String, String, PermissionSetting)],
+    ) {
+        for (id, name, setting) in settings {
+            self.grants.set_app_close(id, name, *setting);
+        }
+    }
+
+    /// Settings asked to change one application's close setting. "Ask every
+    /// time" applies at once; "Always allow" waits for the trusted window.
+    /// Only an application SERSHI knows (a stored setting, or one recently
+    /// asked to close) can be configured.
+    pub fn request_app_permission_change(
+        &mut self,
+        app_id: &str,
+        setting: PermissionSetting,
+        notify: Notify<'_>,
+    ) -> Result<PermissionChange, PermissionChangeError> {
+        let Some(known) = self
+            .application_permissions()
+            .into_iter()
+            .find(|a| a.app_id == app_id)
+        else {
+            return Err(PermissionChangeError::NotConfigurable);
+        };
+        if known.setting == Some(setting) {
+            return Ok(PermissionChange::Unchanged);
+        }
+        let watermark = self.watermark();
+        if setting == PermissionSetting::AskEveryTime {
+            self.apply_app_permission(app_id, &known.display_name, setting);
+            self.flush_activity(watermark, notify);
+            return Ok(PermissionChange::Applied);
+        }
+        let state = self.machine.state();
+        if state.is_busy()
+            || state.is_voice_input()
+            || state == AssistantState::AwaitingConfirmation
+            || self.plan.is_some()
+            || self.thinking.is_some()
+        {
+            return Err(PermissionChangeError::Busy);
+        }
+        self.cancel_confirmations();
+        self.confirmations
+            .create_app_permission(app_id, &known.display_name, setting, (self.clock)())
+            .map_err(|_| PermissionChangeError::Unavailable)?;
+        self.record(NewActivity::new(
+            ActivityKind::ConfirmationRequired,
+            "A permission change is waiting for your approval",
+        ));
+        self.flush_activity(watermark, notify);
+        Ok(PermissionChange::NeedsConfirmation)
+    }
+
+    fn apply_app_permission(
+        &mut self,
+        app_id: &str,
+        display_name: &str,
+        setting: PermissionSetting,
+    ) {
+        let before = self.grants.app_close(app_id);
+        if self.grants.set_app_close(app_id, display_name, setting) {
+            self.record(
+                NewActivity::new(
+                    ActivityKind::PermissionChanged,
+                    format!(
+                        "Close {display_name}: {} → {}",
+                        before.map_or("Default", setting_label),
+                        setting_label(setting)
+                    ),
+                )
+                .subject_opt(Some(display_name.to_owned())),
+            );
+        }
+    }
+
+    /// Remembers an application asked to close (memory only, bounded).
+    pub(super) fn remember_close_candidate(&mut self, app: &ApplicationSummary) {
+        self.close_candidates.retain(|a| a.id != app.id);
+        self.close_candidates.push_front(app.clone());
+        self.close_candidates.truncate(MAX_CLOSE_CANDIDATES);
     }
 
     fn transition(&mut self, event: AssistantEvent, notify: Notify<'_>) {
@@ -1220,12 +1511,26 @@ fn setting_label(setting: PermissionSetting) -> &'static str {
 
 /// The outcome of a permission confirmation (`None` for a tool one).
 fn permission_outcome(pending: &PendingConfirmation, applied: bool) -> Option<CommandOutcome> {
-    let PendingAction::Permission {
-        permission,
-        setting,
-    } = pending.action
-    else {
-        return None;
+    let detail = match &pending.action {
+        PendingAction::Permission {
+            permission,
+            setting,
+        } => OutcomeDetail::Permission {
+            permission: *permission,
+            setting: *setting,
+            applied,
+        },
+        PendingAction::ApplicationPermission {
+            app_id,
+            display_name,
+            setting,
+        } => OutcomeDetail::ApplicationPermission {
+            app_id: app_id.clone(),
+            display_name: display_name.clone(),
+            setting: *setting,
+            applied,
+        },
+        PendingAction::Tool(_) | PendingAction::Batch(_) => return None,
     };
     let (status, reply) = if applied {
         (CommandStatus::Completed, "Permission updated.")
@@ -1233,13 +1538,42 @@ fn permission_outcome(pending: &PendingConfirmation, applied: bool) -> Option<Co
         (CommandStatus::Cancelled, "Nothing was changed.")
     };
     Some(CommandOutcome {
-        detail: Some(OutcomeDetail::Permission {
-            permission,
-            setting,
-            applied,
-        }),
+        detail: Some(detail),
         ..CommandOutcome::new(status, reply)
     })
+}
+
+/// The application a grouped close's item targets.
+fn batch_app(subject: &Option<ConfirmationSubject>) -> Option<ApplicationSummary> {
+    match subject {
+        Some(ConfirmationSubject::Application { application }) => Some(application.clone()),
+        _ => None,
+    }
+}
+
+pub(super) fn step_status(status: CommandStatus) -> StepStatus {
+    match status {
+        CommandStatus::Completed => StepStatus::Completed,
+        CommandStatus::NeedsConfirmation => StepStatus::NeedsConfirmation,
+        CommandStatus::Unresolved => StepStatus::Unresolved,
+        CommandStatus::Cancelled | CommandStatus::Expired => StepStatus::Cancelled,
+        _ => StepStatus::Failed,
+    }
+}
+
+/// Most applications remembered as recently asked to close.
+const MAX_CLOSE_CANDIDATES: usize = 8;
+
+/// One application's close setting as Settings shows it (Gate 4.1.1).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct AppPermissionStatus {
+    pub app_id: String,
+    pub display_name: String,
+    /// The stored setting; `None` follows the defaults.
+    pub setting: Option<PermissionSetting>,
+    pub close_risk: CloseRisk,
 }
 
 fn authorization_of(outcome: &ExecutionOutcome) -> Option<Authorization> {

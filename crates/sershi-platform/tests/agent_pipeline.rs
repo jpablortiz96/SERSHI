@@ -173,7 +173,11 @@ fn actions(outcome: &CommandOutcome, service: &AssistantService) -> Steps {
                     ConfirmationSubject::Application { application } => {
                         Some(application.display_name)
                     }
-                    ConfirmationSubject::Permission { .. } => None,
+                    ConfirmationSubject::Applications { applications } => {
+                        applications.into_iter().next().map(|a| a.display_name)
+                    }
+                    ConfirmationSubject::Permission { .. }
+                    | ConfirmationSubject::ApplicationPermission { .. } => None,
                 })
         });
     vec![(name.to_owned(), app)]

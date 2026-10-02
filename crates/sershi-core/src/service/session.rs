@@ -44,6 +44,9 @@ pub enum ActionResult {
     /// An expected negative result (not found, not running).
     Unresolved,
     Failed,
+    /// It needed approval and was declined, cancelled or expired: nothing
+    /// ran (Gate 4.1.1).
+    Cancelled,
 }
 
 impl ActionResult {
@@ -52,6 +55,7 @@ impl ActionResult {
             CommandStatus::Completed => Some(Self::Succeeded),
             CommandStatus::Unresolved => Some(Self::Unresolved),
             CommandStatus::Failed => Some(Self::Failed),
+            CommandStatus::Cancelled | CommandStatus::Expired => Some(Self::Cancelled),
             // Nothing ran: confirmation pending, denied, cancelled, expired…
             _ => None,
         }
@@ -193,7 +197,10 @@ impl ActionLedger {
                     .entries
                     .iter()
                     .filter(of_kind)
-                    .filter(|e| e.seq > after && e.result != ActionResult::Succeeded)
+                    .filter(|e| {
+                        e.seq > after
+                            && matches!(e.result, ActionResult::Failed | ActionResult::Unresolved)
+                    })
                     .map(item)
                     .collect();
                 failed.reverse();

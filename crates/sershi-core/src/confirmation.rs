@@ -37,6 +37,9 @@ pub const CONFIRMATION_ID_BYTES: usize = 16;
 #[serde(rename_all = "camelCase")]
 pub enum ConfirmationAction {
     CloseApplication,
+    /// Close several applications at once (Gate 4.1.1): one decision for
+    /// exactly the applications listed, nothing else.
+    CloseApplications,
     /// Settings asked to stop confirming a permission (Gate 4.1).
     ChangePermission,
     /// Generic fallback for tools without a dedicated confirmation.
@@ -85,6 +88,28 @@ pub enum ConfirmationSubject {
         permission: ConfigurablePermission,
         setting: PermissionSetting,
     },
+    /// The exact applications a grouped close covers (trusted catalog
+    /// entries, in order).
+    Applications {
+        applications: Vec<ApplicationSummary>,
+    },
+    /// One application's close setting (Gate 4.1.1).
+    ApplicationPermission {
+        app_id: String,
+        display_name: String,
+        setting: PermissionSetting,
+    },
+}
+
+/// Most applications one grouped close may cover.
+pub const MAX_BATCH: usize = 5;
+
+/// One call of a grouped close, with the target it was resolved to when
+/// the confirmation was created (re-verified on approval).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BatchItem {
+    pub call: ToolCall,
+    pub subject: Option<ConfirmationSubject>,
 }
 
 /// Display id of a permission change in the confirmation window.
@@ -189,6 +214,14 @@ pub enum PendingAction {
         permission: ConfigurablePermission,
         setting: PermissionSetting,
     },
+    /// A grouped close: exactly these calls, immutable once stored.
+    Batch(Vec<BatchItem>),
+    /// A less restrictive per-application close setting.
+    ApplicationPermission {
+        app_id: String,
+        display_name: String,
+        setting: PermissionSetting,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,7 +235,9 @@ impl PendingConfirmation {
     pub fn call(&self) -> Option<&ToolCall> {
         match &self.action {
             PendingAction::Tool(call) => Some(call),
-            PendingAction::Permission { .. } => None,
+            PendingAction::Permission { .. }
+            | PendingAction::Batch(_)
+            | PendingAction::ApplicationPermission { .. } => None,
         }
     }
 }
@@ -246,6 +281,99 @@ impl ConfirmationStore {
         let replaced = self.pending.replace(PendingConfirmation {
             request: request.clone(),
             action: PendingAction::Tool(draft.call),
+        });
+        Ok((request, replaced))
+    }
+
+    /// Stores a grouped close of several applications as one confirmation
+    /// (Gate 4.1.1). The stored calls and their resolved targets are the
+    /// whole of what an approval can run; nothing can be added later.
+    /// `None` without at least two drafts, or with more than [`MAX_BATCH`].
+    pub fn create_batch(
+        &mut self,
+        drafts: Vec<ConfirmationDraft>,
+        now_ms: u64,
+    ) -> Result<Option<(ConfirmationRequest, Option<PendingConfirmation>)>, ConfirmationError> {
+        if drafts.len() < 2 || drafts.len() > MAX_BATCH {
+            return Ok(None);
+        }
+        let id = ConfirmationId::generate()?;
+        let applications: Vec<ApplicationSummary> = drafts
+            .iter()
+            .filter_map(|d| match &d.subject {
+                Some(ConfirmationSubject::Application { application }) => Some(application.clone()),
+                _ => None,
+            })
+            .collect();
+        let first = &drafts[0];
+        let risk = drafts
+            .iter()
+            .map(|d| d.risk)
+            .max_by_key(|r| match r {
+                RiskLevel::Safe => 0,
+                RiskLevel::Sensitive => 1,
+                RiskLevel::HighRisk => 2,
+            })
+            .unwrap_or(first.risk);
+        let request = ConfirmationRequest {
+            id,
+            tool_id: first.call.tool_id.clone(),
+            action: ConfirmationAction::CloseApplications,
+            subject: Some(ConfirmationSubject::Applications { applications }),
+            risk,
+            level: ConfirmationLevel::for_risk(risk),
+            reason: first.reason,
+            can_remember: false,
+            expires_at_ms: now_ms.saturating_add(CONFIRMATION_TTL_MS),
+        };
+        let items = drafts
+            .into_iter()
+            .map(|d| BatchItem {
+                call: d.call,
+                subject: d.subject,
+            })
+            .collect();
+        let replaced = self.pending.replace(PendingConfirmation {
+            request: request.clone(),
+            action: PendingAction::Batch(items),
+        });
+        Ok(Some((request, replaced)))
+    }
+
+    /// Stores a request to make one application's close setting "Always
+    /// allow" (Gate 4.1.1); decided only in the trusted window.
+    pub fn create_app_permission(
+        &mut self,
+        app_id: &str,
+        display_name: &str,
+        setting: PermissionSetting,
+        now_ms: u64,
+    ) -> Result<(ConfirmationRequest, Option<PendingConfirmation>), ConfirmationError> {
+        let id = ConfirmationId::generate()?;
+        let tool_id =
+            ToolId::new(PERMISSION_CHANGE_TOOL).map_err(|_| ConfirmationError::Unknown)?;
+        let request = ConfirmationRequest {
+            id,
+            tool_id,
+            action: ConfirmationAction::ChangePermission,
+            subject: Some(ConfirmationSubject::ApplicationPermission {
+                app_id: app_id.to_owned(),
+                display_name: display_name.to_owned(),
+                setting,
+            }),
+            risk: RiskLevel::Sensitive,
+            level: ConfirmationLevel::Standard,
+            reason: ConfirmationReason::PermissionChange,
+            can_remember: false,
+            expires_at_ms: now_ms.saturating_add(CONFIRMATION_TTL_MS),
+        };
+        let replaced = self.pending.replace(PendingConfirmation {
+            request: request.clone(),
+            action: PendingAction::ApplicationPermission {
+                app_id: app_id.to_owned(),
+                display_name: display_name.to_owned(),
+                setting,
+            },
         });
         Ok((request, replaced))
     }

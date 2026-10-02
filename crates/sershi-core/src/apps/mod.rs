@@ -5,6 +5,7 @@ pub mod catalog;
 pub mod manager;
 pub mod model;
 pub mod normalize;
+pub mod risk;
 pub mod tools;
 
 pub use catalog::{ApplicationCatalog, CatalogNames, MatchKind, Resolution};
@@ -12,4 +13,5 @@ pub use manager::{ApplicationManager, CatalogState, CatalogStatus};
 pub use model::{
     AppSource, ApplicationDescriptor, ApplicationSummary, CloseSupport, LaunchTarget, slug,
 };
+pub use risk::{CloseRisk, close_risk};
 pub use tools::{ApplicationResult, LaunchFailure};

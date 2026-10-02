@@ -25,8 +25,8 @@ use serde_json::Value;
 
 use super::session::{ActionResult, Modality, RecallItem, RecallKind, ReferenceSource};
 use super::types::{
-    BrainTrace, BrainUse, CommandOutcome, CommandStatus, OutcomeDetail, PlanReport, PlanStepReport,
-    ServiceEvent, StepAction, StepStatus,
+    BatchStep, BrainTrace, BrainUse, CommandOutcome, CommandStatus, OutcomeDetail, PlanReport,
+    PlanStepReport, ServiceEvent, StepAction, StepStatus,
 };
 use super::{AssistantService, Notify};
 use crate::activity::{ActivityKind, NewActivity};
@@ -40,6 +40,7 @@ use crate::brain::{
     manifest,
 };
 use crate::confirmation::ConfirmationSubject;
+use crate::executor::ExecutionOutcome;
 use crate::ids::ToolId;
 use crate::intent::Intent;
 use crate::tool::{CallOrigin, ToolCall};
@@ -1145,6 +1146,15 @@ impl AssistantService {
             return Progress::Done(self.plan_too_long(text, watermark, notify));
         }
         trace.steps = calls.len();
+        // Closing several applications is one grouped action (Gate 4.1.1),
+        // never a chain of separate approvals.
+        if calls.len() >= 2
+            && calls
+                .iter()
+                .all(|c| c.tool_id.as_str() == CLOSE_APPLICATION)
+        {
+            return self.close_batch(calls, trace, text, watermark, notify);
+        }
         self.plan_seq += 1;
         // A close of an application the plan opens depends on that open.
         let depends: Vec<Option<usize>> = calls
@@ -1193,6 +1203,100 @@ impl AssistantService {
             }
             None => Progress::Done(CommandOutcome::new(CommandStatus::Failed, "No plan.")),
         }
+    }
+
+    /// A grouped close (Gate 4.1.1). Policy is evaluated for every
+    /// application on its own: those allowed by stored policy close now; the
+    /// rest wait together in **one** trusted confirmation that covers exactly
+    /// them (or an ordinary one if a single application needs it). Nothing
+    /// is left waiting where the user cannot see it.
+    fn close_batch(
+        &mut self,
+        calls: Vec<ToolCall>,
+        trace: BrainTrace,
+        text: &str,
+        watermark: u64,
+        notify: Notify<'_>,
+    ) -> Progress {
+        if self.machine.state() == AssistantState::Thinking {
+            self.transition(AssistantEvent::PlanStarted, notify);
+        }
+        let mut steps: Vec<BatchStep> = Vec::with_capacity(calls.len());
+        let mut drafts = Vec::new();
+        for call in &calls {
+            let now = (self.clock)();
+            let execution = {
+                let machine = &mut self.machine;
+                let mut on_execute = || {
+                    if let Ok(snapshot) = machine.apply(AssistantEvent::ExecutionStarted) {
+                        notify(ServiceEvent::State(snapshot));
+                    }
+                };
+                self.executor
+                    .execute(call, &self.grants, &mut self.activity, now, &mut on_execute)
+            };
+            match execution {
+                ExecutionOutcome::ConfirmationRequired(draft) => {
+                    if let Some(ConfirmationSubject::Application { application }) = &draft.subject {
+                        self.remember_close_candidate(application);
+                        steps.push(BatchStep {
+                            application: application.clone(),
+                            status: StepStatus::NeedsConfirmation,
+                        });
+                    }
+                    drafts.push(draft);
+                }
+                other => {
+                    let authorization = super::authorization_of(&other);
+                    let outcome = self.conclude(other, true, notify);
+                    self.note_result(call, &outcome);
+                    self.record_action(call, &outcome, authorization);
+                    if let Some(application) = self.call_app(call) {
+                        steps.push(BatchStep {
+                            application,
+                            status: super::step_status(outcome.status),
+                        });
+                    }
+                }
+            }
+        }
+        self.dialogue
+            .record((self.clock)(), text, Some("closed applications".to_owned()));
+        let outcome = if drafts.is_empty() {
+            self.finish_batch(steps, notify)
+        } else {
+            // One pending confirmation at a time.
+            self.cancel_confirmations();
+            let now = (self.clock)();
+            let created = if drafts.len() == 1 {
+                drafts
+                    .pop()
+                    .map(|d| self.confirmations.create(d, now).is_ok())
+                    .unwrap_or(false)
+            } else {
+                matches!(self.confirmations.create_batch(drafts, now), Ok(Some(_)))
+            };
+            if created {
+                self.transition(AssistantEvent::ConfirmationRequested, notify);
+                CommandOutcome {
+                    tool_id: ToolId::new(CLOSE_APPLICATION).ok(),
+                    detail: Some(OutcomeDetail::CloseBatch { steps }),
+                    ..CommandOutcome::new(
+                        CommandStatus::NeedsConfirmation,
+                        "Closing these applications is waiting for your approval in the confirmation window.",
+                    )
+                }
+            } else {
+                // Fail closed: no secure confirmation, nothing more runs.
+                for step in &mut steps {
+                    if step.status == StepStatus::NeedsConfirmation {
+                        step.status = StepStatus::Failed;
+                    }
+                }
+                self.finish_batch(steps, notify)
+            }
+        };
+        Progress::Done(self.finish(outcome, text, Some(trace), watermark, notify))
     }
 
     /// Runs the next step of plan `id`. A plan that is no longer current
@@ -1415,6 +1519,7 @@ impl AssistantService {
             }
             (CLOSE_APPLICATION, CommandStatus::Completed) => {
                 if let Some(app) = app_in_data() {
+                    self.remember_close_candidate(&app);
                     let request = self.conversation.request;
                     self.conversation.entities.record_app(
                         app,
@@ -1428,6 +1533,7 @@ impl AssistantService {
                 if let Some(ConfirmationSubject::Application { application }) =
                     self.confirmations.current().and_then(|c| c.subject.clone())
                 {
+                    self.remember_close_candidate(&application);
                     self.conversation.entities.record_app(
                         application,
                         AppEvent::CloseRequested,

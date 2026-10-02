@@ -65,6 +65,9 @@ pub enum Authorization {
     StoredPermission,
     /// Approved by the user in the trusted confirmation window.
     TrustedConfirmation,
+    /// Closing an application SERSHI's trusted close-risk list marks safe
+    /// (Gate 4.1.1: the built-in Calculator).
+    SafeToClose,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

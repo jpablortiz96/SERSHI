@@ -146,6 +146,36 @@ pub enum OutcomeDetail {
         setting: PermissionSetting,
         applied: bool,
     },
+    /// A per-application close setting decided in the trusted window
+    /// (Gate 4.1.1).
+    ApplicationPermission {
+        app_id: String,
+        display_name: String,
+        setting: PermissionSetting,
+        applied: bool,
+    },
+    /// What waits in the trusted window: the exact applications a close
+    /// (single or grouped) would affect. Nothing has run.
+    AwaitingApproval {
+        applications: Vec<ApplicationSummary>,
+    },
+    /// A grouped close (Gate 4.1.1): each application and how it ended
+    /// (closed by policy, waiting for approval, cancelled, failed).
+    CloseBatch {
+        steps: Vec<BatchStep>,
+    },
+    /// The trusted confirmation window could not be shown, so the pending
+    /// approval was withdrawn and nothing ran (Gate 4.1.1).
+    ConfirmationUnavailable,
+}
+
+/// One application of a grouped close.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
+#[serde(rename_all = "camelCase")]
+pub struct BatchStep {
+    pub application: ApplicationSummary,
+    pub status: StepStatus,
 }
 
 /// What one plan step does (no paths, ids or arguments beyond the trusted
