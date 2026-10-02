@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stop-voice-session"
+description = "Enables the stop_voice_session command without any pre-configured scope."
+commands.allow = ["stop_voice_session"]
+
+[[permission]]
+identifier = "deny-stop-voice-session"
+description = "Denies the stop_voice_session command without any pre-configured scope."
+commands.deny = ["stop_voice_session"]

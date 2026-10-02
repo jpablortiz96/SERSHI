@@ -10,6 +10,7 @@ mod commands;
 mod confirmation;
 mod integration;
 mod local_model;
+mod permissions;
 mod runtime;
 mod surfaces;
 mod voice;
@@ -26,6 +27,9 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             let runtime = runtime::Runtime::new()?;
+            // Permissions the user chose in Settings › Security (Gate 4.1).
+            let stored = permissions::load(app.handle());
+            let _ = runtime.with_service(|s| s.load_permission_settings(&stored));
             app.manage(runtime);
             // Speech models live in the per-user app-data directory
             // (%LOCALAPPDATA%\dev.sershi.desktop\models\stt on Windows).
@@ -87,6 +91,11 @@ pub fn run() {
             commands::download_brain_model,
             commands::cancel_brain_model_download,
             commands::reset_conversation,
+            commands::start_voice_session,
+            commands::stop_voice_session,
+            commands::get_voice_session,
+            commands::get_permission_settings,
+            commands::request_permission_change,
         ])
         .build(tauri::generate_context!());
 

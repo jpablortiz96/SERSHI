@@ -27,6 +27,7 @@ pub mod language;
 pub mod latency;
 pub mod models;
 pub mod ports;
+pub mod session;
 pub mod signal;
 pub mod stabilize;
 pub mod transcript;

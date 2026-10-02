@@ -3,6 +3,7 @@ import type { BrainTrace } from "./BrainTrace";
 import type { CommandStatus } from "./CommandStatus";
 import type { OutcomeDetail } from "./OutcomeDetail";
 import type { PlanReport } from "./PlanReport";
+import type { SessionTrace } from "./SessionTrace";
 import type { ToolId } from "./ToolId";
 import type { UnderstandingTrace } from "./UnderstandingTrace";
 import type { UnderstoodAs } from "./UnderstoodAs";
@@ -31,4 +32,8 @@ plan: PlanReport | null,
 /**
  * Routing and brain diagnostics (transient; never stored).
  */
-brain: BrainTrace | null, };
+brain: BrainTrace | null, 
+/**
+ * Conversation-session diagnostics (transient; never stored).
+ */
+session: SessionTrace | null, };

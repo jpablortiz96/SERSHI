@@ -4,4 +4,4 @@
  * What the user is asked to approve. The UI renders localized copy per
  * action; it never displays text supplied by a tool or a model.
  */
-export type ConfirmationAction = "closeApplication" | "runTool";
+export type ConfirmationAction = "closeApplication" | "changePermission" | "runTool";

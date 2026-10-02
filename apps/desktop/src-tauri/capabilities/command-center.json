@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "command-center",
-  "description": "The Command Center window: full read access, command submission (typed or push-to-talk), spoken replies, the local semantic model's and Agent Brain's settings, starting a new conversation, and its own window chrome.",
+  "description": "The Command Center window: full read access, command submission (typed or push-to-talk), spoken replies, the local semantic model's and Agent Brain's settings, starting a new conversation, hands-free voice sessions, reading permission settings and requesting a change (a less restrictive one is decided only in the trusted confirmation window), and its own window chrome.",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -40,6 +40,11 @@
     "allow-configure-brain",
     "allow-download-brain-model",
     "allow-cancel-brain-model-download",
-    "allow-reset-conversation"
+    "allow-reset-conversation",
+    "allow-start-voice-session",
+    "allow-stop-voice-session",
+    "allow-get-voice-session",
+    "allow-get-permission-settings",
+    "allow-request-permission-change"
   ]
 }

@@ -7,18 +7,21 @@ use sershi_core::assistant::{AssistantSnapshot, AssistantState};
 use sershi_core::ipc::{
     ApplicationCatalogInfo, IntegrationStatus, IpcError, IpcErrorCode, RuntimeInfo, TrayLabels,
 };
+use sershi_core::permission::{ConfigurablePermission, PermissionSetting, PermissionStatus};
 use sershi_core::platform::Platform;
 use sershi_core::ports::SystemInfoProvider;
-use sershi_core::service::{CommandOutcome, CommandRequest, ServiceEvent};
+use sershi_core::service::{CommandOutcome, CommandRequest, PermissionChange, ServiceEvent};
 use sershi_core::shortcut::ShortcutChange;
 use sershi_core::system::SystemSnapshot;
 use sershi_core::understanding::status::{SemanticSettings, SemanticStatus};
+use sershi_core::voice::session::VoiceSessionStatus;
 use sershi_core::voice::{CaptureStart, VoiceSettings, VoiceStatus};
 use tauri::{AppHandle, State};
 
 use crate::confirmation;
 use crate::integration;
 use crate::local_model::{self, Role};
+use crate::permissions;
 use crate::runtime::{Runtime, broadcast, drive, schedule_settle};
 use crate::surfaces;
 use crate::voice;
@@ -85,6 +88,8 @@ pub fn submit_command(
     let snapshot = runtime.with_service(|s| s.snapshot())?;
     confirmation::sync(&app);
     schedule_settle(&app, &snapshot);
+    // In a voice session, typing is a turn too: it listens again after.
+    voice::after_typed(&app, &outcome);
     Ok(outcome)
 }
 
@@ -222,6 +227,39 @@ pub fn start_voice_capture(app: AppHandle) -> Result<CaptureStart, IpcError> {
 }
 
 /// Stops listening and transcribes what was said.
+/// Starts a hands-free voice session (Gate 4.1). Explicit: there is no
+/// wake word and no listening outside a session.
+#[tauri::command(async)]
+pub fn start_voice_session(app: AppHandle) -> Result<CaptureStart, IpcError> {
+    voice::start_session(&app)
+}
+
+#[tauri::command(async)]
+pub fn stop_voice_session(app: AppHandle) {
+    voice::stop_session(&app);
+}
+
+#[tauri::command]
+pub fn get_voice_session(app: AppHandle) -> Option<VoiceSessionStatus> {
+    voice::session_status(&app)
+}
+
+#[tauri::command]
+pub fn get_permission_settings(app: AppHandle) -> Result<Vec<PermissionStatus>, IpcError> {
+    permissions::current(&app)
+}
+
+/// Settings › Security. Making a permission less restrictive opens the
+/// trusted confirmation window; only its decision applies the change.
+#[tauri::command(async)]
+pub fn request_permission_change(
+    app: AppHandle,
+    permission: ConfigurablePermission,
+    setting: PermissionSetting,
+) -> Result<PermissionChange, IpcError> {
+    permissions::request_change(&app, permission, setting)
+}
+
 #[tauri::command]
 pub fn stop_voice_capture(app: AppHandle) {
     voice::stop_capture(&app);

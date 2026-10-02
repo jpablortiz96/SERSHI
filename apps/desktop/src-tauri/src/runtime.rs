@@ -113,7 +113,11 @@ pub fn drive(app: &AppHandle, mut progress: Progress) -> Option<CommandOutcome> 
 pub fn broadcast(app: &AppHandle, event: ServiceEvent) {
     // Emission only fails if the app is shutting down; nothing to recover.
     let _ = match event {
-        ServiceEvent::State(snapshot) => app.emit(STATE_EVENT, snapshot),
+        ServiceEvent::State(snapshot) => {
+            // The voice session indicator follows the working states.
+            crate::voice::observe(app, snapshot.state);
+            app.emit(STATE_EVENT, snapshot)
+        }
         ServiceEvent::Activity(entry) => app.emit(ACTIVITY_EVENT, entry),
         ServiceEvent::Plan(report) => app.emit_to("main", PLAN_EVENT, report),
     };

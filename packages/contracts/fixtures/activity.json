@@ -6,7 +6,8 @@
     "toolId": "system.close_application",
     "subject": "Spotify",
     "summary": "Close application is waiting for your approval",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 17,
@@ -15,7 +16,8 @@
     "toolId": "system.close_application",
     "subject": null,
     "summary": "Requested Close application",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 16,
@@ -24,7 +26,8 @@
     "toolId": null,
     "subject": null,
     "summary": "Command received",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 15,
@@ -33,7 +36,8 @@
     "toolId": "system.open_application",
     "subject": null,
     "summary": "Open application could not complete",
-    "durationMs": 0
+    "durationMs": 0,
+    "authorization": null
   },
   {
     "id": 14,
@@ -42,7 +46,8 @@
     "toolId": "system.open_application",
     "subject": null,
     "summary": "Requested Open application",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 13,
@@ -51,7 +56,8 @@
     "toolId": null,
     "subject": null,
     "summary": "Command received",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 12,
@@ -60,7 +66,8 @@
     "toolId": "system.open_application",
     "subject": null,
     "summary": "Open application could not complete",
-    "durationMs": 0
+    "durationMs": 0,
+    "authorization": null
   },
   {
     "id": 11,
@@ -69,7 +76,8 @@
     "toolId": "system.open_application",
     "subject": null,
     "summary": "Requested Open application",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 10,
@@ -78,7 +86,8 @@
     "toolId": null,
     "subject": null,
     "summary": "Command received",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 9,
@@ -87,7 +96,8 @@
     "toolId": "system.open_application",
     "subject": "Spotify",
     "summary": "Open application completed",
-    "durationMs": 0
+    "durationMs": 0,
+    "authorization": "policy"
   },
   {
     "id": 8,
@@ -96,7 +106,8 @@
     "toolId": "system.open_application",
     "subject": null,
     "summary": "Requested Open application",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 7,
@@ -105,7 +116,8 @@
     "toolId": null,
     "subject": null,
     "summary": "Command received",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 6,
@@ -114,7 +126,8 @@
     "toolId": null,
     "subject": null,
     "summary": "Command received",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 5,
@@ -123,7 +136,8 @@
     "toolId": null,
     "subject": null,
     "summary": "Battery status is planned for v0.1",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 4,
@@ -132,7 +146,8 @@
     "toolId": null,
     "subject": null,
     "summary": "Command received",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 3,
@@ -141,7 +156,8 @@
     "toolId": "system.get_memory",
     "subject": null,
     "summary": "Memory usage completed",
-    "durationMs": 0
+    "durationMs": 0,
+    "authorization": "policy"
   },
   {
     "id": 2,
@@ -150,7 +166,8 @@
     "toolId": "system.get_memory",
     "subject": null,
     "summary": "Requested Memory usage",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   },
   {
     "id": 1,
@@ -159,6 +176,7 @@
     "toolId": null,
     "subject": null,
     "summary": "Command received",
-    "durationMs": null
+    "durationMs": null,
+    "authorization": null
   }
 ]

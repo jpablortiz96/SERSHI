@@ -226,8 +226,17 @@ pub enum VoiceUpdate {
     },
     /// The outcome of the heard command (same pipeline as typed commands).
     Answered {
-        outcome: CommandOutcome,
+        outcome: Box<CommandOutcome>,
+        /// Speak the reply. False when the user already moved on (they
+        /// interrupted, a newer turn began): it is shown, never spoken.
+        speak: bool,
+        /// In a voice session: follow the reply with "anything else?"
+        /// (Gate 4.1; sparingly, never twice in a row).
+        anything_else: bool,
     },
+    /// In a voice session, "sí" to "anything else?": SERSHI says it is
+    /// listening. Nothing was submitted.
+    Prompt,
     NoSpeech,
     Unclear,
     Cancelled,

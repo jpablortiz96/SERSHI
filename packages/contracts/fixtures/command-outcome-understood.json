@@ -37,5 +37,22 @@
     "modelMs": null,
     "promptVersion": 1,
     "steps": 0
+  },
+  "session": {
+    "session": 1,
+    "modality": "typed",
+    "activeEntities": 1,
+    "ledgerEntries": 1,
+    "lastAction": {
+      "action": "open",
+      "application": {
+        "id": "spotify",
+        "displayName": "Spotify",
+        "source": "packagedApp"
+      },
+      "result": "succeeded"
+    },
+    "reference": null,
+    "authorization": "policy"
   }
 }

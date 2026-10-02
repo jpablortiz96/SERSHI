@@ -64,5 +64,18 @@
     "modelMs": null,
     "promptVersion": 1,
     "steps": 3
+  },
+  "session": {
+    "session": 1,
+    "modality": "typed",
+    "activeEntities": 2,
+    "ledgerEntries": 4,
+    "lastAction": {
+      "action": "memory",
+      "application": null,
+      "result": "succeeded"
+    },
+    "reference": null,
+    "authorization": "policy"
   }
 }

@@ -13,4 +13,14 @@ export type VoiceUpdate = { "kind": "heard", text: string, language: LanguageTag
  * what the first pass literally heard, shown next to the accepted
  * text (never hidden, never logged).
  */
-firstHeard: string | null, } | { "kind": "answered", outcome: CommandOutcome, } | { "kind": "noSpeech" } | { "kind": "unclear" } | { "kind": "cancelled" } | { "kind": "failed", reason: VoiceFailure, } | { "kind": "deviceFallback" } | { "kind": "timings", timings: VoiceTimings, } | { "kind": "speechLatency", ms: number, };
+firstHeard: string | null, } | { "kind": "answered", outcome: CommandOutcome, 
+/**
+ * Speak the reply. False when the user already moved on (they
+ * interrupted, a newer turn began): it is shown, never spoken.
+ */
+speak: boolean, 
+/**
+ * In a voice session: follow the reply with "anything else?"
+ * (Gate 4.1; sparingly, never twice in a row).
+ */
+anythingElse: boolean, } | { "kind": "prompt" } | { "kind": "noSpeech" } | { "kind": "unclear" } | { "kind": "cancelled" } | { "kind": "failed", reason: VoiceFailure, } | { "kind": "deviceFallback" } | { "kind": "timings", timings: VoiceTimings, } | { "kind": "speechLatency", ms: number, };

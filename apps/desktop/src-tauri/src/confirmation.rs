@@ -30,6 +30,7 @@ use tauri::{
 
 use crate::runtime::{Runtime, broadcast, drive, schedule_settle};
 use crate::surfaces::MAIN;
+use crate::{permissions, voice};
 
 /// The confirmation window's label (stable: one surface at a time).
 pub const CONFIRMATION: &str = "confirmation";
@@ -171,6 +172,10 @@ pub fn focus_if_open(app: &AppHandle) {
 }
 
 fn emit_outcome(app: &AppHandle, outcome: &CommandOutcome) {
+    // A permission decision belongs to Settings, not to the conversation.
+    if permissions::handled(app, outcome) {
+        return;
+    }
     let _ = app.emit_to(MAIN, OUTCOME_EVENT, outcome);
 }
 
@@ -200,6 +205,8 @@ fn apply(app: &AppHandle, id: ConfirmationId, choice: ConfirmationChoice) {
         }
     }
     sync(app);
+    // A voice session paused for this approval listens again.
+    voice::confirmation_resolved(app);
 }
 
 /// The surface asks what it should show: its assigned confirmation only.
@@ -259,6 +266,7 @@ pub fn on_close_requested(app: &AppHandle) {
 pub fn expired(app: &AppHandle, outcome: &CommandOutcome) {
     emit_outcome(app, outcome);
     sync(app);
+    voice::confirmation_resolved(app);
 }
 
 /// Quitting SERSHI: cancel whatever is pending and destroy the surface.

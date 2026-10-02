@@ -38,6 +38,11 @@ const COMMANDS: &[&str] = &[
     "download_brain_model",
     "cancel_brain_model_download",
     "reset_conversation",
+    "start_voice_session",
+    "stop_voice_session",
+    "get_voice_session",
+    "get_permission_settings",
+    "request_permission_change",
 ];
 
 /// Installer builds bundle the inference engine (`tauri.bundle.conf.json`).

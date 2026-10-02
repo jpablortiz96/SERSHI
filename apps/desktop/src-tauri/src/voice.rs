@@ -19,6 +19,13 @@
 //! runs on its own thread. No lock is held while joining an audio thread or
 //! calling into the service.
 //!
+//! Voice session (Gate 4.1): after an explicit start, SERSHI listens again
+//! after each reply without a click, until the user says goodbye, stops it,
+//! or stays silent for `IDLE_TIMEOUT_MS`. The core's
+//! [`VoiceSession`] decides the turn-taking; this module only opens and
+//! closes the microphone accordingly. Half duplex: the microphone is never
+//! open while SERSHI speaks or while a trusted confirmation is pending.
+//!
 //! Privacy: audio lives in memory for the length of one utterance and is
 //! dropped after recognition. Nothing is written to disk or logs; the UI
 //! receives only the transcript to show, a bounded 0–1 level and timings.
@@ -31,8 +38,10 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use sershi_core::activity::{ActivityKind, NewActivity};
 use sershi_core::assistant::AssistantState;
 use sershi_core::ipc::{IpcError, IpcErrorCode};
+use sershi_core::service::{CommandOutcome, ServiceEvent};
 use sershi_core::voice::endpoint::{Endpoint, EndpointConfig, EndpointDetector};
 use sershi_core::voice::latency::{
     Acceleration, SPECULATE_AFTER_MS, VoiceTimings, release_due, speculation_usable,
@@ -41,6 +50,10 @@ use sershi_core::voice::latency::{
 use sershi_core::voice::ports::{
     ActiveCapture, ActivePlayback, CaptureError, CaptureFormat, CaptureSink, PlaybackEnd,
     PlaybackSink, SpeechToTextPort, SttError, TranscribeOptions, VoiceChoice,
+};
+use sershi_core::voice::session::{
+    Heard, IDLE_TIMEOUT_MS, Next, REPLY_GRACE_MS, SessionEndReason, VoiceSession,
+    VoiceSessionStatus,
 };
 use sershi_core::voice::signal::{LevelMeter, RECOGNITION_RATE, downmix, resample};
 use sershi_core::voice::stabilize::{self, LanguageContext, RecentLanguages};
@@ -64,6 +77,13 @@ pub const VOICE_EVENT: &str = "sershi://voice";
 pub const LEVEL_EVENT: &str = "sershi://voice-level";
 /// Model download progress (`ModelProgress`), Command Center only.
 pub const MODEL_EVENT: &str = "sershi://voice-model";
+/// The voice session's status (`VoiceSessionStatus`), Command Center and
+/// companion (the "session active" indicator).
+pub const SESSION_EVENT: &str = "sershi://voice-session";
+
+/// After SERSHI stops talking, wait this long before the microphone opens
+/// again, so the end of its own voice (and the room's echo) is never heard.
+const ECHO_GUARD: Duration = Duration::from_millis(350);
 
 /// At most 25 level updates per second.
 const LEVEL_INTERVAL: Duration = Duration::from_millis(40);
@@ -113,6 +133,14 @@ struct Inner {
     /// Recently, confidently detected conversation languages (Gate 3C.1;
     /// memory only, bounded, a hint for language retries).
     recent_languages: RecentLanguages,
+    /// The hands-free voice session, while one is active (Gate 4.1).
+    session: Option<VoiceSession>,
+    session_seq: u64,
+    /// A finished turn waiting for its reply to end before listening again.
+    awaiting: Option<u64>,
+    resume_seq: u64,
+    /// A reply is being synthesized (it will play shortly).
+    synthesizing: bool,
 }
 
 /// Loaded recognition engines, kept warm between commands.
@@ -315,9 +343,24 @@ fn refused(reason: VoiceFailure) -> Result<CaptureStart, IpcError> {
     Ok(CaptureStart::Refused { reason })
 }
 
-/// Push-to-talk. Opens the microphone only after the core agrees (which
-/// also cancels any pending approval) and reports failures honestly.
+/// Who opened the microphone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Opener {
+    /// The user pressed the microphone (or Interrupt).
+    User,
+    /// The voice session listening again after a turn.
+    Session,
+}
+
+/// Push-to-talk (the microphone button). In a voice session it is also the
+/// barge-in: SERSHI stops talking or working and listens.
 pub fn start_capture(app: &AppHandle) -> Result<CaptureStart, IpcError> {
+    open_microphone(app, Opener::User)
+}
+
+/// Opens the microphone only after the core agrees (which also cancels any
+/// pending approval) and reports failures honestly.
+fn open_microphone(app: &AppHandle, opener: Opener) -> Result<CaptureStart, IpcError> {
     let Some(voice) = managed(app) else {
         return refused(VoiceFailure::Unsupported);
     };
@@ -335,6 +378,22 @@ pub fn start_capture(app: &AppHandle) -> Result<CaptureStart, IpcError> {
         ModelState::Installed => {}
         ModelState::Corrupt => return refused(VoiceFailure::ModelCorrupt),
         _ => return refused(VoiceFailure::ModelMissing),
+    }
+    if opener == Opener::User {
+        // The user takes the turn: nothing scheduled may reopen the
+        // microphone behind them. Talking over SERSHI is a barge-in.
+        let interrupting = {
+            let mut inner = voice.locked()?;
+            inner.awaiting = None;
+            inner.playback.is_some() || inner.synthesizing
+        };
+        let working = app
+            .state::<Runtime>()
+            .with_service(|s| s.snapshot().state.is_busy())
+            .unwrap_or(false);
+        if interrupting || working {
+            with_session(app, VoiceSession::barge_in);
+        }
     }
     // Half duplex: SERSHI stops talking before it listens, so its own
     // voice never reaches the recogniser.
@@ -393,6 +452,7 @@ pub fn start_capture(app: &AppHandle) -> Result<CaptureStart, IpcError> {
         id
     };
     integration::set_listening(app, true);
+    with_session(app, VoiceSession::listening);
     // Load (or keep) the engine while the user is still speaking.
     warm_up(app, model);
     let app = app.clone();
@@ -435,6 +495,7 @@ pub fn cancel_capture(app: &AppHandle) {
 /// dismissed it (the recognition itself is aborted too). While listening,
 /// the session records the microphone duration itself.
 pub fn cancel(app: &AppHandle) {
+    end_session(app, SessionEndReason::Dismissed);
     cancel_capture(app);
     if let Some(voice) = managed(app)
         && let Ok(inner) = voice.locked()
@@ -639,10 +700,16 @@ fn session(
     let started = Instant::now();
     let endpoint_override =
         managed(app).and_then(|v| v.locked().ok().and_then(|i| i.settings.endpoint_ms));
-    let config = match endpoint_override {
+    let mut config = match endpoint_override {
         Some(ms) => EndpointConfig::default().with_silence(ms),
         None => EndpointConfig::default(),
     };
+    // In a voice session the microphone waits longer for the next request;
+    // silence that long ends the session (Gate 4.1).
+    let session_turn = session_active(app);
+    if session_turn {
+        config.no_speech_timeout_ms = IDLE_TIMEOUT_MS;
+    }
     let mut detector = EndpointDetector::new(format.sample_rate, config);
     let max_samples =
         (u64::from(format.sample_rate) * u64::from(config.max_capture_ms) / 1000) as usize;
@@ -756,6 +823,7 @@ fn session(
             if let Some(s) = usable {
                 s.abandon();
             }
+            end_session(app, SessionEndReason::Failed);
             end_voice(app, Some(mic_ms), true);
             release();
             emit_update(app, VoiceUpdate::Failed { reason });
@@ -764,6 +832,7 @@ fn session(
             if let Some(s) = usable {
                 s.abandon();
             }
+            end_session(app, SessionEndReason::Failed);
             end_voice(app, Some(mic_ms), true);
             release();
             emit_update(
@@ -772,6 +841,17 @@ fn session(
                     reason: VoiceFailure::MicrophoneSilent,
                 },
             );
+        }
+        Finish::NoSpeech if session_turn && session_active(app) => {
+            // Nobody spoke for the session's idle timeout: the session ends
+            // and the microphone closes. Nothing is said or run.
+            if let Some(s) = usable {
+                s.abandon();
+            }
+            end_session(app, SessionEndReason::Timeout);
+            end_voice(app, Some(mic_ms), false);
+            release();
+            emit_update(app, VoiceUpdate::Cancelled);
         }
         Finish::NoSpeech => {
             if let Some(s) = usable {
@@ -797,6 +877,7 @@ fn session(
 }
 
 fn begin_transcribing(app: &AppHandle, mic_ms: u32) -> bool {
+    with_session(app, VoiceSession::transcribing);
     let runtime = app.state::<Runtime>();
     runtime
         .with_service(|s| s.end_listening(mic_ms, &mut |e| broadcast(app, e)))
@@ -1071,8 +1152,17 @@ fn recognise(
         }
     };
     match transcript::assess(&heard) {
-        Verdict::NoSpeech => unusable(app, VoiceUpdate::NoSpeech),
-        Verdict::Unclear => unusable(app, VoiceUpdate::Unclear),
+        Verdict::NoSpeech | Verdict::Unclear => {
+            let update = if matches!(transcript::assess(&heard), Verdict::NoSpeech) {
+                VoiceUpdate::NoSpeech
+            } else {
+                VoiceUpdate::Unclear
+            };
+            unusable(app, update);
+            if let Some(next) = with_session(app, VoiceSession::unheard) {
+                after_turn(app, next);
+            }
+        }
         Verdict::Accept(text) => {
             emit_update(
                 app,
@@ -1085,6 +1175,24 @@ fn recognise(
                         .map(|r| r.first_text.clone()),
                 },
             );
+            // In a voice session, a farewell ends it and "sí" to "anything
+            // else?" only prompts; neither is a request.
+            match with_session(app, |s| s.heard(&text)) {
+                Some(Heard::Farewell) => {
+                    leave_transcribing(app);
+                    end_session(app, SessionEndReason::Farewell);
+                    report(app, timings);
+                    return;
+                }
+                Some(Heard::Prompt) => {
+                    leave_transcribing(app);
+                    emit_update(app, VoiceUpdate::Prompt);
+                    after_turn(app, Next::Listen);
+                    report(app, timings);
+                    return;
+                }
+                Some(Heard::Submit) | None => {}
+            }
             // Exactly the typed-command path (see AssistantService docs).
             let t0 = Instant::now();
             let runtime = app.state::<Runtime>();
@@ -1134,7 +1242,26 @@ fn recognise(
                 if let Ok(mut inner) = voice.locked() {
                     inner.answered_at = Some(Instant::now());
                 }
-                emit_update(app, VoiceUpdate::Answered { outcome });
+                // The user may have moved on while this ran (pressed to
+                // talk again): the outcome is shown, never spoken, and the
+                // session follows the new turn instead.
+                let superseded = voice.locked().map_or(true, |i| i.capture.is_some());
+                let turn = if superseded {
+                    None
+                } else {
+                    with_session(app, |s| s.answered(&outcome))
+                };
+                emit_update(
+                    app,
+                    VoiceUpdate::Answered {
+                        outcome: Box::new(outcome),
+                        speak: !superseded,
+                        anything_else: turn.is_some_and(|t| t.anything_else),
+                    },
+                );
+                if turn.is_some() {
+                    after_turn(app, Next::Listen);
+                }
             }
         }
     }
@@ -1217,6 +1344,7 @@ impl PlaybackSink for SpeechSink {
             // adapter); the thread ends right after this callback.
             drop(handle);
             finish_speaking(&self.app);
+            reply_finished(&self.app);
         }
     }
 }
@@ -1247,24 +1375,33 @@ pub fn speak(app: &AppHandle, text: &str, language: Option<&str>) -> Result<(), 
         inner.settings.voice.clone()
     };
     stop_speaking(app);
-    let epoch = voice.locked()?.speech_epoch;
+    let epoch = {
+        let mut inner = voice.locked()?;
+        inner.synthesizing = true;
+        inner.speech_epoch
+    };
     let t0 = Instant::now();
-    let audio = voice
-        .platform
-        .synthesis
-        .synthesize(
-            text,
-            VoiceChoice {
-                voice_id: voice_id.as_deref(),
-                language: language.as_ref(),
-            },
-        )
-        .map_err(|_| failure(VoiceFailure::SpeechUnavailable))?;
+    let synthesized = voice.platform.synthesis.synthesize(
+        text,
+        VoiceChoice {
+            voice_id: voice_id.as_deref(),
+            language: language.as_ref(),
+        },
+    );
+    if let Ok(mut inner) = voice.locked() {
+        inner.synthesizing = false;
+    }
+    let Ok(audio) = synthesized else {
+        reply_finished(app);
+        return Err(failure(VoiceFailure::SpeechUnavailable));
+    };
     let id = {
         let mut inner = voice.locked()?;
         if inner.capture.is_some() || inner.speech_epoch != epoch {
             // The user started talking, typed, or pressed Stop while SERSHI
             // prepared its reply.
+            drop(inner);
+            reply_finished(app);
             return Ok(());
         }
         inner.next_id += 1;
@@ -1300,8 +1437,10 @@ pub fn speak(app: &AppHandle, text: &str, language: Option<&str>) -> Result<(), 
             if let Some(stale) = stale {
                 stale.stop();
                 finish_speaking(app);
+                reply_finished(app);
                 return Ok(());
             }
+            with_session(app, VoiceSession::speaking);
             eprintln!(
                 "SERSHI voice: speech started {} ms after request",
                 t0.elapsed().as_millis()
@@ -1315,6 +1454,7 @@ pub fn speak(app: &AppHandle, text: &str, language: Option<&str>) -> Result<(), 
         }
         Err(_) => {
             finish_speaking(app);
+            reply_finished(app);
             Err(failure(VoiceFailure::OutputUnavailable))
         }
     }
@@ -1352,11 +1492,19 @@ pub fn stop_speaking(app: &AppHandle) {
         // Joins the playback thread; no lock is held here.
         handle.stop();
         finish_speaking(app);
+        reply_finished(app);
     }
 }
 
-/// Before a typed command: SERSHI stops listening and talking.
+/// Before a typed command: SERSHI stops listening and talking. A voice
+/// session stays open: after the typed request it listens again (one
+/// conversation, either modality).
 pub fn interrupt(app: &AppHandle) {
+    if let Some(voice) = managed(app)
+        && let Ok(mut inner) = voice.locked()
+    {
+        inner.awaiting = None;
+    }
     cancel_capture(app);
     stop_speaking(app);
     // Give the session worker a moment to release the microphone and leave
@@ -1487,6 +1635,7 @@ pub fn cancel_download(app: &AppHandle) {
 
 /// Quitting: release the microphone and the speaker, stop downloads.
 pub fn shutdown(app: &AppHandle) {
+    end_session(app, SessionEndReason::Dismissed);
     cancel_capture(app);
     stop_speaking(app);
     cancel_download(app);
@@ -1497,5 +1646,288 @@ pub fn shutdown(app: &AppHandle) {
             break;
         }
         thread::sleep(Duration::from_millis(10));
+    }
+}
+
+// ── Voice session (Gate 4.1) ──────────────────────────────────────────────
+
+fn wall_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or(0)
+}
+
+fn emit_session(app: &AppHandle, status: VoiceSessionStatus) {
+    let _ = app.emit_to(MAIN, SESSION_EVENT, status);
+    let _ = app.emit_to(COMPANION, SESSION_EVENT, status);
+}
+
+/// Applies `f` to the active session and publishes its status if it
+/// changed. `None` without an active session.
+fn with_session<R>(app: &AppHandle, f: impl FnOnce(&mut VoiceSession) -> R) -> Option<R> {
+    let voice = managed(app)?;
+    let (result, changed) = {
+        let mut inner = voice.locked().ok()?;
+        let session = inner.session.as_mut()?;
+        let before = session.status();
+        let result = f(session);
+        let after = session.status();
+        (result, (after != before).then_some(after))
+    };
+    if let Some(status) = changed {
+        emit_session(app, status);
+    }
+    Some(result)
+}
+
+pub fn session_active(app: &AppHandle) -> bool {
+    managed(app).is_some_and(|v| v.locked().is_ok_and(|i| i.session.is_some()))
+}
+
+/// The session's status (`None` when no session is active).
+pub fn session_status(app: &AppHandle) -> Option<VoiceSessionStatus> {
+    managed(app)?
+        .locked()
+        .ok()?
+        .session
+        .as_ref()
+        .map(VoiceSession::status)
+}
+
+fn audit(app: &AppHandle, activity: NewActivity) {
+    let runtime = app.state::<Runtime>();
+    if let Ok(entry) = runtime.with_service(|s| s.record(activity)) {
+        broadcast(app, ServiceEvent::Activity(entry));
+    }
+}
+
+/// Starts a hands-free voice session (the explicit button; there is no
+/// wake word). The microphone opens now and after each reply until the
+/// session ends.
+pub fn start_session(app: &AppHandle) -> Result<CaptureStart, IpcError> {
+    let Some(voice) = managed(app) else {
+        return refused(VoiceFailure::Unsupported);
+    };
+    let status = {
+        let mut inner = voice.locked()?;
+        if inner.session.is_some() {
+            return Ok(CaptureStart::Started);
+        }
+        inner.session_seq += 1;
+        let session = VoiceSession::start(inner.session_seq, wall_ms());
+        let status = session.status();
+        inner.session = Some(session);
+        inner.awaiting = None;
+        status
+    };
+    emit_session(app, status);
+    audit(
+        app,
+        NewActivity::new(ActivityKind::VoiceSessionStarted, "Voice session started"),
+    );
+    // Warm the Agent Brain while the user speaks (it is released after the
+    // usual idle period once the session ends).
+    let _ = app.state::<Runtime>().with_service(|s| s.prepare_brain());
+    let started = open_microphone(app, Opener::User);
+    if !matches!(started, Ok(CaptureStart::Started)) {
+        end_session(app, SessionEndReason::Failed);
+    }
+    started
+}
+
+/// The Stop button.
+pub fn stop_session(app: &AppHandle) {
+    end_session(app, SessionEndReason::Stopped);
+    // An utterance still being recognised is dropped too.
+    cancel(app);
+}
+
+/// Ends the session (if any): the microphone closes and nothing scheduled
+/// reopens it.
+pub fn end_session(app: &AppHandle, reason: SessionEndReason) {
+    let Some(voice) = managed(app) else {
+        return;
+    };
+    let status = {
+        let Ok(mut inner) = voice.locked() else {
+            return;
+        };
+        let Some(mut session) = inner.session.take() else {
+            return;
+        };
+        inner.awaiting = None;
+        session.end(reason);
+        session.status()
+    };
+    emit_session(app, status);
+    let summary = match reason {
+        SessionEndReason::Stopped => "Voice session ended (stopped)",
+        SessionEndReason::Farewell => "Voice session ended (the user said goodbye)",
+        SessionEndReason::Timeout => "Voice session ended (no one spoke)",
+        SessionEndReason::NotHeard => "Voice session ended (nothing could be heard)",
+        SessionEndReason::MaxDuration => "Voice session ended (time limit)",
+        SessionEndReason::Dismissed => "Voice session ended (dismissed)",
+        SessionEndReason::Failed => "Voice session ended (microphone unavailable)",
+    };
+    audit(
+        app,
+        NewActivity::new(ActivityKind::VoiceSessionEnded, summary),
+    );
+    cancel_capture(app);
+}
+
+/// Leaves Transcribing without a request (a farewell, a prompt): no
+/// command runs and an open question is dropped.
+fn leave_transcribing(app: &AppHandle) {
+    let runtime = app.state::<Runtime>();
+    if let Ok(snapshot) = runtime.with_service(|s| {
+        s.cancel_voice(None, &mut |e| broadcast(app, e));
+        s.dismiss(&mut |e| broadcast(app, e));
+        s.snapshot()
+    }) {
+        schedule_settle(app, &snapshot);
+    }
+}
+
+/// After a turn: listen again once the reply has been spoken (or at once,
+/// if none is), keep waiting, or end the session.
+fn after_turn(app: &AppHandle, next: Next) {
+    match next {
+        Next::Listen => arm(app),
+        Next::Wait => {}
+        Next::End(reason) => end_session(app, reason),
+    }
+}
+
+/// Schedules "listen again": when the reply finishes, or after a short
+/// grace period if no reply starts (spoken replies may be off).
+fn arm(app: &AppHandle) {
+    let Some(voice) = managed(app) else {
+        return;
+    };
+    let token = {
+        let Ok(mut inner) = voice.locked() else {
+            return;
+        };
+        if inner.session.is_none() {
+            return;
+        }
+        inner.resume_seq += 1;
+        inner.awaiting = Some(inner.resume_seq);
+        inner.resume_seq
+    };
+    let app = app.clone();
+    let _ = thread::Builder::new()
+        .name("sershi-voice-turn".to_owned())
+        .spawn(move || {
+            thread::sleep(Duration::from_millis(REPLY_GRACE_MS));
+            let silent = managed(&app).is_some_and(|v| {
+                v.locked().is_ok_and(|i| {
+                    i.awaiting == Some(token) && i.playback.is_none() && !i.synthesizing
+                })
+            });
+            if silent {
+                resume(&app, token);
+            }
+        });
+}
+
+/// SERSHI's reply ended (or was stopped or failed): a waiting turn listens
+/// again after the echo guard.
+fn reply_finished(app: &AppHandle) {
+    let Some(token) = managed(app).and_then(|v| v.locked().ok().and_then(|i| i.awaiting)) else {
+        return;
+    };
+    let app = app.clone();
+    let _ = thread::Builder::new()
+        .name("sershi-voice-turn".to_owned())
+        .spawn(move || {
+            thread::sleep(ECHO_GUARD);
+            resume(&app, token);
+        });
+}
+
+/// Opens the microphone for the next turn, if this turn is still the one
+/// waiting and the session says so.
+fn resume(app: &AppHandle, token: u64) {
+    let Some(voice) = managed(app) else {
+        return;
+    };
+    let next = {
+        let Ok(mut inner) = voice.locked() else {
+            return;
+        };
+        if inner.awaiting != Some(token)
+            || inner.capture.is_some()
+            || inner.playback.is_some()
+            || inner.synthesizing
+        {
+            return;
+        }
+        inner.awaiting = None;
+        match inner.session.as_mut() {
+            Some(session) => session.reply_done(wall_ms()),
+            None => return,
+        }
+    };
+    match next {
+        Next::Listen => {
+            if !matches!(
+                open_microphone(app, Opener::Session),
+                Ok(CaptureStart::Started)
+            ) {
+                end_session(app, SessionEndReason::Failed);
+            }
+        }
+        Next::Wait => {}
+        Next::End(reason) => end_session(app, reason),
+    }
+}
+
+/// A typed request finished during a voice session: the session follows it
+/// (one conversation for both modalities) and listens again.
+pub fn after_typed(app: &AppHandle, outcome: &CommandOutcome) {
+    if with_session(app, |s| s.answered(outcome)).is_some() {
+        arm(app);
+    }
+}
+
+/// The trusted confirmation window decided (or the approval expired or was
+/// cancelled). If nothing else is waiting for approval, the session
+/// listens again.
+pub fn confirmation_resolved(app: &AppHandle) {
+    let pending = app
+        .state::<Runtime>()
+        .with_service(|s| s.pending_confirmation().is_some())
+        .unwrap_or(false);
+    if pending {
+        return;
+    }
+    if let Some(next) = with_session(app, VoiceSession::confirmation_resolved) {
+        after_turn(app, next);
+    }
+}
+
+/// Follows the assistant's working states in the session indicator. Never
+/// blocks: called while the core is locked, so it skips if voice is busy.
+pub fn observe(app: &AppHandle, state: AssistantState) {
+    let Some(voice) = managed(app) else {
+        return;
+    };
+    let changed = {
+        let Ok(mut inner) = voice.inner.try_lock() else {
+            return;
+        };
+        let Some(session) = inner.session.as_mut() else {
+            return;
+        };
+        let before = session.status();
+        session.working(state);
+        let after = session.status();
+        (after != before).then_some(after)
+    };
+    if let Some(status) = changed {
+        emit_session(app, status);
     }
 }

@@ -2,11 +2,15 @@
 import type { AnswerTopic } from "./AnswerTopic";
 import type { ApplicationSummary } from "./ApplicationSummary";
 import type { Clarification } from "./Clarification";
+import type { ConfigurablePermission } from "./ConfigurablePermission";
 import type { DenialReason } from "./DenialReason";
+import type { PermissionSetting } from "./PermissionSetting";
+import type { RecallItem } from "./RecallItem";
+import type { RecallKind } from "./RecallKind";
 import type { RejectionReason } from "./RejectionReason";
 
 /**
  * Structured facts behind a reply, so each surface can phrase it in the
  * user's interface language instead of relaying the English `reply`.
  */
-export type OutcomeDetail = { "kind": "answer", topic: AnswerTopic, } | { "kind": "unavailable", capability: string, milestone: string, } | { "kind": "denied", reason: DenialReason, } | { "kind": "rejected", reason: RejectionReason, maxChars: number, } | { "kind": "clarification", clarification: Clarification, } | { "kind": "brainAnswer", message: string, } | { "kind": "brainQuestion", message: string, options: Array<ApplicationSummary>, } | { "kind": "planTooLong", maxSteps: number, };
+export type OutcomeDetail = { "kind": "answer", topic: AnswerTopic, } | { "kind": "unavailable", capability: string, milestone: string, } | { "kind": "denied", reason: DenialReason, } | { "kind": "rejected", reason: RejectionReason, maxChars: number, } | { "kind": "clarification", clarification: Clarification, } | { "kind": "brainAnswer", message: string, } | { "kind": "brainQuestion", message: string, options: Array<ApplicationSummary>, } | { "kind": "planTooLong", maxSteps: number, } | { "kind": "recall", recall: RecallKind, items: Array<RecallItem>, } | { "kind": "permission", permission: ConfigurablePermission, setting: PermissionSetting, applied: boolean, };

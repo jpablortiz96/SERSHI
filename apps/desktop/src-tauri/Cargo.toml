@@ -26,6 +26,7 @@ vulkan = ["sershi-platform/vulkan"]
 sershi-core.workspace = true
 sershi-platform.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2.4"
 tauri-plugin-single-instance = "2.5"
