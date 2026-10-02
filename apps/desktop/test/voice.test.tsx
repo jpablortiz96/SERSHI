@@ -110,6 +110,8 @@ const outcome: CommandOutcome = {
   durationMs: 120,
   understood: null,
   understanding: null,
+  plan: null,
+  brain: null,
 };
 
 beforeEach(() => {

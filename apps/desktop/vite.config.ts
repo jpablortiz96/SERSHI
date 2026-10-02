@@ -28,6 +28,10 @@ export default defineConfig({
   test: {
     name: "desktop",
     environment: "jsdom",
+    // Whole-surface tests (Settings rendered in three languages) take about
+    // 0.5 s alone but can exceed the 5 s default when every file runs in
+    // parallel on a busy machine.
+    testTimeout: 15_000,
     include: ["test/**/*.test.{ts,tsx}"],
     setupFiles: ["test/setup.ts"],
   },

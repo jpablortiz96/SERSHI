@@ -183,3 +183,40 @@
   font-size: var(--type-caption-size);
   color: var(--text-tertiary);
 }
+
+/* Prompt 4: a bounded plan and its steps. */
+.plan {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--type-caption-size);
+  color: var(--text-secondary);
+}
+
+.planStep {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.planStep[data-status="completed"] {
+  color: var(--text-primary);
+}
+
+.planMark {
+  inline-size: 1.25em;
+  text-align: center;
+}
+
+.srOnly {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

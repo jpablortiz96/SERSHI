@@ -8,7 +8,7 @@
  * phrased at render time in the current interface language and re-render
  * when the user switches language.
  */
-import type { CommandOutcome, VoiceFailure } from "@sershi/contracts";
+import type { CommandOutcome, PlanReport, VoiceFailure } from "@sershi/contracts";
 import { create } from "zustand";
 
 import { loadPreferences } from "../i18n/preferences";
@@ -46,12 +46,18 @@ export type Message =
 interface ConversationStore {
   messages: Message[];
   pending: boolean;
+  /** A plan still running (live progress), until its outcome arrives. */
+  livePlan: PlanReport | null;
   submit: (text: string) => Promise<void>;
   /** Adds a reply that did not come from `submit` (a decision on the confirmation surface). */
   addReply: (reply: Reply) => void;
   /** Shows what SERSHI heard; the core has already submitted it. */
   addHeard: (text: string, firstHeard?: string | null) => void;
   clear: () => void;
+  /** Starts a new conversation: the core forgets the session context too. */
+  newConversation: () => void;
+  /** A plan's progress (display only). */
+  followPlan: (report: PlanReport) => void;
 }
 
 /** Messages kept in view; older ones are dropped from memory. */
@@ -71,10 +77,25 @@ export const useConversation = create<ConversationStore>((set, get) => {
   return {
     messages: [],
     pending: false,
+    livePlan: null,
     clear: () => {
-      set({ messages: [] });
+      set({ messages: [], livePlan: null });
+    },
+    newConversation: () => {
+      set({ messages: [], livePlan: null });
+      if (desktopRuntime) sershi.resetConversation().catch(() => undefined);
+    },
+    followPlan: (report) => {
+      set({ livePlan: report.done ? null : report });
     },
     addReply: (reply) => {
+      // A plan that continues after an approval reports its progress; only
+      // its final outcome becomes a message.
+      if (reply.kind === "outcome" && reply.outcome.plan && !reply.outcome.plan.done) {
+        set({ livePlan: reply.outcome.plan });
+        return;
+      }
+      if (reply.kind === "outcome" && reply.outcome.plan) set({ livePlan: null });
       push({ role: "sershi", reply });
     },
     addHeard: (text, firstHeard = null) => {
@@ -99,6 +120,7 @@ export const useConversation = create<ConversationStore>((set, get) => {
         // one needs approval, the core opens the confirmation window; this
         // surface only learns that approval is pending.
         const outcome = await sershi.submitCommand(text);
+        set({ livePlan: null });
         push({ role: "sershi", reply: { kind: "outcome", outcome } });
         useUnderstanding.getState().observe(outcome, text);
         if (loadPreferences().speakTypedResponses) {

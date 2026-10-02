@@ -46,7 +46,7 @@ export default tseslint.config(
     rules: { "no-restricted-imports": "off" },
   },
   {
-    files: ["**/*.config.{js,ts}", "scripts/**"],
+    files: ["**/*.config.{js,ts}", "scripts/**", "**/scripts/**/*.mjs"],
     languageOptions: { globals: { ...globals.node } },
     ...tseslint.configs.disableTypeChecked,
   },

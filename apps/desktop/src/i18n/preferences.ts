@@ -76,6 +76,11 @@ export interface Preferences {
    * is installed (on by default). The model only interprets requests.
    */
   naturalUnderstanding: boolean;
+  /**
+   * The local Agent Brain (Prompt 4), once installed (on by default). It
+   * proposes; SERSHI's rules decide.
+   */
+  localBrain: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -95,6 +100,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   speechProfile: "fast",
   endpointMs: null,
   naturalUnderstanding: true,
+  localBrain: true,
 };
 
 /** Clamps a volume to 0–100; anything else becomes the default. */
@@ -185,6 +191,7 @@ export function parsePreferences(raw: string | null): Preferences {
       naturalUnderstanding: !(
         "naturalUnderstanding" in value && value.naturalUnderstanding === false
       ),
+      localBrain: !("localBrain" in value && value.localBrain === false),
     };
   } catch {
     return DEFAULT_PREFERENCES;

@@ -14,5 +14,13 @@
     "semantic": "notNeeded",
     "semanticMs": null,
     "understandingMs": 0.0
+  },
+  "plan": null,
+  "brain": {
+    "route": "fastPath",
+    "brain": "notInstalled",
+    "modelMs": null,
+    "promptVersion": 1,
+    "steps": 0
   }
 }

@@ -1,0 +1,68 @@
+{
+  "status": "completed",
+  "reply": "Plan finished: 3 of 3 steps done.",
+  "detail": null,
+  "toolId": null,
+  "data": null,
+  "durationMs": null,
+  "understood": null,
+  "understanding": null,
+  "plan": {
+    "id": 1,
+    "steps": [
+      {
+        "action": "open",
+        "application": {
+          "id": "spotify",
+          "displayName": "Spotify",
+          "source": "packagedApp"
+        },
+        "status": "completed",
+        "data": {
+          "application": {
+            "displayName": "Spotify",
+            "id": "spotify",
+            "source": "packagedApp"
+          },
+          "kind": "opened",
+          "matched": "exact"
+        }
+      },
+      {
+        "action": "open",
+        "application": {
+          "id": "google-chrome",
+          "displayName": "Google Chrome",
+          "source": "startMenu"
+        },
+        "status": "completed",
+        "data": {
+          "application": {
+            "displayName": "Google Chrome",
+            "id": "google-chrome",
+            "source": "startMenu"
+          },
+          "kind": "opened",
+          "matched": "exact"
+        }
+      },
+      {
+        "action": "memory",
+        "application": null,
+        "status": "completed",
+        "data": {
+          "totalBytes": 34359738368,
+          "usedBytes": 12884901888
+        }
+      }
+    ],
+    "done": true
+  },
+  "brain": {
+    "route": "agentBrain",
+    "brain": "deterministic",
+    "modelMs": null,
+    "promptVersion": 1,
+    "steps": 3
+  }
+}

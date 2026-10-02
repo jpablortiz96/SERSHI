@@ -5,4 +5,4 @@
  * user's interface language; [`AnswerTopic::canonical_text`] is the English
  * fallback carried in `CommandOutcome::reply`.
  */
-export type AnswerTopic = "greeting" | "help" | "noAction";
+export type AnswerTopic = "greeting" | "help" | "noAction" | "noCommands";

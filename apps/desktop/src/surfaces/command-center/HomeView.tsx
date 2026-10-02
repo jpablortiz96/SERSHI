@@ -22,7 +22,7 @@ const SUGGESTIONS = [
 export function HomeView({ onViewActivity }: { onViewActivity: () => void }) {
   const state = useDisplayState();
   const revision = useAssistantStore((s) => s.snapshot.revision);
-  const { messages, submit } = useConversation();
+  const { messages, submit, newConversation, livePlan } = useConversation();
   const conversing = messages.length > 0;
   const { t } = useI18n();
   const coreSlot = useRef<HTMLDivElement>(null);
@@ -68,8 +68,15 @@ export function HomeView({ onViewActivity }: { onViewActivity: () => void }) {
         </div>
 
         <div className={styles.dialogue}>
+          {conversing && (
+            <div className={styles.conversationBar}>
+              <button type="button" className={styles.newConversation} onClick={newConversation}>
+                {t("home.newConversation")}
+              </button>
+            </div>
+          )}
           {conversing ? (
-            <Transcript messages={messages} />
+            <Transcript messages={messages} livePlan={livePlan} />
           ) : (
             <div className={styles.welcome}>
               <h1 className={styles.greeting}>{t("home.greeting")}</h1>

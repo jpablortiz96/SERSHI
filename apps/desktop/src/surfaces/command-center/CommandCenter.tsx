@@ -40,6 +40,10 @@ export function CommandCenter() {
     const stopOutcomes = sershi.onCommandOutcome((outcome) => {
       useConversation.getState().addReply({ kind: "outcome", outcome });
     });
+    // A plan's progress, step by step (display only).
+    const stopPlans = sershi.onPlan((report) => {
+      useConversation.getState().followPlan(report);
+    });
     // Summon (companion, tray, shortcut) always lands on the command input.
     const stopFocus = sershi.onFocusCommand(() => {
       setView("home");
@@ -53,6 +57,7 @@ export function CommandCenter() {
       disconnectUnderstanding();
       stopFocus();
       stopOutcomes();
+      stopPlans();
     };
   }, []);
 

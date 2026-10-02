@@ -48,6 +48,8 @@ const notUnderstood: CommandOutcome = {
   durationMs: null,
   understood: null,
   understanding: null,
+  plan: null,
+  brain: null,
 };
 
 beforeEach(() => {

@@ -2,10 +2,13 @@ import type { CommandStatus } from "@sershi/contracts";
 import { useEffect, useRef } from "react";
 
 import { useI18n, type I18n } from "../../i18n";
+import type { PlanReport } from "@sershi/contracts";
+
 import {
   applicationName,
   asApplicationResult,
   composeReply,
+  stepLabel,
   understoodAction,
 } from "../../i18n/domain";
 import { useConversation, type Message, type Reply } from "../../state/conversation";
@@ -16,6 +19,7 @@ import styles from "./Transcript.module.css";
 type Status = CommandStatus | "offline" | "voice";
 
 const STATUS_WITH_LABEL = [
+  "partial",
   "needsClarification",
   "unavailable",
   "notUnderstood",
@@ -74,6 +78,21 @@ function Candidates({ reply, latest }: { reply: Reply; latest: boolean }) {
   const submit = useConversation((s) => s.submit);
   if (reply.kind !== "outcome") return null;
   const detail = reply.outcome.detail;
+  // The Agent Brain's question: its options are trusted applications.
+  if (detail?.kind === "brainQuestion" && detail.options.length > 0) {
+    if (!latest) return null;
+    return (
+      <ul className={styles.candidates}>
+        {detail.options.map((app) => (
+          <li key={app.id}>
+            <button type="button" onClick={() => void submit(app.displayName)}>
+              {applicationName(t, app)}
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  }
   if (detail?.kind === "clarification") {
     // Only the latest question can still be answered.
     if (!latest) return null;
@@ -130,8 +149,47 @@ function Candidates({ reply, latest }: { reply: Reply; latest: boolean }) {
   );
 }
 
+const STEP_MARK: Record<string, string> = {
+  pending: "○",
+  running: "◌",
+  completed: "✓",
+  needsConfirmation: "…",
+  unresolved: "!",
+  failed: "✕",
+  skipped: "–",
+  cancelled: "–",
+};
+
+/** A bounded plan and each step's state (no hidden reasoning, no ids). */
+export function PlanCard({ plan, live = false }: { plan: PlanReport; live?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <ol
+      className={styles.plan}
+      aria-label={live ? t("plan.liveLabel") : t("plan.label")}
+      data-live={live || undefined}
+    >
+      {plan.steps.map((step, i) => (
+        <li key={i} className={styles.planStep} data-status={step.status}>
+          <span className={styles.planMark} aria-hidden="true">
+            {STEP_MARK[step.status]}
+          </span>
+          <span>{stepLabel(t, step)}</span>
+          <span className={styles.srOnly}>{t(`plan.status.${step.status}`)}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /** The session conversation. SERSHI's replies are announced to screen readers. */
-export function Transcript({ messages }: { messages: Message[] }) {
+export function Transcript({
+  messages,
+  livePlan = null,
+}: {
+  messages: Message[];
+  livePlan?: PlanReport | null;
+}) {
   const end = useRef<HTMLDivElement>(null);
   const i18n = useI18n();
   const { t, format } = i18n;
@@ -139,7 +197,7 @@ export function Transcript({ messages }: { messages: Message[] }) {
   useEffect(() => {
     const reduce = motionReduced();
     end.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
-  }, [messages.length]);
+  }, [messages.length, livePlan]);
 
   return (
     <div className={styles.scroller}>
@@ -173,6 +231,7 @@ export function Transcript({ messages }: { messages: Message[] }) {
                   <strong>{understoodAction(t, outcome.understood)}</strong>
                 </p>
               )}
+              {outcome?.plan && <PlanCard plan={outcome.plan} />}
               <p className={styles.reply}>{replyText(i18n, m.reply)}</p>
               <Candidates reply={m.reply} latest={index === messages.length - 1} />
               <p className={styles.meta}>
@@ -185,6 +244,11 @@ export function Transcript({ messages }: { messages: Message[] }) {
             </li>
           );
         })}
+        {livePlan && (
+          <li className={styles.message} data-role="sershi" data-status="running">
+            <PlanCard plan={livePlan} live />
+          </li>
+        )}
       </ol>
       <div ref={end} />
     </div>

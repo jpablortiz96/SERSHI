@@ -11,6 +11,9 @@ import type {
   CapabilityStatus,
   Clarification,
   CommandOutcome,
+  PlanReport,
+  PlanStepReport,
+  StepAction,
   UnderstoodAs,
   Platform,
   PlatformCapability,
@@ -153,6 +156,12 @@ function describeEvent(t: Translate, entry: ActivityEntry): string {
       return t("activity.events.clarificationExpired");
     case "commandInterpreted":
       return t("activity.events.commandInterpreted");
+    case "planStarted":
+      return t("activity.events.planStarted");
+    case "planFinished":
+      return t("activity.events.planFinished");
+    case "planCancelled":
+      return t("activity.events.planCancelled");
   }
 }
 
@@ -163,9 +172,18 @@ const str = (o: Json, k: string) => (typeof o[k] === "string" ? o[k] : undefined
 
 /** Phrases a tool result from its structured data, or returns null if the shape is unknown. */
 function completedReply(t: Translate, f: Formatters, outcome: CommandOutcome): string | null {
-  const data = outcome.data;
+  return systemReply(t, f, outcome.toolId, outcome.data);
+}
+
+/** Phrases a system tool's structured result (memory, CPU, system). */
+function systemReply(
+  t: Translate,
+  f: Formatters,
+  toolId: string | null,
+  data: unknown,
+): string | null {
   if (!isObj(data)) return null;
-  switch (outcome.toolId) {
+  switch (toolId) {
     case "system.get_memory": {
       const total = num(data, "totalBytes");
       const used = num(data, "usedBytes");
@@ -285,6 +303,67 @@ export function understoodAction(t: Translate, understood: UnderstoodAs): string
     : t("reply.understood.close", { app });
 }
 
+/** What one plan step does, as a short label ("Abrir Google Chrome"). */
+export function stepLabel(
+  t: Translate,
+  step: Pick<PlanStepReport, "action" | "application">,
+): string {
+  const app = step.application ? applicationName(t, step.application) : "";
+  const key: Record<StepAction, string> = {
+    open: "plan.step.open",
+    close: "plan.step.close",
+    memory: "plan.step.memory",
+    cpu: "plan.step.cpu",
+    systemInfo: "plan.step.systemInfo",
+  };
+  return t(key[step.action] as "plan.step.open", { app });
+}
+
+/**
+ * A plan's result, phrased from each step's trusted data: what happened,
+ * never what a model said would happen ("Abrí Chrome, pero no pude abrir
+ * Outlook. Estás usando 19,8 GB de 31,7 GB.").
+ */
+export function planReply(t: Translate, f: Formatters, plan: PlanReport): string {
+  const sentences: string[] = [];
+  for (const step of plan.steps) {
+    const app = step.application ? applicationName(t, step.application) : "";
+    switch (step.status) {
+      case "completed": {
+        if (step.action === "open") sentences.push(t("plan.done.open", { app }));
+        else if (step.action === "close") sentences.push(t("plan.done.close", { app }));
+        else {
+          const tool = {
+            memory: "system.get_memory",
+            cpu: "system.get_cpu",
+            systemInfo: "system.get_info",
+          }[step.action];
+          const phrased = systemReply(t, f, tool, step.data);
+          if (phrased) sentences.push(phrased);
+        }
+        break;
+      }
+      case "needsConfirmation":
+        sentences.push(t("plan.waiting", { step: stepLabel(t, step) }));
+        break;
+      case "failed":
+      case "unresolved":
+        sentences.push(t("plan.failed", { step: stepLabel(t, step) }));
+        break;
+      case "skipped":
+        sentences.push(t("plan.skipped", { step: stepLabel(t, step) }));
+        break;
+      case "cancelled":
+        if (!sentences.includes(t("plan.cancelled"))) sentences.push(t("plan.cancelled"));
+        break;
+      case "pending":
+      case "running":
+        break;
+    }
+  }
+  return sentences.join(" ");
+}
+
 /**
  * Renders a command outcome in the interface language. Falls back to the
  * core's canonical English `reply` for anything it cannot phrase (e.g. a tool
@@ -294,7 +373,15 @@ export function composeReply(t: Translate, f: Formatters, outcome: CommandOutcom
   const tool = toolName(t, outcome.toolId);
   const detail = outcome.detail;
   const app = asApplicationResult(outcome.data);
+  // A plan (finished, waiting for a step's approval, or cancelled) is
+  // phrased from its steps.
+  if (outcome.plan) return planReply(t, f, outcome.plan) || outcome.reply;
+  // The Agent Brain's own words, in the interface language.
+  if (detail?.kind === "brainAnswer" || detail?.kind === "brainQuestion") return detail.message;
+  if (detail?.kind === "planTooLong") return t("plan.tooLong", { max: f.integer(detail.maxSteps) });
   switch (outcome.status) {
+    case "partial":
+      return outcome.reply;
     case "completed":
       if (app) return applicationReply(t, app);
       return completedReply(t, f, outcome) ?? outcome.reply;

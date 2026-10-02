@@ -61,6 +61,7 @@ export const enUS = {
 
   home: {
     greeting: "How can I help?",
+    newConversation: "New conversation",
     suggestionsLabel: "Suggestions",
     suggestions: {
       memory: "How much memory am I using?",
@@ -90,11 +91,43 @@ export const enUS = {
     hintDismiss: "dismiss",
   },
 
+  plan: {
+    label: "Plan",
+    liveLabel: "Plan in progress",
+    step: {
+      open: "Open {app}",
+      close: "Close {app}",
+      memory: "Check memory",
+      cpu: "Check the processor",
+      systemInfo: "Check this computer",
+    },
+    done: {
+      open: "Opened {app}.",
+      close: "Asked {app} to close.",
+    },
+    waiting: "“{step}” is waiting for your approval in the confirmation window.",
+    failed: "I couldn't do “{step}”.",
+    skipped: "I skipped “{step}” because an earlier step didn't work.",
+    cancelled: "I stopped the rest of the plan.",
+    tooLong: "That's more than {max} steps at once. Please ask in smaller parts.",
+    status: {
+      pending: "pending",
+      running: "in progress",
+      completed: "done",
+      needsConfirmation: "waiting for approval",
+      unresolved: "couldn't be done",
+      failed: "failed",
+      skipped: "skipped",
+      cancelled: "cancelled",
+    },
+  },
+
   transcript: {
     youSaid: "You said",
     heardAgain: "Recognized again",
     firstHeard: "First heard as “{text}”, in an unexpected language.",
     status: {
+      partial: "Partly done",
       needsClarification: "Question",
       unavailable: "Not available yet",
       notUnderstood: "Not understood",
@@ -129,6 +162,8 @@ export const enUS = {
     notUnderstood:
       "I didn't understand that. Try, for example, “Open Chrome” or “How much memory am I using?”",
     answer: {
+      noCommands:
+        "I can't run commands, scripts or programs by path. I can open installed applications and check memory and the processor.",
       noAction: "OK — I won't do anything.",
       greeting:
         "Hello. I'm SERSHI. I can tell you about this computer's system, memory and processor. Language understanding arrives once an AI provider is connected.",
@@ -218,6 +253,7 @@ export const enUS = {
       cancel: "Cancel",
       ready: "Speech model installed. Press the microphone to talk.",
       error: {
+        diskFull: "There isn't enough free disk space for this model.",
         network: "The download failed. Check your connection and try again.",
         integrity: "The download didn't match the expected checksum, so it was deleted. Try again.",
         storage: "The model couldn't be saved. Check your free disk space.",
@@ -288,6 +324,9 @@ export const enUS = {
       clarificationCancelled: "Question cancelled",
       clarificationExpired: "Question expired unanswered",
       commandInterpreted: "Understood an imperfect request",
+      planStarted: "Started a plan",
+      planFinished: "Finished a plan",
+      planCancelled: "Stopped a plan",
     },
   },
 
@@ -299,7 +338,7 @@ export const enUS = {
       appearance: "Appearance",
       windows: "Windows integration",
       voice: "Voice",
-      understanding: "Natural understanding",
+      understanding: "Intelligence",
       privacy: "Privacy",
       tools: "Tools & permissions",
       platform: "Platform",
@@ -444,8 +483,22 @@ export const enUS = {
       unsupported: "Voice is available in the Windows desktop app.",
     },
     understanding: {
-      lede: "SERSHI understands commands in your own words and asks when it isn't sure. Everything stays on this computer.",
-      model: "Local language model (optional)",
+      lede: "SERSHI understands commands in your own words, follows the conversation and can do a few things in one request. Everything stays on this computer.",
+      brain: {
+        title: "Agent Brain (optional)",
+        detail:
+          "A local language model for conversation, follow-ups such as “close it”, and requests with several steps.",
+        enabled: "Use the Agent Brain",
+        enabledDetail:
+          "While it is on, it also covers unusual phrasing, so the smaller understanding model is not loaded.",
+      },
+      semantic: {
+        title: "Understanding model (optional)",
+        detail: "A smaller local model for short commands with unusual phrasing or misheard names.",
+        enabled: "Use the understanding model",
+        enabledDetail:
+          "Without it, SERSHI still understands common commands, similar names and your answers to its questions.",
+      },
       modelMeta: "{name} · {quantization} · {size} · {license}",
       memoryGpu: "While in use: about {ram} of memory and {vram} of video memory.",
       memoryCpu: "While in use: about {ram} of memory.",
@@ -454,18 +507,19 @@ export const enUS = {
       corrupt: "Damaged",
       download: "Download ({size})",
       redownload: "Download again",
-      enabled: "Use the local model",
-      enabledDetail:
-        "Helps with unusual phrasing and misheard names. Without it, SERSHI still understands common commands, similar names and your answers to its questions.",
+      noSpace: "Not enough free disk space for this model.",
+      brainCpuNote:
+        "Without a GPU on this computer, the Agent Brain takes several seconds per answer. Basic commands stay instant.",
+      standby: "Not loaded while the Agent Brain is on.",
       runtime: "Status",
       runtimeDetail: "Loads when a request needs it and is released after 5 minutes without use.",
       loaded: "Loaded · {backend}",
       notLoaded: "Not loaded",
       backendGpu: "GPU",
       backendCpu: "Processor",
-      unavailable: "The local language model isn't available on this computer.",
+      unavailable: "Local language models aren't available on this computer.",
       footnote:
-        "The model only interprets what you say. It can't run anything, see approvals or change settings: SERSHI's rules still decide, and sensitive actions still need your approval in the confirmation window.",
+        "The models only interpret and propose. They can't run anything by themselves, see approvals or change settings: SERSHI's rules decide every step, and sensitive actions always need your approval in the confirmation window — one approval per action.",
     },
     windows: {
       appControl: "Application control",
@@ -549,6 +603,23 @@ export const enUS = {
         footnote:
           "How the last request was understood. Kept in memory only, never stored. Developer builds only.",
         empty: "Send a command to see how it was understood.",
+        route: "Route",
+        routes: {
+          fastPath: "Fast path",
+          semanticRouter: "Understanding model",
+          agentBrain: "Agent Brain",
+        },
+        brain: "Agent Brain",
+        brainUse: {
+          deterministic: "Context and plan rules (no model)",
+          model: "Local model",
+          notInstalled: "Not installed",
+          failed: "Failed (fell back)",
+          rejected: "Output rejected",
+        },
+        brainTime: "Agent Brain time",
+        planSteps: "Plan steps",
+        promptVersion: "Instruction version",
         raw: "Text",
         normalized: "Normalized",
         tier: "Resolved by",

@@ -17,6 +17,7 @@ import type { VoiceLevel } from "./generated/VoiceLevel";
 import type { VoiceStatus } from "./generated/VoiceStatus";
 import type { VoiceUpdate } from "./generated/VoiceUpdate";
 import type { SemanticStatus } from "./generated/SemanticStatus";
+import type { PlanReport } from "./generated/PlanReport";
 
 /** Mirrors `AssistantState::ALL` in Rust. */
 export const ASSISTANT_STATES = [
@@ -129,11 +130,55 @@ export function isCommandOutcome(v: unknown): v is CommandOutcome {
       return false;
     }
   }
+  // The Agent Brain's question offers trusted applications only.
+  if (isObj(detail) && detail.kind === "brainQuestion") {
+    if (
+      !isStr(detail.message) ||
+      !Array.isArray(detail.options) ||
+      !detail.options.every(isApplicationSummary)
+    ) {
+      return false;
+    }
+  }
+  if (isObj(detail) && detail.kind === "brainAnswer" && !isStr(detail.message)) return false;
   const understood = v.understood;
   if (understood != null && (!isObj(understood) || !isApplicationSummary(understood.application))) {
     return false;
   }
+  if (v.plan != null && !isPlanReport(v.plan)) return false;
   return true;
+}
+
+const STEP_ACTIONS = ["open", "close", "memory", "cpu", "systemInfo"];
+const STEP_STATUSES = [
+  "pending",
+  "running",
+  "completed",
+  "needsConfirmation",
+  "unresolved",
+  "failed",
+  "skipped",
+  "cancelled",
+];
+
+/** A plan and its progress: bounded, trusted applications only. */
+export function isPlanReport(v: unknown): v is PlanReport {
+  return (
+    isObj(v) &&
+    isNum(v.id) &&
+    typeof v.done === "boolean" &&
+    Array.isArray(v.steps) &&
+    v.steps.length <= 5 &&
+    v.steps.every(
+      (s) =>
+        isObj(s) &&
+        isStr(s.action) &&
+        STEP_ACTIONS.includes(s.action) &&
+        isStr(s.status) &&
+        STEP_STATUSES.includes(s.status) &&
+        (s.application === null || isApplicationSummary(s.application)),
+    )
+  );
 }
 
 export function isSemanticStatus(v: unknown): v is SemanticStatus {

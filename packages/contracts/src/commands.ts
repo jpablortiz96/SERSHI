@@ -9,6 +9,7 @@ import type { ConfirmationDecision } from "./generated/ConfirmationDecision";
 import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { IntegrationStatus } from "./generated/IntegrationStatus";
 import type { ModelProgress } from "./generated/ModelProgress";
+import type { PlanReport } from "./generated/PlanReport";
 import type { PresenceUpdate } from "./generated/PresenceUpdate";
 import type { RuntimeInfo } from "./generated/RuntimeInfo";
 import type { SemanticSettings } from "./generated/SemanticSettings";
@@ -69,6 +70,14 @@ export interface CommandMap {
   configure_semantic: { args: { settings: SemanticSettings }; result: SemanticStatus };
   download_semantic_model: { args: NoArgs; result: null };
   cancel_semantic_model_download: { args: NoArgs; result: null };
+  // The local Agent Brain (Command Center only). It decides and proposes;
+  // nothing here can run a tool or approve anything.
+  get_brain_status: { args: NoArgs; result: SemanticStatus };
+  configure_brain: { args: { settings: SemanticSettings }; result: SemanticStatus };
+  download_brain_model: { args: NoArgs; result: null };
+  cancel_brain_model_download: { args: NoArgs; result: null };
+  /** Forgets the session context (not preferences). Grants nothing. */
+  reset_conversation: { args: NoArgs; result: null };
 }
 
 export type CommandName = keyof CommandMap;
@@ -104,6 +113,11 @@ export const COMMAND_NAMES = [
   "configure_semantic",
   "download_semantic_model",
   "cancel_semantic_model_download",
+  "get_brain_status",
+  "configure_brain",
+  "download_brain_model",
+  "cancel_brain_model_download",
+  "reset_conversation",
 ] as const satisfies readonly CommandName[];
 
 /** Events broadcast by the core to every window. */
@@ -127,6 +141,10 @@ export const EVENTS = {
   voiceModel: "sershi://voice-model",
   /** Main window only: semantic-model download progress. */
   semanticModel: "sershi://semantic-model",
+  /** Main window only: Agent Brain model download progress. */
+  brainModel: "sershi://brain-model",
+  /** Main window only: a plan's progress after each step. */
+  plan: "sershi://plan",
 } as const;
 
 export interface EventMap {
@@ -139,6 +157,8 @@ export interface EventMap {
   [EVENTS.voiceLevel]: VoiceLevel;
   [EVENTS.voiceModel]: ModelProgress;
   [EVENTS.semanticModel]: ModelProgress;
+  [EVENTS.brainModel]: ModelProgress;
+  [EVENTS.plan]: PlanReport;
 }
 
 export type EventName = keyof EventMap;

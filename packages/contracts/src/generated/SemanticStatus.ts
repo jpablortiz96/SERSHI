@@ -17,4 +17,14 @@ running: boolean,
 /**
  * "vulkan" or "cpu" once loaded.
  */
-backend: string | null, device: string | null, loadMs: number | null, lastMs: number | null, };
+backend: string | null, device: string | null, loadMs: number | null, lastMs: number | null, 
+/**
+ * The model's volume has room for it plus a safety margin (a download
+ * is refused otherwise).
+ */
+freeSpaceOk: boolean, 
+/**
+ * Not loaded because another local model covers its role (the
+ * semantic router while the Agent Brain is active).
+ */
+standby: boolean, };

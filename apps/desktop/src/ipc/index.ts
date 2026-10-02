@@ -6,6 +6,7 @@ import {
   isCommandOutcome,
   isModelProgress,
   isNullPayload,
+  isPlanReport,
   isPresenceUpdate,
   isSemanticStatus,
   isShortcutChange,
@@ -18,6 +19,7 @@ import {
   type AssistantState,
   type CommandOutcome,
   type ModelProgress,
+  type PlanReport,
   type PresenceUpdate,
   type SemanticSettings,
   type TrayLabels,
@@ -73,6 +75,15 @@ export const sershi = {
   downloadSemanticModel: () => call("download_semantic_model", {}),
   cancelSemanticModelDownload: () => call("cancel_semantic_model_download", {}),
 
+  // The local Agent Brain: it decides and proposes, it never acts.
+  getBrainStatus: () => call("get_brain_status", {}, isSemanticStatus),
+  configureBrain: (settings: SemanticSettings) =>
+    call("configure_brain", { settings }, isSemanticStatus),
+  downloadBrainModel: () => call("download_brain_model", {}),
+  cancelBrainModelDownload: () => call("cancel_brain_model_download", {}),
+  /** Forgets the session context (not preferences). */
+  resetConversation: () => call("reset_conversation", {}),
+
   onAssistantState: (handler: (snapshot: AssistantSnapshot) => void) =>
     subscribe(EVENTS.assistantState, isAssistantSnapshot, handler),
   onActivity: (handler: (entry: ActivityEntry) => void) =>
@@ -93,4 +104,8 @@ export const sershi = {
     subscribe(EVENTS.voiceModel, isModelProgress, handler),
   onSemanticModel: (handler: (progress: ModelProgress) => void) =>
     subscribe(EVENTS.semanticModel, isModelProgress, handler),
+  onBrainModel: (handler: (progress: ModelProgress) => void) =>
+    subscribe(EVENTS.brainModel, isModelProgress, handler),
+  /** A plan's progress after each step (display only). */
+  onPlan: (handler: (report: PlanReport) => void) => subscribe(EVENTS.plan, isPlanReport, handler),
 };

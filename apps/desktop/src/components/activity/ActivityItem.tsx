@@ -38,6 +38,10 @@ export const KIND_TONE: Record<ActivityKind, Tone> = {
   clarificationCancelled: "neutral",
   clarificationExpired: "neutral",
   commandInterpreted: "signal",
+  // Prompt 4: bounded plans.
+  planStarted: "neutral",
+  planFinished: "success",
+  planCancelled: "neutral",
 };
 
 export function ActivityItem({ entry }: { entry: ActivityEntry }) {

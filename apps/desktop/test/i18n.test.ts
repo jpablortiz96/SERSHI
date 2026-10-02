@@ -65,6 +65,9 @@ describe("locale resources", () => {
           // Technical terms shown in Developer Mode.
           "settings.developer.voice.backend",
           "settings.developer.understanding.tiers.alias",
+          // "Agent Brain" is a product name (Prompt 4).
+          "settings.developer.understanding.brain",
+          "settings.developer.understanding.routes.agentBrain",
           // Punctuation-only patterns and the GPU acronym (Gate 3C).
           "reply.clarify.option",
           "settings.understanding.modelMeta",
@@ -78,7 +81,10 @@ describe("locale resources", () => {
               ]
             : []),
           // "No" is the same word in Spanish.
-          ...(locale === "es-419" ? ["settings.sections.general", "reply.clarify.no"] : []),
+          // "No" and "Plan" are the same words in Spanish.
+          ...(locale === "es-419"
+            ? ["settings.sections.general", "reply.clarify.no", "plan.label"]
+            : []),
         ].sort(),
       );
     }

@@ -63,6 +63,7 @@ export const es419: Messages = {
 
   home: {
     greeting: "¿En qué puedo ayudarte?",
+    newConversation: "Nueva conversación",
     suggestionsLabel: "Sugerencias",
     suggestions: {
       memory: "¿Cuánta memoria estoy usando?",
@@ -92,11 +93,43 @@ export const es419: Messages = {
     hintDismiss: "descartar",
   },
 
+  plan: {
+    label: "Plan",
+    liveLabel: "Plan en curso",
+    step: {
+      open: "Abrir {app}",
+      close: "Cerrar {app}",
+      memory: "Revisar la memoria",
+      cpu: "Revisar el procesador",
+      systemInfo: "Revisar esta computadora",
+    },
+    done: {
+      open: "Abrí {app}.",
+      close: "Pedí a {app} que se cierre.",
+    },
+    waiting: "«{step}» espera tu aprobación en la ventana de confirmación.",
+    failed: "No pude «{step}».",
+    skipped: "No hice «{step}» porque un paso anterior no funcionó.",
+    cancelled: "Detuve el resto del plan.",
+    tooLong: "Son más de {max} pasos a la vez. Pídelo en partes más pequeñas.",
+    status: {
+      pending: "pendiente",
+      running: "en curso",
+      completed: "hecho",
+      needsConfirmation: "espera aprobación",
+      unresolved: "no se pudo",
+      failed: "falló",
+      skipped: "omitido",
+      cancelled: "cancelado",
+    },
+  },
+
   transcript: {
     youSaid: "Dijiste",
     heardAgain: "Reconocido de nuevo",
     firstHeard: "Primero se oyó “{text}”, en un idioma inesperado.",
     status: {
+      partial: "En parte",
       needsClarification: "Pregunta",
       unavailable: "Aún no disponible",
       notUnderstood: "No entendido",
@@ -134,6 +167,8 @@ export const es419: Messages = {
     notUnderstood:
       "No entendí eso. Prueba, por ejemplo, «Abre Chrome» o «¿Cuánta memoria estoy usando?».",
     answer: {
+      noCommands:
+        "No puedo ejecutar comandos, scripts ni programas por ruta. Puedo abrir aplicaciones instaladas y revisar la memoria y el procesador.",
       noAction: "De acuerdo, no haré nada.",
       greeting:
         "Hola. Soy SERSHI. Puedo contarte sobre el sistema, la memoria y el procesador de esta computadora. La comprensión del lenguaje llegará cuando se conecte un proveedor de IA.",
@@ -229,6 +264,7 @@ export const es419: Messages = {
       cancel: "Cancelar",
       ready: "Modelo de voz instalado. Pulsa el micrófono para hablar.",
       error: {
+        diskFull: "No hay suficiente espacio libre en disco para este modelo.",
         network: "La descarga falló. Revisa tu conexión e inténtalo de nuevo.",
         integrity:
           "La descarga no coincidió con la suma de verificación esperada, así que se eliminó. Inténtalo de nuevo.",
@@ -300,6 +336,9 @@ export const es419: Messages = {
       clarificationCancelled: "Pregunta cancelada",
       clarificationExpired: "La pregunta expiró sin respuesta",
       commandInterpreted: "Entendió una solicitud imperfecta",
+      planStarted: "Comenzó un plan",
+      planFinished: "Terminó un plan",
+      planCancelled: "Detuvo un plan",
     },
   },
 
@@ -311,7 +350,7 @@ export const es419: Messages = {
       appearance: "Apariencia",
       windows: "Integración con Windows",
       voice: "Voz",
-      understanding: "Comprensión natural",
+      understanding: "Inteligencia",
       privacy: "Privacidad",
       tools: "Herramientas y permisos",
       platform: "Plataforma",
@@ -459,8 +498,23 @@ export const es419: Messages = {
       unsupported: "La voz está disponible en la aplicación de escritorio para Windows.",
     },
     understanding: {
-      lede: "SERSHI entiende comandos dichos con tus propias palabras y pregunta cuando no está seguro. Todo se queda en esta computadora.",
-      model: "Modelo de lenguaje local (opcional)",
+      lede: "SERSHI entiende comandos con tus propias palabras, sigue la conversación y puede hacer varias cosas en una sola solicitud. Todo se queda en esta computadora.",
+      brain: {
+        title: "Agent Brain (opcional)",
+        detail:
+          "Un modelo de lenguaje local para conversar, seguir referencias como «ciérralo» y hacer solicitudes de varios pasos.",
+        enabled: "Usar el Agent Brain",
+        enabledDetail:
+          "Mientras está activo también cubre frases poco comunes, así que el modelo de comprensión más pequeño no se carga.",
+      },
+      semantic: {
+        title: "Modelo de comprensión (opcional)",
+        detail:
+          "Un modelo local más pequeño para comandos cortos con frases poco comunes o nombres mal escuchados.",
+        enabled: "Usar el modelo de comprensión",
+        enabledDetail:
+          "Sin él, SERSHI igual entiende comandos comunes, nombres parecidos y tus respuestas a sus preguntas.",
+      },
       modelMeta: "{name} · {quantization} · {size} · {license}",
       memoryGpu: "Mientras se usa: unos {ram} de memoria y {vram} de memoria de video.",
       memoryCpu: "Mientras se usa: unos {ram} de memoria.",
@@ -469,9 +523,10 @@ export const es419: Messages = {
       corrupt: "Dañado",
       download: "Descargar ({size})",
       redownload: "Descargar de nuevo",
-      enabled: "Usar el modelo local",
-      enabledDetail:
-        "Ayuda con frases poco comunes y nombres mal escuchados. Sin él, SERSHI igual entiende comandos comunes, nombres parecidos y tus respuestas a sus preguntas.",
+      noSpace: "No hay suficiente espacio libre en disco para este modelo.",
+      brainCpuNote:
+        "Sin GPU en esta computadora, el Agent Brain tarda varios segundos por respuesta. Los comandos básicos siguen siendo inmediatos.",
+      standby: "No se carga mientras el Agent Brain está activo.",
       runtime: "Estado",
       runtimeDetail:
         "Se carga cuando una solicitud lo necesita y se libera tras 5 minutos sin uso.",
@@ -479,9 +534,9 @@ export const es419: Messages = {
       notLoaded: "No cargado",
       backendGpu: "GPU",
       backendCpu: "Procesador",
-      unavailable: "El modelo de lenguaje local no está disponible en esta computadora.",
+      unavailable: "Los modelos de lenguaje locales no están disponibles en esta computadora.",
       footnote:
-        "El modelo solo interpreta lo que dices. No puede ejecutar nada, ver aprobaciones ni cambiar ajustes: las reglas de SERSHI siguen decidiendo, y las acciones sensibles siguen necesitando tu aprobación en la ventana de confirmación.",
+        "Los modelos solo interpretan y proponen. No pueden ejecutar nada por sí mismos, ver aprobaciones ni cambiar ajustes: las reglas de SERSHI deciden cada paso, y las acciones sensibles siempre necesitan tu aprobación en la ventana de confirmación — una aprobación por acción.",
     },
     windows: {
       appControl: "Control de aplicaciones",
@@ -564,6 +619,23 @@ export const es419: Messages = {
         footnote:
           "Cómo se entendió la última solicitud. Solo en memoria, nunca se guarda. Solo en compilaciones de desarrollo.",
         empty: "Envía un comando para ver cómo se entendió.",
+        route: "Ruta",
+        routes: {
+          fastPath: "Ruta rápida",
+          semanticRouter: "Modelo de comprensión",
+          agentBrain: "Agent Brain",
+        },
+        brain: "Agent Brain",
+        brainUse: {
+          deterministic: "Reglas de contexto y planes (sin modelo)",
+          model: "Modelo local",
+          notInstalled: "No instalado",
+          failed: "Falló (se usó la alternativa)",
+          rejected: "Salida rechazada",
+        },
+        brainTime: "Tiempo del Agent Brain",
+        planSteps: "Pasos del plan",
+        promptVersion: "Versión de instrucciones",
         raw: "Texto",
         normalized: "Normalizado",
         tier: "Resuelto por",

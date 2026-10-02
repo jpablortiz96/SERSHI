@@ -29,6 +29,8 @@ vi.mock("../src/ipc", async (importOriginal) => {
       configureSemantic,
       downloadSemanticModel,
       getSemanticStatus: () => Promise.resolve(semanticStatus()),
+      getBrainStatus: () => Promise.resolve(null),
+      configureBrain: () => Promise.reject(new Error("not needed")),
       stopSpeaking: () => Promise.resolve(null),
     },
   };
@@ -66,6 +68,8 @@ function semanticStatus(overrides: Partial<SemanticStatus> = {}): SemanticStatus
     device: null,
     loadMs: null,
     lastMs: null,
+    freeSpaceOk: true,
+    standby: false,
     ...overrides,
   };
 }
@@ -75,7 +79,13 @@ const outcome = (value: unknown) => value as CommandOutcome;
 beforeEach(() => {
   useLocaleStore.setState({ preference: "auto", systemLocale: "en-US", locale: "en-US" });
   useConversation.setState({ messages: [], pending: false });
-  useUnderstanding.setState({ status: null, enabled: true, error: null, last: null });
+  useUnderstanding.setState({
+    models: {
+      brain: { status: null, enabled: true, error: null },
+      semantic: { status: null, enabled: true, error: null },
+    },
+    last: null,
+  });
   submitCommand.mockClear();
   configureSemantic.mockClear();
   downloadSemanticModel.mockClear();
@@ -214,7 +224,7 @@ describe("settings", () => {
   it("offer the download with its size, and never download silently", async () => {
     render(<UnderstandingSettings />);
     await act(async () => {
-      await useUnderstanding.getState().refresh();
+      await useUnderstanding.getState().refresh("semantic");
     });
     const button = await screen.findByRole("button", { name: /Download \(1,107/ });
     expect(downloadSemanticModel).not.toHaveBeenCalled();
@@ -223,14 +233,21 @@ describe("settings", () => {
       await Promise.resolve();
     });
     expect(downloadSemanticModel).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/The model only interprets what you say/)).toBeTruthy();
+    expect(screen.getByText(/The models only interpret and propose/)).toBeTruthy();
   });
 
   it("let the user turn the installed model off, remembered locally", async () => {
     useUnderstanding.setState({
-      status: semanticStatus({
-        model: { ...semanticStatus().model, state: { kind: "installed" } },
-      }),
+      models: {
+        brain: { status: null, enabled: true, error: null },
+        semantic: {
+          status: semanticStatus({
+            model: { ...semanticStatus().model, state: { kind: "installed" } },
+          }),
+          enabled: true,
+          error: null,
+        },
+      },
     });
     render(<UnderstandingSettings />);
     await act(async () => {
