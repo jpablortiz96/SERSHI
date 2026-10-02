@@ -360,6 +360,12 @@ Details: [VOICE.md](VOICE.md).
 | Launching a malicious binary                        | Only discovered targets (Start Menu, App Paths, packages, built-ins) can launch; SERSHI trusts what the user or an installer already registered, like the Start Menu does |
 | Elevation abuse                                     | No elevation requests; `ERROR_ELEVATION_REQUIRED` is reported, never retried elevated           |
 | Data loss by closing apps                           | Sensitive + confirmation; `WM_CLOSE` only, so apps can prompt to save; no forced termination   |
+| Agent Brain proposes an unwanted action (Prompt 4)  | Grammar-constrained, strictly parsed decisions; tools only from the registry manifest, apps only from offered handles; ≤ 5 steps; each step through policy; `Agent` origin; every sensitive step needs its own trusted confirmation ([AGENT_BRAIN.md](AGENT_BRAIN.md)) |
+| One approval reused for a whole plan                | Approval covers one stored call; a plan's later sensitive step opens a new confirmation; decline or expiry cancels the rest |
+| "Yes" / "do it" over a pending approval             | The request withdraws the approval and is understood by Gate 3C only — never through context or the model, so it cannot re-create it |
+| Stale or cancelled model output acting late         | Decisions are tied to a ticket; a dismissed or replaced request's decision is discarded; plans advance only by current id |
+| Commands, paths or scripts requested in chat        | Refused deterministically before any model ("I can't run commands…"); no tool can run them |
+| Tampered inference engine executable                | Installer builds compile in the engine's SHA-256; a mismatching engine is never started |
 
 ## Dependencies with a security role
 

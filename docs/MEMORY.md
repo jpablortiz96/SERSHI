@@ -11,6 +11,7 @@ profile: the user can view, edit, delete and disable everything SERSHI remembers
 | Kind              | Examples                                                             | Lifetime                     | Status                                   |
 | ----------------- | -------------------------------------------------------------------- | ---------------------------- | ---------------------------------------- |
 | Session           | The current conversation, including what SERSHI heard ("You said …") | Until SERSHI exits           | **Implemented** — UI memory only, max 40 messages, never written by the core. Audio is never kept ([VOICE.md](VOICE.md)) |
+| Session context   | Recent applications, the last system fact, a few turns, an open question (Prompt 4) | Minutes; "New conversation" clears it | **Implemented** — core memory only, bounded, trusted entities only, never persisted ([AGENT_BRAIN.md](AGENT_BRAIN.md#session-context)) |
 | Preference        | Preferred browser, editor, voice, language                           | Until changed                | v0.1 settings, v0.7 learned suggestions  |
 | Operational       | "my project" → `D:\Projects\SERSHI`; "work mode" → routine id         | Until deleted                | v0.7                                     |
 | Long-term         | Facts the user explicitly asks SERSHI to remember                    | Until deleted                | v0.7                                     |

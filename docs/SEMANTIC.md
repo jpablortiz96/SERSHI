@@ -364,6 +364,13 @@ after the other, never at the same time. With Whisper Small (the default)
 the margin is larger. On GPUs with less memory, a failed GPU load retries on
 the CPU.
 
+### With the Agent Brain (Prompt 4)
+
+When the Agent Brain is installed and enabled, it also covers short,
+imperfect commands and this model stays on **standby** (not loaded): both
+on a 6 GB GPU slowed each other about fourfold. The router returns when the
+brain is turned off or removed. See [AGENT_BRAIN.md](AGENT_BRAIN.md).
+
 ### Settings
 
 Settings › **Natural understanding** shows:

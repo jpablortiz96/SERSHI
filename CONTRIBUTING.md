@@ -20,6 +20,13 @@ semantic model's runtime, [docs/SEMANTIC.md](docs/SEMANTIC.md)); `pnpm dev` and
 `pnpm tauri build` build it next to SERSHI automatically. Its first build takes
 about ten minutes.
 
+Installer (NSIS) builds bundle that engine as a sidecar and compile in its
+SHA-256: `pnpm --filter @sershi/desktop tauri build --config
+src-tauri/tauri.bundle.conf.json` (it builds the release engine and stages it
+with `apps/desktop/scripts/stage-sidecars.mjs`; honours `CARGO_TARGET_DIR`).
+Ordinary builds, `pnpm dev` and CI do not need it. Code signing is not set up
+yet (docs/AGENT_BRAIN.md, packaging).
+
 ## Before opening a pull request
 
 ```bash

@@ -139,6 +139,27 @@ Natural language in, structured intent out, policy still decides
   final contextual-retry policy is proven by automated tests; its physical
   confirmation is folded into Prompt 4's voice acceptance.
 
+### Prompt 4 — Local Agent Brain (implemented; physical acceptance pending)
+
+([AGENT_BRAIN.md](AGENT_BRAIN.md), [ADR 0017](adr/0017-agent-brain-trust-boundary.md))
+
+- ✅ Provider-neutral `AgentBrainPort`; local implementation over the
+  existing engine (one process per model); Qwen3 4B Q4_K_M selected by a
+  120-request SERSHI benchmark (7 models).
+- ✅ Routing: deterministic guards, compound commands and references first;
+  the model for conversation and what the trusted tiers cannot resolve.
+- ✅ Bounded plans (≤ 5 steps), per-step policy and confirmation,
+  cancellation, failure reporting from trusted data.
+- ✅ Ephemeral session context with expiry and "New conversation".
+- ✅ Whole pipeline: 118/120 correct, 0 wrong actions; fast paths unchanged.
+- ✅ One model at a time (measured), lazy load, idle release, disk-space
+  check, engine integrity for installer builds, sidecar packaging overlay.
+- ⏳ Physical acceptance (conversation, plans, ambiguity, negation, voice,
+  security, offline, load):
+  [Prompt 4](WINDOWS_PLATFORM.md#prompt-4--agent-brain)
+- Next gates (not started): 4A persistent memory, 4B cloud providers,
+  wake word, roles, skills, connectors.
+
 - Next, only if Gate 3A passes: **Prompt 3B — wake word and conversational
   voice**. It covers:
   - a local wake word, opt-in, with the same Listening indicator

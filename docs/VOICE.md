@@ -457,6 +457,12 @@ along: a poorly recognised utterance makes SERSHI ask rather than act. When
 the microphone opens, the semantic model (if installed) starts loading while
 the user speaks.
 
+Spoken requests reach the Agent Brain (Prompt 4) exactly like typed ones:
+references, plans and conversation follow the same routing, policy and
+per-step confirmation. Pressing the microphone while an approval is pending
+withdraws it, and the transcript that follows is understood by Gate 3C only
+(never through conversation context or the model).
+
 ## Tests
 
 - **Portable (Ubuntu + Windows CI):**
