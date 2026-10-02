@@ -10,7 +10,9 @@ use sershi_core::ipc::{
 use sershi_core::permission::{ConfigurablePermission, PermissionSetting, PermissionStatus};
 use sershi_core::platform::Platform;
 use sershi_core::ports::SystemInfoProvider;
-use sershi_core::service::{CommandOutcome, CommandRequest, PermissionChange, ServiceEvent};
+use sershi_core::service::{
+    AppPermissionStatus, CommandOutcome, CommandRequest, PermissionChange, ServiceEvent,
+};
 use sershi_core::shortcut::ShortcutChange;
 use sershi_core::system::SystemSnapshot;
 use sershi_core::understanding::status::{SemanticSettings, SemanticStatus};
@@ -258,6 +260,24 @@ pub fn request_permission_change(
     setting: PermissionSetting,
 ) -> Result<PermissionChange, IpcError> {
     permissions::request_change(&app, permission, setting)
+}
+
+/// Per-application close settings and applications recently asked to close
+/// (Gate 4.1.1).
+#[tauri::command]
+pub fn get_application_permissions(app: AppHandle) -> Result<Vec<AppPermissionStatus>, IpcError> {
+    permissions::applications(&app)
+}
+
+/// One application's close setting. "Always allow" is decided only in the
+/// trusted confirmation window.
+#[tauri::command(async)]
+pub fn request_app_permission_change(
+    app: AppHandle,
+    app_id: String,
+    setting: PermissionSetting,
+) -> Result<PermissionChange, IpcError> {
+    permissions::request_app_change(&app, &app_id, setting)
 }
 
 #[tauri::command]

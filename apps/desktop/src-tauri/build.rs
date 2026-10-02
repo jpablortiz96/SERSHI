@@ -43,6 +43,8 @@ const COMMANDS: &[&str] = &[
     "get_voice_session",
     "get_permission_settings",
     "request_permission_change",
+    "get_application_permissions",
+    "request_app_permission_change",
 ];
 
 /// Installer builds bundle the inference engine (`tauri.bundle.conf.json`).

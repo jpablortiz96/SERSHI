@@ -4,4 +4,4 @@
  * Where a voice session is (for the indicator; shared visuals stay the
  * assistant's own states).
  */
-export type VoiceSessionPhase = "starting" | "listening" | "transcribing" | "understanding" | "planning" | "executing" | "waitingForClarification" | "waitingForConfirmation" | "speaking" | "ending";
+export type VoiceSessionPhase = "starting" | "listening" | "preparing" | "transcribing" | "understanding" | "planning" | "executing" | "waitingForClarification" | "waitingForConfirmation" | "speaking" | "ending";

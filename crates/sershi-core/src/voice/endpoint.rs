@@ -82,6 +82,11 @@ impl EndpointConfig {
 const CALIBRATION_FRAMES: u32 = 5;
 /// The seeded noise floor never starts above this (a loud room adapts up).
 const MAX_SEED_NOISE_DBFS: f32 = -45.0;
+/// Speech onset (Gate 4.1.1): `min_speech_ms` of speech within this
+/// sliding window — at least half of it voiced. Keyboard clicks, a cough or
+/// a bump over a long wait never add up to "speech" and never start
+/// recognition; a spoken word is mostly voiced and qualifies at once.
+const ONSET_WINDOW_MS: u32 = 400;
 
 /// What the detector concluded after the latest audio.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +109,9 @@ pub struct EndpointDetector {
     frames: u32,
     noise_db: Option<f32>,
     speech_frames: u32,
+    /// Before speech is heard: the speech frames of the last
+    /// `ONSET_WINDOW_MS`.
+    onset: std::collections::VecDeque<u32>,
     trailing_silence: u32,
     heard_speech: bool,
     any_signal: bool,
@@ -122,6 +130,7 @@ impl EndpointDetector {
             frames: 0,
             noise_db: None,
             speech_frames: 0,
+            onset: std::collections::VecDeque::new(),
             trailing_silence: 0,
             heard_speech: false,
             any_signal: false,
@@ -182,14 +191,34 @@ impl EndpointDetector {
         };
         self.noise_db = Some(noise + (db - noise) * rate);
 
-        if is_speech {
+        if !self.heard_speech {
+            if is_speech {
+                self.trailing_silence = 0;
+                self.onset.push_back(self.frames);
+            } else {
+                self.trailing_silence += 1;
+            }
+            let window = (ONSET_WINDOW_MS / c.frame_ms).max(1);
+            while self
+                .onset
+                .front()
+                .is_some_and(|f| self.frames.saturating_sub(*f) >= window)
+            {
+                self.onset.pop_front();
+            }
+            let voiced = u32::try_from(self.onset.len()).unwrap_or(u32::MAX);
+            if self.ms(voiced) >= c.min_speech_ms {
+                // Speech starts at its first voiced frame in the window.
+                self.heard_speech = true;
+                self.speech_frames = voiced;
+                self.first_speech_frame = self.onset.front().copied();
+                self.last_speech_frame = self.onset.back().copied();
+                self.onset.clear();
+            }
+        } else if is_speech {
             self.speech_frames += 1;
             self.trailing_silence = 0;
-            self.first_speech_frame.get_or_insert(self.frames);
             self.last_speech_frame = Some(self.frames);
-            if self.ms(self.speech_frames) >= c.min_speech_ms {
-                self.heard_speech = true;
-            }
         } else {
             self.trailing_silence += 1;
         }
@@ -278,6 +307,71 @@ mod tests {
 
     fn detector() -> EndpointDetector {
         EndpointDetector::new(RATE, EndpointConfig::default())
+    }
+
+    /// Keyboard-like transients: 15 ms clicks every 150 ms.
+    fn typing(ms: u32) -> Vec<f32> {
+        let mut out = Vec::new();
+        let mut t = 0;
+        while t < ms {
+            out.extend(speech(RATE, 0.3, 15));
+            out.extend(noise(RATE, 0.002, 135, t + 3));
+            t += 150;
+        }
+        out
+    }
+
+    #[test]
+    fn scattered_transients_over_a_long_wait_are_never_speech() {
+        // Gate 4.1.1: a voice session waits up to 25 s; clicks, a cough
+        // and bumps must not add up to "speech" and start recognition.
+        let config = EndpointConfig {
+            no_speech_timeout_ms: 25_000,
+            ..EndpointConfig::default()
+        };
+        let mut parts = vec![noise(RATE, 0.003, 500, 7)];
+        for i in 0..12 {
+            parts.push(typing(1_500));
+            parts.push(speech(RATE, 0.3, 120)); // a cough or a bump
+            parts.push(noise(RATE, 0.003, 600, 20 + i));
+        }
+        parts.push(noise(RATE, 0.003, 4_000, 99));
+        let audio = concat(&parts);
+        let mut d = EndpointDetector::new(RATE, config);
+        assert_eq!(run(&mut d, &audio), Endpoint::NoSpeech);
+        assert!(!d.heard_speech());
+    }
+
+    #[test]
+    fn steady_fan_noise_is_never_speech() {
+        let config = EndpointConfig {
+            no_speech_timeout_ms: 10_000,
+            ..EndpointConfig::default()
+        };
+        let audio = noise(RATE, 0.02, 11_000, 5);
+        let mut d = EndpointDetector::new(RATE, config);
+        assert_eq!(run(&mut d, &audio), Endpoint::NoSpeech);
+    }
+
+    #[test]
+    fn speech_after_a_long_wait_is_heard_promptly_and_from_its_start() {
+        let config = EndpointConfig {
+            no_speech_timeout_ms: 25_000,
+            ..EndpointConfig::default()
+        };
+        let audio = concat(&[
+            noise(RATE, 0.003, 300, 1),
+            typing(3_000),
+            noise(RATE, 0.003, 2_000, 2),
+            speech(RATE, 0.3, 1_200),
+            noise(RATE, 0.003, 1_500, 3),
+        ]);
+        let mut d = EndpointDetector::new(RATE, config);
+        assert_eq!(run(&mut d, &audio), Endpoint::SpeechEnded);
+        // The onset is the speech, not the typing before it (so recognition
+        // can skip what came before, with a short pre-roll).
+        let start = d.speech_started_ms().expect("speech");
+        assert!((5_280..=5_340).contains(&start), "onset at {start} ms");
     }
 
     #[test]

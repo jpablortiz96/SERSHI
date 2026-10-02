@@ -53,7 +53,7 @@ use sershi_core::voice::ports::{
 };
 use sershi_core::voice::session::{
     Heard, IDLE_TIMEOUT_MS, Next, REPLY_GRACE_MS, SessionEndReason, VoiceSession,
-    VoiceSessionStatus,
+    VoiceSessionStatus, recognition_deadline_ms, speech_offset,
 };
 use sershi_core::voice::signal::{LevelMeter, RECOGNITION_RATE, downmix, resample};
 use sershi_core::voice::stabilize::{self, LanguageContext, RecentLanguages};
@@ -655,12 +655,13 @@ impl Speculation {
     }
 }
 
-fn speculate(app: &AppHandle, audio: &[f32], rate: u32) -> Option<Speculation> {
+fn speculate(app: &AppHandle, audio: &[f32], rate: u32, offset: usize) -> Option<Speculation> {
     let voice = managed(app)?;
     let model = voice.locked().ok()?.settings.model();
     let cancel = Arc::new(AtomicBool::new(false));
     let options = options(app, &voice, cancel.clone());
-    let snapshot = audio.to_vec();
+    // Covers everything captured (`samples`), decodes from the speech on.
+    let snapshot = audio[offset.min(audio.len())..].to_vec();
     let (tx, rx) = mpsc::channel();
     let app = app.clone();
     thread::Builder::new()
@@ -709,6 +710,8 @@ fn session(
     let session_turn = session_active(app);
     if session_turn {
         config.no_speech_timeout_ms = IDLE_TIMEOUT_MS;
+        // The user may start speaking late in the wait (Gate 4.1.1).
+        config.max_capture_ms = IDLE_TIMEOUT_MS + 30_000;
     }
     let mut detector = EndpointDetector::new(format.sample_rate, config);
     let max_samples =
@@ -757,7 +760,12 @@ fn session(
                 if speculation.is_none()
                     && detector.pause_ms().is_some_and(|p| p >= SPECULATE_AFTER_MS)
                 {
-                    speculation = speculate(app, &audio, format.sample_rate);
+                    let offset = speech_offset(
+                        detector.speech_started_ms(),
+                        format.sample_rate,
+                        audio.len(),
+                    );
+                    speculation = speculate(app, &audio, format.sample_rate, offset);
                 }
                 match endpoint {
                     Endpoint::Continue => {}
@@ -868,6 +876,11 @@ fn session(
             release();
             drop(mono);
             if transcribing {
+                // Never transcribe the silence before speech (a pre-roll
+                // keeps the first syllable).
+                let offset =
+                    speech_offset(timeline.speech_started_ms, format.sample_rate, audio.len());
+                audio.drain(..offset);
                 recognise(app, audio, format.sample_rate, usable, &timeline);
             } else if let Some(s) = usable {
                 s.abandon();
@@ -971,6 +984,41 @@ fn recognise(
     }
     let opts = options(app, &voice, cancel.clone());
     let detect = opts.language.is_none();
+    // A cold model (first turn after start or after idle release): say
+    // "Preparing voice…" instead of pretending to transcribe (Gate 4.1.1).
+    let warm = voice
+        .engines
+        .try_lock()
+        .is_ok_and(|e| e.loaded.contains_key(model.id));
+    if !warm {
+        emit_update(app, VoiceUpdate::Preparing);
+        with_session(app, VoiceSession::preparing);
+    }
+    // Watchdog (Gate 4.1.1): recognition never leaves SERSHI stuck in
+    // "Transcribing". Past the deadline the decode is cancelled and the
+    // turn recovers (a voice session listens again).
+    let finished = Arc::new(AtomicBool::new(false));
+    let timed_out = Arc::new(AtomicBool::new(false));
+    {
+        let gpu = voice.acceleration().0 == Acceleration::Vulkan;
+        let deadline = Duration::from_millis(u64::from(recognition_deadline_ms(gpu, !warm)));
+        let (finished, timed_out, cancel) = (finished.clone(), timed_out.clone(), cancel.clone());
+        let _ = thread::Builder::new()
+            .name("sershi-voice-watchdog".to_owned())
+            .spawn(move || {
+                let started = Instant::now();
+                while started.elapsed() < deadline {
+                    if finished.load(Ordering::Relaxed) || cancel.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                }
+                if !finished.load(Ordering::Relaxed) {
+                    timed_out.store(true, Ordering::Relaxed);
+                    cancel.store(true, Ordering::Relaxed);
+                }
+            });
+    }
 
     let mut speculative = false;
     let mut decoded = match speculation {
@@ -1091,6 +1139,23 @@ fn recognise(
     drop(audio);
     if let Ok(mut inner) = voice.locked() {
         inner.recognition = None;
+    }
+    finished.store(true, Ordering::Relaxed);
+    if timed_out.load(Ordering::Relaxed) {
+        // Too slow: nothing is submitted; the turn fails visibly and a
+        // voice session recovers to Listening.
+        eprintln!("SERSHI voice: recognition exceeded its deadline and was cancelled");
+        end_voice(app, None, true);
+        emit_update(
+            app,
+            VoiceUpdate::Failed {
+                reason: VoiceFailure::RecognitionFailed,
+            },
+        );
+        if let Some(next) = with_session(app, VoiceSession::unheard) {
+            after_turn(app, next);
+        }
+        return;
     }
     if cancel.load(Ordering::Relaxed) {
         // Dismissed while recognising: the result is discarded, never run.

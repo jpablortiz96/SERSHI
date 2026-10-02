@@ -1,7 +1,16 @@
 {
   "status": "needsConfirmation",
   "reply": "Close application is waiting for your approval in the confirmation window.",
-  "detail": null,
+  "detail": {
+    "kind": "awaitingApproval",
+    "applications": [
+      {
+        "id": "spotify",
+        "displayName": "Spotify",
+        "source": "packagedApp"
+      }
+    ]
+  },
   "toolId": "system.close_application",
   "data": null,
   "durationMs": null,

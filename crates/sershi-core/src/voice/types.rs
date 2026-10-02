@@ -237,6 +237,9 @@ pub enum VoiceUpdate {
     /// In a voice session, "sí" to "anything else?": SERSHI says it is
     /// listening. Nothing was submitted.
     Prompt,
+    /// Speech was heard and the local speech model is still loading (a
+    /// cold start): "Preparing voice…" (Gate 4.1.1).
+    Preparing,
     NoSpeech,
     Unclear,
     Cancelled,

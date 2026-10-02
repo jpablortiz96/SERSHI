@@ -6,4 +6,4 @@ import type { PermissionSetting } from "./PermissionSetting";
 /**
  * The resolved target of a confirmation, from trusted discovery data.
  */
-export type ConfirmationSubject = { "kind": "application", application: ApplicationSummary, } | { "kind": "permission", permission: ConfigurablePermission, setting: PermissionSetting, };
+export type ConfirmationSubject = { "kind": "application", application: ApplicationSummary, } | { "kind": "permission", permission: ConfigurablePermission, setting: PermissionSetting, } | { "kind": "applications", applications: Array<ApplicationSummary>, } | { "kind": "applicationPermission", appId: string, displayName: string, setting: PermissionSetting, };

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-application-permissions"
+description = "Enables the get_application_permissions command without any pre-configured scope."
+commands.allow = ["get_application_permissions"]
+
+[[permission]]
+identifier = "deny-get-application-permissions"
+description = "Denies the get_application_permissions command without any pre-configured scope."
+commands.deny = ["get_application_permissions"]

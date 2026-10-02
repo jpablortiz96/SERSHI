@@ -86,7 +86,7 @@ pub fn sync(app: &AppHandle) {
         .with_service(|s| s.pending_confirmation().map(|r| r.id))
         .ok()
         .flatten();
-    match assignment(app, |a| a.reconcile(pending.as_ref())) {
+    let shown = match assignment(app, |a| a.reconcile(pending.as_ref())) {
         Some(SurfaceAction::Open(_)) => open(app),
         Some(SurfaceAction::Replace(_)) => {
             // Reload so the surface fetches the new confirmation and its
@@ -94,20 +94,53 @@ pub fn sync(app: &AppHandle) {
             if let Some(window) = app.get_webview_window(CONFIRMATION) {
                 let _ = window.reload();
                 present(&window);
+                true
             } else {
-                open(app);
+                open(app)
             }
         }
-        Some(SurfaceAction::Close) => destroy(app),
-        Some(SurfaceAction::Keep) | None => {}
+        Some(SurfaceAction::Close) => {
+            destroy(app);
+            true
+        }
+        Some(SurfaceAction::Keep) => {
+            // Health check (Gate 4.1.1): a pending confirmation must have a
+            // window. One that vanished is shown again.
+            pending.is_none() || app.get_webview_window(CONFIRMATION).is_some() || open(app)
+        }
+        None => true,
+    };
+    if !shown {
+        withdraw(app);
     }
 }
 
-fn open(app: &AppHandle) {
+/// The trusted window could not be shown (Gate 4.1.1): an approval nobody
+/// can see must not wait. The core withdraws it — nothing it covered runs
+/// — and the conversation says so.
+fn withdraw(app: &AppHandle) {
+    assignment(app, SurfaceAssignment::release);
+    let runtime = app.state::<Runtime>();
+    let outcome = runtime
+        .with_service(|s| s.withdraw_confirmation(&mut |e| broadcast(app, e)))
+        .ok()
+        .flatten();
+    if let Some(outcome) = outcome {
+        eprintln!("SERSHI: the confirmation window could not be shown; the approval was withdrawn");
+        emit_outcome(app, &outcome);
+    }
+    if let Ok(snapshot) = runtime.with_service(|s| s.snapshot()) {
+        schedule_settle(app, &snapshot);
+    }
+    voice::confirmation_resolved(app);
+}
+
+/// Creates (or re-presents) the surface. False if no window could be shown.
+fn open(app: &AppHandle) -> bool {
     if let Some(existing) = app.get_webview_window(CONFIRMATION) {
         let _ = existing.reload();
         present(&existing);
-        return;
+        return true;
     }
     let built = WebviewWindowBuilder::new(
         app,
@@ -128,11 +161,13 @@ fn open(app: &AppHandle) {
     .on_navigation(is_own_page)
     .build();
     match built {
-        Ok(window) => present(&window),
+        Ok(window) => {
+            present(&window);
+            true
+        }
         Err(error) => {
-            // Without a surface nothing can be approved; the confirmation
-            // simply expires. Report it rather than failing silently.
             eprintln!("SERSHI: confirmation window unavailable: {error}");
+            false
         }
     }
 }
@@ -248,8 +283,25 @@ pub fn decide_confirmation(window: Window, decision: ConfirmationDecision) -> Re
     }
     let _ = window.hide();
     apply(&app, decision.confirmation_id, decision.decision);
-    destroy(&app);
+    // Gate 4.1.1 root cause: applying the decision may continue a plan whose
+    // next step needs its own approval; `sync` (inside `apply`) has already
+    // pointed this window at it and shown it again. Destroying the window
+    // unconditionally here used to tear that new approval's window down,
+    // leaving it pending and invisible. Destroy only when nothing waits.
+    destroy_if_idle(&app);
     Ok(())
+}
+
+/// Destroys the surface if no confirmation is pending any more.
+fn destroy_if_idle(app: &AppHandle) {
+    let pending = app
+        .state::<Runtime>()
+        .with_service(|s| s.pending_confirmation().is_some())
+        .unwrap_or(false);
+    if !pending {
+        assignment(app, SurfaceAssignment::release);
+        destroy(app);
+    }
 }
 
 /// The user closed the surface (× or Alt+F4): that is a cancellation, never
@@ -258,7 +310,7 @@ pub fn on_close_requested(app: &AppHandle) {
     if let Some(Some(id)) = assignment(app, SurfaceAssignment::release) {
         apply(app, id, ConfirmationChoice::Cancel);
     }
-    destroy(app);
+    destroy_if_idle(app);
 }
 
 /// An expired confirmation: report it to the Command Center and close the

@@ -46,6 +46,30 @@ pub const MAX_UNHEARD_TURNS: u8 = 2;
 /// How long the shell waits for a reply to start playing before it listens
 /// again anyway (spoken replies may be turned off).
 pub const REPLY_GRACE_MS: u64 = 1_500;
+/// Audio kept before the detected start of speech, so the first syllable
+/// is never clipped while the silence before it is not transcribed.
+pub const PRE_ROLL_MS: u32 = 300;
+
+/// The longest a recognition may run before it is abandoned (Gate 4.1.1
+/// watchdog): far beyond a normal decode (well under 2 s on a GPU, a few
+/// seconds on a CPU), short enough that SERSHI never sits in
+/// "Transcribing". A first, cold decode includes loading the model.
+pub fn recognition_deadline_ms(gpu: bool, cold: bool) -> u32 {
+    let base = if gpu { 15_000 } else { 45_000 };
+    if cold { base + 30_000 } else { base }
+}
+
+/// Where recognition should start in a capture: the detected start of
+/// speech minus [`PRE_ROLL_MS`] (in samples), never past the end.
+pub fn speech_offset(speech_started_ms: Option<u32>, rate: u32, len: usize) -> usize {
+    let Some(start) = speech_started_ms else {
+        return 0;
+    };
+    let ms = u64::from(start.saturating_sub(PRE_ROLL_MS));
+    usize::try_from(ms * u64::from(rate) / 1000)
+        .unwrap_or(usize::MAX)
+        .min(len)
+}
 
 /// Where a voice session is (for the indicator; shared visuals stay the
 /// assistant's own states).
@@ -55,6 +79,9 @@ pub const REPLY_GRACE_MS: u64 = 1_500;
 pub enum VoiceSessionPhase {
     Starting,
     Listening,
+    /// Speech was heard but the speech model is still loading (cold start):
+    /// "Preparing voice…" rather than pretending to transcribe.
+    Preparing,
     Transcribing,
     Understanding,
     Planning,
@@ -204,6 +231,16 @@ impl VoiceSession {
     /// The end of speech was detected; recognition runs.
     pub fn transcribing(&mut self) {
         self.set(VoiceSessionPhase::Transcribing);
+    }
+
+    /// Recognition waits for the speech model to load (cold start).
+    pub fn preparing(&mut self) {
+        if matches!(
+            self.phase,
+            VoiceSessionPhase::Listening | VoiceSessionPhase::Transcribing
+        ) {
+            self.set(VoiceSessionPhase::Preparing);
+        }
     }
 
     /// Something usable was heard.
@@ -553,6 +590,34 @@ mod tests {
         // The first reason is kept.
         s.end(SessionEndReason::Timeout);
         assert_eq!(s.status().ended, Some(SessionEndReason::Farewell));
+    }
+
+    #[test]
+    fn a_cold_model_is_shown_as_preparing_not_transcribing() {
+        let mut s = VoiceSession::start(1, 0);
+        s.listening();
+        s.transcribing();
+        s.preparing();
+        assert_eq!(s.phase(), Some(VoiceSessionPhase::Preparing));
+        assert_eq!(s.heard("Abre Excel"), Heard::Submit);
+        assert_eq!(s.phase(), Some(VoiceSessionPhase::Understanding));
+    }
+
+    #[test]
+    fn recognition_never_waits_forever() {
+        assert!(recognition_deadline_ms(true, false) < recognition_deadline_ms(false, false));
+        assert!(recognition_deadline_ms(true, true) > recognition_deadline_ms(true, false));
+        assert!(recognition_deadline_ms(false, true) <= 90_000);
+    }
+
+    #[test]
+    fn recognition_skips_the_silence_before_speech_but_keeps_a_pre_roll() {
+        // Speech started 20 s into a session turn at 48 kHz.
+        let offset = speech_offset(Some(20_000), 48_000, 48_000 * 22);
+        assert_eq!(offset, 48 * (20_000 - PRE_ROLL_MS as usize));
+        assert_eq!(speech_offset(Some(100), 48_000, 100_000), 0);
+        assert_eq!(speech_offset(None, 48_000, 100_000), 0);
+        assert_eq!(speech_offset(Some(5_000), 48_000, 1_000), 1_000);
     }
 
     #[test]

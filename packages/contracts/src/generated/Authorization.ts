@@ -6,4 +6,4 @@
  * traced to a stored setting the user chose in Settings — never to the
  * words that asked for it.
  */
-export type Authorization = "policy" | "storedPermission" | "trustedConfirmation";
+export type Authorization = "policy" | "storedPermission" | "trustedConfirmation" | "safeToClose";

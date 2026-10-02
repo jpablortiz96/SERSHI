@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-request-app-permission-change"
+description = "Enables the request_app_permission_change command without any pre-configured scope."
+commands.allow = ["request_app_permission_change"]
+
+[[permission]]
+identifier = "deny-request-app-permission-change"
+description = "Denies the request_app_permission_change command without any pre-configured scope."
+commands.deny = ["request_app_permission_change"]

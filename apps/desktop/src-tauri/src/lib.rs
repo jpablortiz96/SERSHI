@@ -29,7 +29,10 @@ pub fn run() {
             let runtime = runtime::Runtime::new()?;
             // Permissions the user chose in Settings › Security (Gate 4.1).
             let stored = permissions::load(app.handle());
-            let _ = runtime.with_service(|s| s.load_permission_settings(&stored));
+            let _ = runtime.with_service(|s| {
+                s.load_permission_settings(&stored.permissions);
+                s.load_application_permissions(&stored.applications);
+            });
             app.manage(runtime);
             // Speech models live in the per-user app-data directory
             // (%LOCALAPPDATA%\dev.sershi.desktop\models\stt on Windows).
@@ -96,6 +99,8 @@ pub fn run() {
             commands::get_voice_session,
             commands::get_permission_settings,
             commands::request_permission_change,
+            commands::get_application_permissions,
+            commands::request_app_permission_change,
         ])
         .build(tauri::generate_context!());
 

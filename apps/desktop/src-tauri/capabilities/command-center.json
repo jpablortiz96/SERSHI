@@ -45,6 +45,8 @@
     "allow-stop-voice-session",
     "allow-get-voice-session",
     "allow-get-permission-settings",
-    "allow-request-permission-change"
+    "allow-request-permission-change",
+    "allow-get-application-permissions",
+    "allow-request-app-permission-change"
   ]
 }
