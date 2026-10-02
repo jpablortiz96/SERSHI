@@ -109,3 +109,22 @@ export const ApprovalMark = () => (
     <circle cx="8" cy="7.5" r="1.75" fill="currentColor" stroke="none" />
   </Icon>
 );
+
+/** A voice session: sound waves (hands-free conversation). */
+export const WaveIcon = () => (
+  <Icon>
+    <path d="M2.5 7v2M5 5v6M8 3v10M11 5v6M13.5 7v2" />
+  </Icon>
+);
+
+export const PlusIcon = () => (
+  <Icon>
+    <path d="M8 3.5v9M3.5 8h9" />
+  </Icon>
+);
+
+export const ArrowDownIcon = () => (
+  <Icon>
+    <path d="M8 3.5v9M4 8.5l4 4 4-4" />
+  </Icon>
+);

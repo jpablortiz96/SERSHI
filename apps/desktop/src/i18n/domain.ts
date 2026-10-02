@@ -11,7 +11,10 @@ import type {
   CapabilityStatus,
   Clarification,
   CommandOutcome,
+  ConfigurablePermission,
   PlanReport,
+  RecallItem,
+  RecallKind,
   PlanStepReport,
   StepAction,
   UnderstoodAs,
@@ -29,6 +32,7 @@ const TOOL_KEYS: Partial<Record<string, PlainKey>> = {
   "system.get_cpu": "tools.cpu",
   "system.open_application": "tools.openApplication",
   "system.close_application": "tools.closeApplication",
+  "settings.permissions": "tools.permissionChange",
 };
 
 /** Windows components have stable ids and localized names. */
@@ -162,7 +166,64 @@ function describeEvent(t: Translate, entry: ActivityEntry): string {
       return t("activity.events.planFinished");
     case "planCancelled":
       return t("activity.events.planCancelled");
+    case "voiceSessionStarted":
+      return t("activity.events.voiceSessionStarted");
+    case "voiceSessionEnded":
+      return t("activity.events.voiceSessionEnded");
+    case "permissionChanged":
+      return t("activity.events.permissionChanged");
   }
+}
+
+/** A configurable permission's name ("Close applications"). */
+export function permissionLabel(t: Translate, permission: ConfigurablePermission): string {
+  return t(`settings.security.permissions.${permission}.label`);
+}
+
+/**
+ * "What did you just open?", phrased from the action ledger: real results
+ * only. A failed attempt is said to have failed, never to have happened.
+ */
+export function recallReply(t: Translate, kind: RecallKind, items: RecallItem[]): string {
+  const name = (i: RecallItem) =>
+    i.application ? applicationName(t, i.application) : stepLabel(t, i);
+  const done = items.filter((i) => i.result === "succeeded");
+  const failed = items.filter((i) => i.result !== "succeeded");
+  if (items.length === 0) {
+    if (kind === "opened") return t("reply.recall.noneOpened");
+    if (kind === "closed") return t("reply.recall.noneClosed");
+    return t("reply.recall.noneDid");
+  }
+  const sentences: string[] = [];
+  if (kind === "did") {
+    const label = (i: RecallItem) => stepLabel(t, i).toLowerCase();
+    if (done.length) {
+      sentences.push(
+        t("reply.recall.did", { actions: done.map(label).join(t("reply.recall.and")) }),
+      );
+    }
+    if (failed.length) {
+      sentences.push(
+        t("reply.recall.didFailed", { actions: failed.map(label).join(t("reply.recall.and")) }),
+      );
+    }
+    return sentences.join(" ");
+  }
+  if (done.length) {
+    const apps = done.map(name).join(t("reply.recall.and"));
+    sentences.push(
+      kind === "opened" ? t("reply.recall.opened", { apps }) : t("reply.recall.closed", { apps }),
+    );
+  }
+  if (failed.length) {
+    const apps = failed.map(name).join(t("reply.recall.or"));
+    sentences.push(
+      kind === "opened"
+        ? t("reply.recall.openFailed", { apps })
+        : t("reply.recall.closeFailed", { apps }),
+    );
+  }
+  return sentences.join(" ");
 }
 
 type Json = Record<string, unknown>;
@@ -379,6 +440,7 @@ export function composeReply(t: Translate, f: Formatters, outcome: CommandOutcom
   // The Agent Brain's own words, in the interface language.
   if (detail?.kind === "brainAnswer" || detail?.kind === "brainQuestion") return detail.message;
   if (detail?.kind === "planTooLong") return t("plan.tooLong", { max: f.integer(detail.maxSteps) });
+  if (detail?.kind === "recall") return recallReply(t, detail.recall, detail.items);
   switch (outcome.status) {
     case "partial":
       return outcome.reply;

@@ -62,6 +62,8 @@ export const es419: Messages = {
   },
 
   home: {
+    jumpToLatest: "Ir a lo último",
+    conversationLabel: "Conversación",
     greeting: "¿En qué puedo ayudarte?",
     newConversation: "Nueva conversación",
     suggestionsLabel: "Sugerencias",
@@ -74,6 +76,10 @@ export const es419: Messages = {
   },
 
   command: {
+    session: "Iniciar una sesión de voz",
+    sessionTip: "Sesión de voz: habla sin usar las manos",
+    sessionStop: "Terminar la sesión de voz",
+    interrupt: "Interrumpir y hablar",
     label: "Comando",
     placeholder: "Pregúntale a SERSHI o escribe un comando",
     voice: "Hablar con SERSHI",
@@ -146,6 +152,19 @@ export const es419: Messages = {
   },
 
   reply: {
+    recall: {
+      opened: "Abrí {apps}.",
+      closed: "Le pedí a {apps} que se cerrara.",
+      openFailed: "No pude abrir {apps}.",
+      closeFailed: "No pude cerrar {apps}.",
+      noneOpened: "No he abierto ninguna aplicación en esta conversación.",
+      noneClosed: "No he cerrado ninguna aplicación en esta conversación.",
+      noneDid: "Todavía no he hecho nada en esta conversación.",
+      did: "Hace un momento: {actions}.",
+      didFailed: "No funcionó: {actions}.",
+      and: " y ",
+      or: " ni ",
+    },
     memory: "Estás usando {used} GB de {total} GB de memoria ({percent}).",
     cpu: "Tu procesador está funcionando al {percent} en {cores} núcleos.",
     cpuWarmingUp:
@@ -225,6 +244,36 @@ export const es419: Messages = {
     offline:
       "Me estoy ejecutando como vista previa en el navegador, así que mi núcleo no está conectado. Abre la aplicación de escritorio (pnpm dev) para hablar conmigo.",
     coreUnreachable: "Algo salió mal al comunicarme con mi núcleo.",
+  },
+
+  session: {
+    label: "Sesión de voz",
+    hint: "Habla con naturalidad. Di “No, gracias” cuando termines.",
+    end: "Terminar",
+    phase: {
+      starting: "Iniciando",
+      listening: "Escuchando",
+      transcribing: "Entendiendo",
+      understanding: "Pensando",
+      planning: "Planificando",
+      executing: "Trabajando",
+      waitingForClarification: "Esperando tu respuesta",
+      waitingForConfirmation: "Aprueba en la ventana de confirmación",
+      speaking: "Hablando",
+      ending: "Terminando",
+    },
+    started: "Te escucho.",
+    listening: "Te escucho.",
+    anythingElse: "¿Necesitas algo más?",
+    ended: {
+      stopped: "Sesión de voz terminada.",
+      farewell: "Hasta luego.",
+      timeout: "La sesión de voz terminó tras un momento de silencio.",
+      notHeard: "No logré escucharte, así que terminé la sesión de voz.",
+      maxDuration: "La sesión de voz terminó (límite de tiempo).",
+      dismissed: "Sesión de voz terminada.",
+      failed: "La sesión de voz terminó: el micrófono no está disponible.",
+    },
   },
 
   voice: {
@@ -339,6 +388,9 @@ export const es419: Messages = {
       planStarted: "Comenzó un plan",
       planFinished: "Terminó un plan",
       planCancelled: "Detuvo un plan",
+      voiceSessionStarted: "Inició una sesión de voz",
+      voiceSessionEnded: "Terminó la sesión de voz",
+      permissionChanged: "Cambió un permiso",
     },
   },
 
@@ -353,6 +405,7 @@ export const es419: Messages = {
       understanding: "Inteligencia",
       privacy: "Privacidad",
       tools: "Herramientas y permisos",
+      security: "Seguridad y permisos",
       platform: "Plataforma",
       developer: "Desarrollo · Vista previa de estados",
       about: "Acerca de",
@@ -440,6 +493,35 @@ export const es419: Messages = {
       volumeDetail: "Solo los sonidos de la interfaz.",
       volumeValue: "{value} %",
       soundSample: "Escuchar muestra",
+    },
+    security: {
+      lede: "Lo que SERSHI puede hacer sin preguntarte antes. La voz nunca aprueba nada: las acciones sin manos vienen solo de lo que permitas aquí, y un ajuste menos restrictivo se aprueba en la ventana de confirmación.",
+      permissions: {
+        openApplications: {
+          label: "Abrir aplicaciones",
+          detail: "Iniciar aplicaciones instaladas cuando lo pidas.",
+        },
+        closeApplications: {
+          label: "Cerrar aplicaciones",
+          detail: "Pedir a una aplicación abierta que se cierre. Puede pedirte guardar tu trabajo.",
+        },
+        systemInformation: {
+          label: "Información del sistema",
+          detail: "Leer la memoria, el procesador y los datos del sistema.",
+        },
+      },
+      settings: {
+        alwaysAllow: "Permitir siempre",
+        askEveryTime: "Preguntar cada vez",
+      },
+      alwaysAllowDetail:
+        "Lo que pidas escribiendo o hablando se hace sin una confirmación extra. Las acciones propuestas por el Agent Brain siguen preguntando.",
+      askEveryTimeDetail: "Apruébalo cada vez en la ventana de confirmación.",
+      recommended: "Recomendado",
+      pending: "Aprueba este cambio en la ventana de confirmación.",
+      busy: "SERSHI está ocupado. Inténtalo de nuevo en un momento.",
+      footnote:
+        "Las acciones de alto riesgo —borrar archivos, enviar mensajes, pagos, cambios de seguridad— nunca pueden quedar en Permitir siempre. Cada cambio queda registrado en Actividad.",
     },
     voice: {
       microphone: "Micrófono",
@@ -635,6 +717,29 @@ export const es419: Messages = {
         },
         brainTime: "Tiempo del Agent Brain",
         planSteps: "Pasos del plan",
+        session: "Conversación",
+        modality: "Entrada",
+        modalities: {
+          typed: "Escrita",
+          voice: "Voz",
+        },
+        entities: "Entidades activas",
+        ledger: "Acciones recordadas",
+        lastAction: "Última acción",
+        reference: "Referencia desde",
+        references: {
+          entities: "Aplicaciones recientes",
+          ledger: "Registro de acciones",
+          clarification: "Respuesta a una pregunta",
+        },
+        authorization: "Permitido por",
+        authorizations: {
+          policy: "Política predeterminada",
+          storedPermission: "Tu ajuste (Permitir siempre)",
+          trustedConfirmation: "Tu aprobación",
+        },
+        voiceSession: "Sesión de voz",
+        bargeIns: "Interrupciones",
         promptVersion: "Versión de instrucciones",
         raw: "Texto",
         normalized: "Normalizado",
@@ -684,6 +789,7 @@ export const es419: Messages = {
   },
 
   tools: {
+    permissionChange: "Cambio de permiso",
     systemInfo: "Información del sistema",
     memory: "Uso de memoria",
     cpu: "Uso del procesador",
@@ -699,6 +805,12 @@ export const es419: Messages = {
   },
 
   confirm: {
+    changePermission: {
+      title: "¿Permitir “{permission}” sin preguntar?",
+      body: "Lo que pidas escribiendo o hablando se hará sin esta confirmación. Puedes volver a “Preguntar cada vez” en Configuración › Seguridad cuando quieras.",
+      risk: "Las acciones propuestas por el Agent Brain seguirán preguntando.",
+      confirm: "Permitir siempre",
+    },
     label: "Se requiere confirmación",
     trust: "Aprobación de SERSHI",
     closeApplication: {
@@ -713,6 +825,7 @@ export const es419: Messages = {
       confirm: "Permitir",
     },
     reason: {
+      permissionChange: "Lo pediste en Configuración.",
       permissionUndecided: "Todavía no concediste este permiso.",
       highRisk: "Puede que esta acción no se pueda deshacer.",
       agentInitiatedSensitiveAction: "Esta acción se propuso de forma automática.",

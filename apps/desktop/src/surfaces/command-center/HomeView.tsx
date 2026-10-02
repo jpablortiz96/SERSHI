@@ -5,6 +5,7 @@ import { CommandBar } from "../../components/command/CommandBar";
 import { Transcript } from "../../components/conversation/Transcript";
 import { Core } from "../../components/core/Core";
 import { StateGlyph } from "../../components/core/StateGlyph";
+import { PlusIcon } from "../../components/shell/icons";
 import { SystemRail } from "../../components/telemetry/SystemRail";
 import { useI18n } from "../../i18n";
 import { stateLabel, stateLine } from "../../i18n/domain";
@@ -71,6 +72,7 @@ export function HomeView({ onViewActivity }: { onViewActivity: () => void }) {
           {conversing && (
             <div className={styles.conversationBar}>
               <button type="button" className={styles.newConversation} onClick={newConversation}>
+                <PlusIcon />
                 {t("home.newConversation")}
               </button>
             </div>

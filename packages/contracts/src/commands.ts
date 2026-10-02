@@ -9,6 +9,10 @@ import type { ConfirmationDecision } from "./generated/ConfirmationDecision";
 import type { ConfirmationRequest } from "./generated/ConfirmationRequest";
 import type { IntegrationStatus } from "./generated/IntegrationStatus";
 import type { ModelProgress } from "./generated/ModelProgress";
+import type { ConfigurablePermission } from "./generated/ConfigurablePermission";
+import type { PermissionChange } from "./generated/PermissionChange";
+import type { PermissionSetting } from "./generated/PermissionSetting";
+import type { PermissionStatus } from "./generated/PermissionStatus";
 import type { PlanReport } from "./generated/PlanReport";
 import type { PresenceUpdate } from "./generated/PresenceUpdate";
 import type { RuntimeInfo } from "./generated/RuntimeInfo";
@@ -20,6 +24,7 @@ import type { TrayLabels } from "./generated/TrayLabels";
 import type { VoiceLevel } from "./generated/VoiceLevel";
 import type { VoiceSettings } from "./generated/VoiceSettings";
 import type { VoiceStatus } from "./generated/VoiceStatus";
+import type { VoiceSessionStatus } from "./generated/VoiceSessionStatus";
 import type { VoiceUpdate } from "./generated/VoiceUpdate";
 
 type NoArgs = Record<string, never>;
@@ -78,6 +83,17 @@ export interface CommandMap {
   cancel_brain_model_download: { args: NoArgs; result: null };
   /** Forgets the session context (not preferences). Grants nothing. */
   reset_conversation: { args: NoArgs; result: null };
+  // Hands-free voice session (Gate 4.1). Explicit start; input only.
+  start_voice_session: { args: NoArgs; result: CaptureStart };
+  stop_voice_session: { args: NoArgs; result: null };
+  get_voice_session: { args: NoArgs; result: VoiceSessionStatus | null };
+  // Settings > Security (Gate 4.1). A less restrictive setting is applied
+  // only after the trusted confirmation window approves it.
+  get_permission_settings: { args: NoArgs; result: PermissionStatus[] };
+  request_permission_change: {
+    args: { permission: ConfigurablePermission; setting: PermissionSetting };
+    result: PermissionChange;
+  };
 }
 
 export type CommandName = keyof CommandMap;
@@ -118,6 +134,11 @@ export const COMMAND_NAMES = [
   "download_brain_model",
   "cancel_brain_model_download",
   "reset_conversation",
+  "start_voice_session",
+  "stop_voice_session",
+  "get_voice_session",
+  "get_permission_settings",
+  "request_permission_change",
 ] as const satisfies readonly CommandName[];
 
 /** Events broadcast by the core to every window. */
@@ -145,6 +166,10 @@ export const EVENTS = {
   brainModel: "sershi://brain-model",
   /** Main window only: a plan's progress after each step. */
   plan: "sershi://plan",
+  /** Main window and companion: the voice session's status (Gate 4.1). */
+  voiceSession: "sershi://voice-session",
+  /** Main window only: permission settings after a change (Gate 4.1). */
+  permissions: "sershi://permissions",
 } as const;
 
 export interface EventMap {
@@ -159,6 +184,8 @@ export interface EventMap {
   [EVENTS.semanticModel]: ModelProgress;
   [EVENTS.brainModel]: ModelProgress;
   [EVENTS.plan]: PlanReport;
+  [EVENTS.voiceSession]: VoiceSessionStatus;
+  [EVENTS.permissions]: PermissionStatus[];
 }
 
 export type EventName = keyof EventMap;

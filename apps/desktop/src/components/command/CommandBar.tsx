@@ -5,9 +5,10 @@ import { desktopRuntime, sershi } from "../../ipc";
 import { useAssistantStore } from "../../state/assistant";
 import { useConversation } from "../../state/conversation";
 import { useVoice } from "../../state/voice";
-import { ArrowUpIcon, MicIcon, StopIcon } from "../shell/icons";
+import { ArrowUpIcon, MicIcon, StopIcon, WaveIcon } from "../shell/icons";
 import styles from "./CommandBar.module.css";
 import { VoicePanel } from "./VoicePanel";
+import { VoiceSessionBar } from "./VoiceSessionBar";
 
 /** Mirrors MAX_COMMAND_CHARS in sershi-core. */
 const MAX_CHARS = 1000;
@@ -22,6 +23,12 @@ export const ACCEPTED_MS = 520;
  * stop and send; Escape cancels). The button's pressed state, the placeholder
  * and the assistant state all say when SERSHI is listening — it never
  * listens otherwise. Voice is additive: typing always works.
+ *
+ * Voice session (Gate 4.1): the wave button starts a hands-free
+ * conversation — SERSHI listens again after each reply until the user says
+ * goodbye, presses End or stays silent. The session bar shows it whenever
+ * it is active. While SERSHI speaks or works, the microphone button
+ * interrupts it (barge-in).
  */
 export function CommandBar() {
   const [text, setText] = useState("");
@@ -38,6 +45,10 @@ export function CommandBar() {
   const toggleCapture = useVoice((s) => s.toggleCapture);
   const cancelCapture = useVoice((s) => s.cancelCapture);
   const stopSpeaking = useVoice((s) => s.stopSpeaking);
+  const session = useVoice((s) => s.session);
+  const startSession = useVoice((s) => s.startSession);
+  const stopSession = useVoice((s) => s.stopSession);
+  const inSession = session !== null;
   const listening = state === "listening";
   const transcribing = state === "transcribing";
   const speaking = state === "speaking";
@@ -106,13 +117,16 @@ export function CommandBar() {
     }
   };
 
+  const interrupting = speaking || state === "thinking" || state === "executing";
   const micLabel = listening
     ? t("command.voiceStop")
     : transcribing
       ? t("command.voiceBusy")
-      : voiceAvailable
-        ? t("command.voice")
-        : t("command.voiceUnavailable");
+      : !voiceAvailable
+        ? t("command.voiceUnavailable")
+        : interrupting
+          ? t("command.interrupt")
+          : t("command.voice");
   const placeholder = listening
     ? t("command.listeningPlaceholder")
     : transcribing
@@ -122,6 +136,7 @@ export function CommandBar() {
   return (
     <form className={styles.form} onSubmit={send}>
       <VoicePanel />
+      <VoiceSessionBar />
       <div
         className={styles.bar}
         data-pending={pending || transcribing || undefined}
@@ -160,6 +175,21 @@ export function CommandBar() {
             <StopIcon />
           </button>
         )}
+        <button
+          type="button"
+          className={styles.icon}
+          data-session={inSession || undefined}
+          disabled={!voiceAvailable}
+          aria-pressed={inSession}
+          aria-label={inSession ? t("command.sessionStop") : t("command.session")}
+          data-tip={inSession ? t("command.sessionStop") : t("command.sessionTip")}
+          onClick={() => {
+            if (inSession) stopSession();
+            else void startSession();
+          }}
+        >
+          <WaveIcon />
+        </button>
         <button
           type="button"
           className={styles.icon}

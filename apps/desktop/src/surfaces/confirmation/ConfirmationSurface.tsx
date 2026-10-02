@@ -29,7 +29,7 @@ import {
 import { Core } from "../../components/core/Core";
 import { ApprovalMark, CloseIcon } from "../../components/shell/icons";
 import { useI18n, type Translate } from "../../i18n";
-import { applicationName, riskLabel, toolName } from "../../i18n/domain";
+import { applicationName, permissionLabel, riskLabel, toolName } from "../../i18n/domain";
 import { confirmationSurface, desktopRuntime } from "../../ipc/confirmation";
 import styles from "./ConfirmationSurface.module.css";
 
@@ -60,6 +60,16 @@ function copy(t: Translate, request: ConfirmationRequest) {
     request.subject?.kind === "application"
       ? applicationName(t, request.subject.application)
       : null;
+  // Settings asked to stop confirming a permission (Gate 4.1).
+  if (request.action === "changePermission" && request.subject?.kind === "permission") {
+    const permission = permissionLabel(t, request.subject.permission);
+    return {
+      title: t("confirm.changePermission.title", { permission }),
+      body: t("confirm.changePermission.body"),
+      risk: t("confirm.changePermission.risk"),
+      confirm: t("confirm.changePermission.confirm"),
+    };
+  }
   if (request.action === "closeApplication" && subject) {
     return {
       title: t("confirm.closeApplication.title", { app: subject }),

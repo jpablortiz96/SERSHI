@@ -213,6 +213,7 @@ describe("core outcomes are phrased in the interface language", () => {
       subject: null,
       summary: "Memory usage completed",
       durationMs: 0,
+      authorization: null,
     });
     expect(text).toBe("Completado: Uso de memoria");
   });

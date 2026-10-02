@@ -31,6 +31,7 @@ import {
 import { companionRenderer } from "../../visual/companions";
 import { playCue } from "../../audio/interfaceAudio";
 import styles from "./Page.module.css";
+import { SecuritySettings } from "./SecuritySettings";
 import { Choices, Pill, Row, Section } from "./SettingsParts";
 import { VoiceDiagnostics, VoiceSettings } from "./VoiceSettings";
 import { UnderstandingDiagnostics, UnderstandingSettings } from "./UnderstandingSettings";
@@ -56,6 +57,8 @@ export function SettingsView() {
       <VoiceSettings />
 
       <UnderstandingSettings />
+
+      <SecuritySettings />
 
       <Appearance />
 

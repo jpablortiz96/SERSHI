@@ -54,14 +54,25 @@ export function speakText(text: string): void {
   });
 }
 
-/** Speaks a command outcome the way the transcript shows it. */
-export function speakOutcome(outcome: CommandOutcome): void {
+/**
+ * Speaks a command outcome the way the transcript shows it, optionally
+ * followed by "anything else?" in a voice session.
+ */
+export function speakOutcome(outcome: CommandOutcome, anythingElse = false): void {
   const { t, format } = i18n();
-  speakText(composeReply(t, format, outcome));
+  const reply = composeReply(t, format, outcome);
+  speakText(anythingElse ? `${reply} ${t("session.anythingElse")}` : reply);
 }
 
 /** Speaks a fixed voice notice. */
-export function speakMessage(key: "voice.noSpeech" | "voice.unclear"): void {
+export function speakMessage(
+  key:
+    | "voice.noSpeech"
+    | "voice.unclear"
+    | "session.listening"
+    | "session.ended.farewell"
+    | "session.ended.notHeard",
+): void {
   speakText(i18n().t(key));
 }
 

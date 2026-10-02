@@ -112,6 +112,7 @@ const outcome: CommandOutcome = {
   understanding: null,
   plan: null,
   brain: null,
+  session: null,
 };
 
 beforeEach(() => {
@@ -210,7 +211,7 @@ describe("push-to-talk", () => {
 describe("what SERSHI heard", () => {
   it("shows the transcript as “You said” before the result, then speaks the reply", () => {
     handleVoiceUpdate({ kind: "heard", text: "Abre Spotify", language: "es", firstHeard: null });
-    handleVoiceUpdate({ kind: "answered", outcome });
+    handleVoiceUpdate({ kind: "answered", outcome, speak: true, anythingElse: false });
     const { messages } = useConversation.getState();
     expect(messages.map((m) => m.role)).toEqual(["user", "sershi"]);
     render(<Transcript messages={messages} />);
@@ -221,7 +222,7 @@ describe("what SERSHI heard", () => {
 
   it("does not speak when voice responses are off", () => {
     useVoice.setState({ prefs: { ...useVoice.getState().prefs, voiceResponses: false } });
-    handleVoiceUpdate({ kind: "answered", outcome });
+    handleVoiceUpdate({ kind: "answered", outcome, speak: true, anythingElse: false });
     expect(speakReply).not.toHaveBeenCalled();
   });
 
@@ -238,7 +239,7 @@ describe("what SERSHI heard", () => {
   it("phrases the reply in the interface language, whatever language was spoken", () => {
     useLocaleStore.setState({ locale: "es-419" });
     handleVoiceUpdate({ kind: "heard", text: "Open Spotify", language: "en", firstHeard: null });
-    handleVoiceUpdate({ kind: "answered", outcome });
+    handleVoiceUpdate({ kind: "answered", outcome, speak: true, anythingElse: false });
     expect(speakReply).toHaveBeenCalledWith("Abrí Spotify.", "es-419");
   });
 });

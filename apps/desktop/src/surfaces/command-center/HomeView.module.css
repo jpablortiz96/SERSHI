@@ -75,7 +75,8 @@
 
 .dialogue {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
   min-height: 0;
 }
@@ -198,18 +199,29 @@
 .conversationBar {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: var(--space-2);
+  width: 100%;
+  max-width: var(--layout-stage-max);
 }
 
+/* Compact: a quiet "+ New conversation", never the room's focus. */
 .newConversation {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border-subtle);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 0;
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font: inherit;
   font-size: var(--type-caption-size);
+  line-height: 1.4;
   cursor: pointer;
+}
+
+.newConversation svg {
+  width: 12px;
+  height: 12px;
 }
 
 .newConversation:hover {

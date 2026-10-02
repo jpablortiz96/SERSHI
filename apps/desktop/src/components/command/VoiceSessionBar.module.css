@@ -1,0 +1,92 @@
+/* The voice session indicator: a quiet pill above the command bar. */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-glass);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  font-size: var(--type-caption-size);
+  color: var(--text-secondary);
+  --session-color: var(--state-listening);
+}
+
+.bar[data-phase="speaking"] {
+  --session-color: var(--state-speaking, var(--state-listening));
+}
+
+.bar[data-phase="understanding"],
+.bar[data-phase="transcribing"],
+.bar[data-phase="planning"],
+.bar[data-phase="executing"] {
+  --session-color: var(--state-thinking, var(--state-transcribing));
+}
+
+.bar[data-phase="waitingForConfirmation"],
+.bar[data-phase="waitingForClarification"] {
+  --session-color: var(--state-awaiting-confirmation, var(--state-warning, var(--state-listening)));
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--session-color);
+  box-shadow: 0 0 calc(4px + var(--voice-level, 0) * 10px) var(--session-color);
+  animation: breathe 1.6s var(--ease-standard) infinite;
+}
+
+.label {
+  font-weight: var(--type-label-weight);
+  color: var(--text-primary);
+}
+
+.phase {
+  color: color-mix(in oklab, var(--session-color) 70%, var(--text-primary));
+}
+
+.hint {
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.end {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.end:hover {
+  color: var(--text-primary);
+}
+
+.end:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+:global(html[data-motion="reduced"]) .dot {
+  animation: none;
+}
+
+@media (max-width: 720px) {
+  .hint {
+    display: none;
+  }
+}

@@ -159,6 +159,12 @@
   color: var(--action-on-primary);
 }
 
+/* An active voice session (Gate 4.1): the wave button stays lit. */
+.icon[data-session] {
+  color: var(--state-listening);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--state-listening) 45%, transparent);
+}
+
 .icon[data-mic="transcribing"] {
   color: var(--state-transcribing);
 }

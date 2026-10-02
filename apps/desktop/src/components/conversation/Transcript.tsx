@@ -1,5 +1,5 @@
 import type { CommandStatus } from "@sershi/contracts";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useI18n, type I18n } from "../../i18n";
 import type { PlanReport } from "@sershi/contracts";
@@ -13,7 +13,7 @@ import {
 } from "../../i18n/domain";
 import { useConversation, type Message, type Reply } from "../../state/conversation";
 import { motionReduced } from "../../visual/appearance";
-import { MicIcon } from "../shell/icons";
+import { ArrowDownIcon, MicIcon } from "../shell/icons";
 import styles from "./Transcript.module.css";
 
 type Status = CommandStatus | "offline" | "voice";
@@ -48,6 +48,7 @@ function statusOf(reply: Reply): Status {
     case "unreachable":
       return "failed";
     case "voice":
+    case "session":
       return "voice";
   }
 }
@@ -64,8 +65,15 @@ function replyText({ t, format }: I18n, reply: Reply): string {
       return reply.notice === "noSpeech" || reply.notice === "unclear"
         ? t(`voice.${reply.notice}`)
         : t(`voice.failure.${reply.notice}`);
+    case "session":
+      return reply.notice === "listening" || reply.notice === "anythingElse"
+        ? t(`session.${reply.notice}`)
+        : t(`session.ended.${reply.notice}`);
   }
 }
+
+/** How close to the end counts as "reading the latest" (px). */
+const NEAR_END_PX = 48;
 
 /**
  * Answers to a question SERSHI asked: one button per offered application
@@ -190,67 +198,120 @@ export function Transcript({
   messages: Message[];
   livePlan?: PlanReport | null;
 }) {
+  const scroller = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const i18n = useI18n();
   const { t, format } = i18n;
+  // Following the latest turn, unless the user scrolled up to read.
+  const following = useRef(true);
+  const count = messages.length + (livePlan ? 1 : 0);
+  const [atEnd, setAtEnd] = useState(true);
+  const [seen, setSeen] = useState(count);
+  const unread = !atEnd && count > seen;
+
+  const toLatest = useCallback((smooth: boolean) => {
+    const reduce = motionReduced();
+    following.current = true;
+    end.current?.scrollIntoView({
+      behavior: smooth && !reduce ? "smooth" : "auto",
+      block: "end",
+    });
+  }, []);
+
+  const onScroll = () => {
+    const el = scroller.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_END_PX;
+    following.current = near;
+    setAtEnd(near);
+    if (near) setSeen(count);
+  };
+
+  // New turns scroll into view only while the user follows the latest;
+  // someone reading older turns is never snapped back to the bottom (the
+  // "Jump to latest" button appears instead).
+  useLayoutEffect(() => {
+    if (following.current) toLatest(true);
+  }, [count, toLatest]);
 
   useEffect(() => {
-    const reduce = motionReduced();
-    end.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "end" });
-  }, [messages.length, livePlan]);
+    toLatest(false);
+  }, [toLatest]);
 
   return (
-    <div className={styles.scroller}>
-      <ol className={styles.list} aria-live="polite" aria-relevant="additions">
-        {messages.map((m, index) => {
-          if (m.role === "user") {
+    <div className={styles.frame}>
+      <div
+        ref={scroller}
+        className={styles.scroller}
+        onScroll={onScroll}
+        // Keyboard users scroll the conversation with the arrow keys.
+        tabIndex={0}
+        role="region"
+        aria-label={t("home.conversationLabel")}
+      >
+        <ol className={styles.list} aria-live="polite" aria-relevant="additions">
+          {messages.map((m, index) => {
+            if (m.role === "user") {
+              return (
+                <li key={m.id} className={styles.message} data-role="user" data-via={m.via}>
+                  {m.via === "voice" && (
+                    <p className={styles.via}>
+                      <MicIcon />
+                      {m.firstHeard ? t("transcript.heardAgain") : t("transcript.youSaid")}
+                    </p>
+                  )}
+                  <p className={styles.user}>{m.text}</p>
+                  {m.firstHeard && (
+                    <p className={styles.firstHeard}>
+                      {t("transcript.firstHeard", { text: m.firstHeard })}
+                    </p>
+                  )}
+                </li>
+              );
+            }
+            const status = statusOf(m.reply);
+            const outcome = m.reply.kind === "outcome" ? m.reply.outcome : null;
             return (
-              <li key={m.id} className={styles.message} data-role="user" data-via={m.via}>
-                {m.via === "voice" && (
-                  <p className={styles.via}>
-                    <MicIcon />
-                    {m.firstHeard ? t("transcript.heardAgain") : t("transcript.youSaid")}
+              <li key={m.id} className={styles.message} data-role="sershi" data-status={status}>
+                {outcome?.understood && (
+                  <p className={styles.understood}>
+                    {t("reply.understood.label")}{" "}
+                    <strong>{understoodAction(t, outcome.understood)}</strong>
                   </p>
                 )}
-                <p className={styles.user}>{m.text}</p>
-                {m.firstHeard && (
-                  <p className={styles.firstHeard}>
-                    {t("transcript.firstHeard", { text: m.firstHeard })}
-                  </p>
-                )}
+                {outcome?.plan && <PlanCard plan={outcome.plan} />}
+                <p className={styles.reply}>{replyText(i18n, m.reply)}</p>
+                <Candidates reply={m.reply} latest={index === messages.length - 1} />
+                <p className={styles.meta}>
+                  {hasLabel(status) && <span>{t(`transcript.status.${status}`)}</span>}
+                  {outcome?.toolId && <span className="t-mono">{outcome.toolId}</span>}
+                  {outcome?.durationMs != null && (
+                    <span className="t-mono">{format.milliseconds(outcome.durationMs)}</span>
+                  )}
+                </p>
               </li>
             );
-          }
-          const status = statusOf(m.reply);
-          const outcome = m.reply.kind === "outcome" ? m.reply.outcome : null;
-          return (
-            <li key={m.id} className={styles.message} data-role="sershi" data-status={status}>
-              {outcome?.understood && (
-                <p className={styles.understood}>
-                  {t("reply.understood.label")}{" "}
-                  <strong>{understoodAction(t, outcome.understood)}</strong>
-                </p>
-              )}
-              {outcome?.plan && <PlanCard plan={outcome.plan} />}
-              <p className={styles.reply}>{replyText(i18n, m.reply)}</p>
-              <Candidates reply={m.reply} latest={index === messages.length - 1} />
-              <p className={styles.meta}>
-                {hasLabel(status) && <span>{t(`transcript.status.${status}`)}</span>}
-                {outcome?.toolId && <span className="t-mono">{outcome.toolId}</span>}
-                {outcome?.durationMs != null && (
-                  <span className="t-mono">{format.milliseconds(outcome.durationMs)}</span>
-                )}
-              </p>
+          })}
+          {livePlan && (
+            <li className={styles.message} data-role="sershi" data-status="running">
+              <PlanCard plan={livePlan} live />
             </li>
-          );
-        })}
-        {livePlan && (
-          <li className={styles.message} data-role="sershi" data-status="running">
-            <PlanCard plan={livePlan} live />
-          </li>
-        )}
-      </ol>
-      <div ref={end} />
+          )}
+        </ol>
+        <div ref={end} />
+      </div>
+      {unread && (
+        <button
+          type="button"
+          className={styles.jump}
+          onClick={() => {
+            toLatest(true);
+          }}
+        >
+          <ArrowDownIcon />
+          {t("home.jumpToLatest")}
+        </button>
+      )}
     </div>
   );
 }

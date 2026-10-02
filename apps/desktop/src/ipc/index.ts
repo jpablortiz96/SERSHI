@@ -6,6 +6,8 @@ import {
   isCommandOutcome,
   isModelProgress,
   isNullPayload,
+  isPermissionChange,
+  isPermissionList,
   isPlanReport,
   isPresenceUpdate,
   isSemanticStatus,
@@ -13,8 +15,13 @@ import {
   isSystemSnapshot,
   isVoiceLevel,
   isVoiceStatus,
+  isVoiceSessionStatus,
   isVoiceUpdate,
   type ActivityEntry,
+  type ConfigurablePermission,
+  type PermissionSetting,
+  type PermissionStatus,
+  type VoiceSessionStatus,
   type AssistantSnapshot,
   type AssistantState,
   type CommandOutcome,
@@ -84,6 +91,22 @@ export const sershi = {
   /** Forgets the session context (not preferences). */
   resetConversation: () => call("reset_conversation", {}),
 
+  // Hands-free voice session (Gate 4.1): input only, never authorization.
+  startVoiceSession: () => call("start_voice_session", {}, isCaptureStart),
+  stopVoiceSession: () => call("stop_voice_session", {}),
+  getVoiceSession: () =>
+    call(
+      "get_voice_session",
+      {},
+      (v: unknown): v is VoiceSessionStatus | null => v === null || isVoiceSessionStatus(v),
+    ),
+
+  // Settings > Security: a less restrictive setting waits for the trusted
+  // confirmation window; this call can never apply it by itself.
+  getPermissionSettings: () => call("get_permission_settings", {}, isPermissionList),
+  requestPermissionChange: (permission: ConfigurablePermission, setting: PermissionSetting) =>
+    call("request_permission_change", { permission, setting }, isPermissionChange),
+
   onAssistantState: (handler: (snapshot: AssistantSnapshot) => void) =>
     subscribe(EVENTS.assistantState, isAssistantSnapshot, handler),
   onActivity: (handler: (entry: ActivityEntry) => void) =>
@@ -108,4 +131,8 @@ export const sershi = {
     subscribe(EVENTS.brainModel, isModelProgress, handler),
   /** A plan's progress after each step (display only). */
   onPlan: (handler: (report: PlanReport) => void) => subscribe(EVENTS.plan, isPlanReport, handler),
+  onVoiceSession: (handler: (status: VoiceSessionStatus) => void) =>
+    subscribe(EVENTS.voiceSession, isVoiceSessionStatus, handler),
+  onPermissions: (handler: (settings: PermissionStatus[]) => void) =>
+    subscribe(EVENTS.permissions, isPermissionList, handler),
 };

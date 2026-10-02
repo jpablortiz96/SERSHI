@@ -61,3 +61,9 @@
 :global(html[data-motion="reduced"]) .companion {
   transform: none !important;
 }
+
+/* Voice session active (Gate 4.1): a steady ring, never hidden. */
+.stage[data-session] .companion {
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--state-listening) 70%, transparent);
+}

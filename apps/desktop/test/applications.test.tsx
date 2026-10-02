@@ -50,6 +50,7 @@ describe("application replies", () => {
         subject: "Spotify",
         summary: "Open application completed",
         durationMs: 3,
+        authorization: null,
       }),
     ).toBe("Se abrió Spotify");
   });

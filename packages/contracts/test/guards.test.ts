@@ -136,8 +136,18 @@ describe("guards reject malformed payloads", () => {
 
   it("the activity log never carries user text fields", () => {
     for (const entry of activity) {
+      // `authorization` is a closed enum (Gate 4.1): why an action ran.
       expect(Object.keys(entry).sort()).toEqual(
-        ["atMs", "durationMs", "id", "kind", "subject", "summary", "toolId"].sort(),
+        [
+          "atMs",
+          "authorization",
+          "durationMs",
+          "id",
+          "kind",
+          "subject",
+          "summary",
+          "toolId",
+        ].sort(),
       );
     }
   });

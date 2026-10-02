@@ -14,6 +14,7 @@ import type {
   ModelError,
   ModelProgress,
   SemanticStatus,
+  SessionTrace,
   UnderstandingTrace,
 } from "@sershi/contracts";
 import { create } from "zustand";
@@ -32,6 +33,8 @@ export interface UnderstandingRecord {
   brain: BrainTrace | null;
   /** The outcome's status, e.g. "completed" or "needsClarification". */
   status: CommandOutcome["status"];
+  /** The conversation session after it (Gate 4.1; no words, no prompts). */
+  session: SessionTrace | null;
 }
 
 interface RoleState {
@@ -121,13 +124,14 @@ export const useUnderstanding = create<UnderstandingStore>((set, get) => {
     },
 
     observe: (outcome, raw) => {
-      if (outcome.understanding || outcome.brain) {
+      if (outcome.understanding || outcome.brain || outcome.session) {
         set({
           last: {
             raw,
             trace: outcome.understanding,
             brain: outcome.brain,
             status: outcome.status,
+            session: outcome.session,
           },
         });
       }

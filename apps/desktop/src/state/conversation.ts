@@ -8,7 +8,7 @@
  * phrased at render time in the current interface language and re-render
  * when the user switches language.
  */
-import type { CommandOutcome, PlanReport, VoiceFailure } from "@sershi/contracts";
+import type { CommandOutcome, PlanReport, SessionEndReason, VoiceFailure } from "@sershi/contracts";
 import { create } from "zustand";
 
 import { loadPreferences } from "../i18n/preferences";
@@ -23,7 +23,12 @@ export type Reply =
   /** The IPC call itself failed. */
   | { kind: "unreachable" }
   /** A voice interaction ended without a command (nothing ran). */
-  | { kind: "voice"; notice: "noSpeech" | "unclear" | VoiceFailure };
+  | { kind: "voice"; notice: "noSpeech" | "unclear" | VoiceFailure }
+  /**
+   * The voice session speaking for itself (Gate 4.1): "I'm listening",
+   * "Anything else?", or why it ended. Nothing ran.
+   */
+  | { kind: "session"; notice: "listening" | "anythingElse" | SessionEndReason };
 
 /** How the user asked: typed, or spoken (then transcribed locally). */
 export type Via = "typed" | "voice";
@@ -60,8 +65,11 @@ interface ConversationStore {
   followPlan: (report: PlanReport) => void;
 }
 
-/** Messages kept in view; older ones are dropped from memory. */
-const MAX_MESSAGES = 40;
+/**
+ * Messages kept for scrollback in this session (memory only; saved
+ * conversations are a later gate). Bounded so the view stays light.
+ */
+export const MAX_MESSAGES = 120;
 
 let nextId = 1;
 

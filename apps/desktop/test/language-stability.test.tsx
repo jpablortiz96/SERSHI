@@ -50,6 +50,7 @@ const notUnderstood: CommandOutcome = {
   understanding: null,
   plan: null,
   brain: null,
+  session: null,
 };
 
 beforeEach(() => {
@@ -69,13 +70,18 @@ describe("response language", () => {
   ])("stays %s when recognition detected %s", (locale, detected, reply) => {
     useLocaleStore.setState({ locale: locale as "es-419" });
     handleVoiceUpdate({ kind: "heard", text: "Пон Мекром", language: detected, firstHeard: null });
-    handleVoiceUpdate({ kind: "answered", outcome });
+    handleVoiceUpdate({ kind: "answered", outcome, speak: true, anythingElse: false });
     expect(speakReply).toHaveBeenCalledWith(reply, locale);
   });
 
   it("a misunderstood utterance is answered in the interface language too", () => {
     handleVoiceUpdate({ kind: "heard", text: "Ári Óðluk", language: "is", firstHeard: null });
-    handleVoiceUpdate({ kind: "answered", outcome: notUnderstood });
+    handleVoiceUpdate({
+      kind: "answered",
+      outcome: notUnderstood,
+      speak: true,
+      anythingElse: false,
+    });
     const [text, language] = speakReply.mock.calls[0] ?? [];
     expect(text).toBe(
       "No entendí eso. Prueba, por ejemplo, «Abre Chrome» o «¿Cuánta memoria estoy usando?».",

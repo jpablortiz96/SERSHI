@@ -60,6 +60,8 @@ export const enUS = {
   },
 
   home: {
+    jumpToLatest: "Jump to latest",
+    conversationLabel: "Conversation",
     greeting: "How can I help?",
     newConversation: "New conversation",
     suggestionsLabel: "Suggestions",
@@ -72,6 +74,10 @@ export const enUS = {
   },
 
   command: {
+    session: "Start a voice session",
+    sessionTip: "Voice session — talk hands-free",
+    sessionStop: "End the voice session",
+    interrupt: "Interrupt and speak",
     label: "Command",
     placeholder: "Ask SERSHI or type a command",
     voice: "Talk to SERSHI",
@@ -144,6 +150,19 @@ export const enUS = {
   },
 
   reply: {
+    recall: {
+      opened: "I opened {apps}.",
+      closed: "I asked {apps} to close.",
+      openFailed: "I couldn't open {apps}.",
+      closeFailed: "I couldn't close {apps}.",
+      noneOpened: "I haven't opened an application in this conversation.",
+      noneClosed: "I haven't closed an application in this conversation.",
+      noneDid: "I haven't done anything in this conversation yet.",
+      did: "Just now: {actions}.",
+      didFailed: "Didn't work: {actions}.",
+      and: " and ",
+      or: " or ",
+    },
     memory: "You're using {used} GB of {total} GB memory ({percent}).",
     cpu: "Your processor is running at {percent} across {cores} cores.",
     cpuWarmingUp:
@@ -218,6 +237,36 @@ export const enUS = {
     offline:
       "I'm running as a browser preview, so my core isn't connected. Launch the desktop app (pnpm dev) to talk to me.",
     coreUnreachable: "Something went wrong reaching my core.",
+  },
+
+  session: {
+    label: "Voice session",
+    hint: "Speak naturally. Say “No, thanks” when you're done.",
+    end: "End",
+    phase: {
+      starting: "Starting",
+      listening: "Listening",
+      transcribing: "Understanding",
+      understanding: "Thinking",
+      planning: "Planning",
+      executing: "Working",
+      waitingForClarification: "Waiting for your answer",
+      waitingForConfirmation: "Approve in the confirmation window",
+      speaking: "Speaking",
+      ending: "Ending",
+    },
+    started: "I'm listening.",
+    listening: "I'm listening.",
+    anythingElse: "Anything else?",
+    ended: {
+      stopped: "Voice session ended.",
+      farewell: "Talk to you later.",
+      timeout: "Voice session ended after a quiet moment.",
+      notHeard: "I couldn't hear you, so I ended the voice session.",
+      maxDuration: "Voice session ended (time limit).",
+      dismissed: "Voice session ended.",
+      failed: "Voice session ended: the microphone isn't available.",
+    },
   },
 
   voice: {
@@ -327,6 +376,9 @@ export const enUS = {
       planStarted: "Started a plan",
       planFinished: "Finished a plan",
       planCancelled: "Stopped a plan",
+      voiceSessionStarted: "Voice session started",
+      voiceSessionEnded: "Voice session ended",
+      permissionChanged: "Permission changed",
     },
   },
 
@@ -341,6 +393,7 @@ export const enUS = {
       understanding: "Intelligence",
       privacy: "Privacy",
       tools: "Tools & permissions",
+      security: "Security & permissions",
       platform: "Platform",
       developer: "Developer · State preview",
       about: "About",
@@ -426,6 +479,35 @@ export const enUS = {
       volumeDetail: "Interface sounds only.",
       volumeValue: "{value}%",
       soundSample: "Play sample",
+    },
+    security: {
+      lede: "What SERSHI may do without asking you first. Voice never approves anything: hands-free actions come only from what you allow here, and a less restrictive setting is approved in the confirmation window.",
+      permissions: {
+        openApplications: {
+          label: "Open applications",
+          detail: "Start installed applications when you ask.",
+        },
+        closeApplications: {
+          label: "Close applications",
+          detail: "Ask a running application to close. It may ask to save your work.",
+        },
+        systemInformation: {
+          label: "System information",
+          detail: "Read memory, processor and system details.",
+        },
+      },
+      settings: {
+        alwaysAllow: "Always allow",
+        askEveryTime: "Ask every time",
+      },
+      alwaysAllowDetail:
+        "Your typed or spoken requests run without an extra confirmation. Actions proposed by the Agent Brain still ask.",
+      askEveryTimeDetail: "Approve each time in the confirmation window.",
+      recommended: "Recommended",
+      pending: "Approve this change in the confirmation window.",
+      busy: "SERSHI is busy. Try again in a moment.",
+      footnote:
+        "High-risk actions — deleting files, sending messages, payments, security changes — can never be set to Always allow. Every change is recorded in Activity.",
     },
     voice: {
       microphone: "Microphone",
@@ -619,6 +701,29 @@ export const enUS = {
         },
         brainTime: "Agent Brain time",
         planSteps: "Plan steps",
+        session: "Conversation",
+        modality: "Input",
+        modalities: {
+          typed: "Typed",
+          voice: "Voice",
+        },
+        entities: "Active entities",
+        ledger: "Actions remembered",
+        lastAction: "Last action",
+        reference: "Reference from",
+        references: {
+          entities: "Recent applications",
+          ledger: "Action ledger",
+          clarification: "Answer to a question",
+        },
+        authorization: "Allowed by",
+        authorizations: {
+          policy: "Default policy",
+          storedPermission: "Your setting (Always allow)",
+          trustedConfirmation: "Your approval",
+        },
+        voiceSession: "Voice session",
+        bargeIns: "Interruptions",
         promptVersion: "Instruction version",
         raw: "Text",
         normalized: "Normalized",
@@ -668,6 +773,7 @@ export const enUS = {
   },
 
   tools: {
+    permissionChange: "Permission change",
     systemInfo: "System information",
     memory: "Memory usage",
     cpu: "Processor usage",
@@ -683,6 +789,12 @@ export const enUS = {
   },
 
   confirm: {
+    changePermission: {
+      title: "Allow “{permission}” without asking?",
+      body: "Your typed or spoken requests will run without this confirmation. You can switch back to “Ask every time” in Settings › Security at any time.",
+      risk: "Actions proposed by the Agent Brain will still ask.",
+      confirm: "Always allow",
+    },
     label: "Confirmation required",
     trust: "SERSHI approval",
     closeApplication: {
@@ -697,6 +809,7 @@ export const enUS = {
       confirm: "Allow",
     },
     reason: {
+      permissionChange: "You asked for this in Settings.",
       permissionUndecided: "You haven't granted this permission yet.",
       highRisk: "This action may not be reversible.",
       agentInitiatedSensitiveAction: "This action was proposed automatically.",

@@ -42,6 +42,10 @@ export const KIND_TONE: Record<ActivityKind, Tone> = {
   planStarted: "neutral",
   planFinished: "success",
   planCancelled: "neutral",
+  // Gate 4.1: hands-free sessions and permission changes.
+  voiceSessionStarted: "signal",
+  voiceSessionEnded: "signal",
+  permissionChanged: "warning",
 };
 
 export function ActivityItem({ entry }: { entry: ActivityEntry }) {

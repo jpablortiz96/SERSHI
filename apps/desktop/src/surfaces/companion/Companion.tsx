@@ -54,6 +54,16 @@ export function Companion() {
       }),
     [],
   );
+  // A voice session is never hidden: the companion wears a ring while one
+  // is active (Gate 4.1). Display only.
+  const [inSession, setInSession] = useState(false);
+  useEffect(
+    () =>
+      sershi.onVoiceSession((status) => {
+        setInSession(status.phase !== null);
+      }),
+    [],
+  );
   useEffect(
     () => () => {
       window.clearTimeout(settle.current);
@@ -117,6 +127,7 @@ export function Companion() {
       ref={stage}
       className={styles.stage}
       data-state={state}
+      data-session={inSession || undefined}
       data-pressed={pressed || undefined}
       data-dragging={dragging || undefined}
     >

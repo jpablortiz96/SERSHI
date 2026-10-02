@@ -59,6 +59,8 @@ export const ptBR: Messages = {
   },
 
   home: {
+    jumpToLatest: "Ir para o mais recente",
+    conversationLabel: "Conversa",
     greeting: "Como posso ajudar?",
     newConversation: "Nova conversa",
     suggestionsLabel: "Sugestões",
@@ -71,6 +73,10 @@ export const ptBR: Messages = {
   },
 
   command: {
+    session: "Iniciar uma sessão de voz",
+    sessionTip: "Sessão de voz: fale sem usar as mãos",
+    sessionStop: "Encerrar a sessão de voz",
+    interrupt: "Interromper e falar",
     label: "Comando",
     placeholder: "Pergunte ao SERSHI ou digite um comando",
     voice: "Falar com a SERSHI",
@@ -143,6 +149,19 @@ export const ptBR: Messages = {
   },
 
   reply: {
+    recall: {
+      opened: "Abri {apps}.",
+      closed: "Pedi para {apps} fechar.",
+      openFailed: "Não consegui abrir {apps}.",
+      closeFailed: "Não consegui fechar {apps}.",
+      noneOpened: "Não abri nenhum aplicativo nesta conversa.",
+      noneClosed: "Não fechei nenhum aplicativo nesta conversa.",
+      noneDid: "Ainda não fiz nada nesta conversa.",
+      did: "Agora há pouco: {actions}.",
+      didFailed: "Não funcionou: {actions}.",
+      and: " e ",
+      or: " nem ",
+    },
     memory: "Você está usando {used} GB de {total} GB de memória ({percent}).",
     cpu: "Seu processador está operando a {percent} em {cores} núcleos.",
     cpuWarmingUp:
@@ -222,6 +241,36 @@ export const ptBR: Messages = {
     offline:
       "Estou rodando como prévia no navegador, então meu núcleo não está conectado. Abra o aplicativo para desktop (pnpm dev) para falar comigo.",
     coreUnreachable: "Algo deu errado ao falar com o meu núcleo.",
+  },
+
+  session: {
+    label: "Sessão de voz",
+    hint: "Fale naturalmente. Diga “Não, obrigado” quando terminar.",
+    end: "Encerrar",
+    phase: {
+      starting: "Iniciando",
+      listening: "Ouvindo",
+      transcribing: "Entendendo",
+      understanding: "Pensando",
+      planning: "Planejando",
+      executing: "Trabalhando",
+      waitingForClarification: "Esperando sua resposta",
+      waitingForConfirmation: "Aprove na janela de confirmação",
+      speaking: "Falando",
+      ending: "Encerrando",
+    },
+    started: "Estou ouvindo.",
+    listening: "Estou ouvindo.",
+    anythingElse: "Precisa de mais alguma coisa?",
+    ended: {
+      stopped: "Sessão de voz encerrada.",
+      farewell: "Até mais.",
+      timeout: "A sessão de voz terminou depois de um momento de silêncio.",
+      notHeard: "Não consegui ouvir você, então encerrei a sessão de voz.",
+      maxDuration: "A sessão de voz terminou (limite de tempo).",
+      dismissed: "Sessão de voz encerrada.",
+      failed: "A sessão de voz terminou: o microfone não está disponível.",
+    },
   },
 
   voice: {
@@ -333,6 +382,9 @@ export const ptBR: Messages = {
       planStarted: "Começou um plano",
       planFinished: "Terminou um plano",
       planCancelled: "Parou um plano",
+      voiceSessionStarted: "Iniciou uma sessão de voz",
+      voiceSessionEnded: "Encerrou a sessão de voz",
+      permissionChanged: "Alterou uma permissão",
     },
   },
 
@@ -347,6 +399,7 @@ export const ptBR: Messages = {
       understanding: "Inteligência",
       privacy: "Privacidade",
       tools: "Ferramentas e permissões",
+      security: "Segurança e permissões",
       platform: "Plataforma",
       developer: "Desenvolvimento · Prévia de estados",
       about: "Sobre",
@@ -434,6 +487,36 @@ export const ptBR: Messages = {
       volumeDetail: "Somente os sons da interface.",
       volumeValue: "{value}%",
       soundSample: "Ouvir amostra",
+    },
+    security: {
+      lede: "O que o SERSHI pode fazer sem perguntar antes. A voz nunca aprova nada: ações sem as mãos vêm apenas do que você permitir aqui, e uma configuração menos restritiva é aprovada na janela de confirmação.",
+      permissions: {
+        openApplications: {
+          label: "Abrir aplicativos",
+          detail: "Iniciar aplicativos instalados quando você pedir.",
+        },
+        closeApplications: {
+          label: "Fechar aplicativos",
+          detail:
+            "Pedir a um aplicativo aberto que feche. Ele pode pedir para salvar seu trabalho.",
+        },
+        systemInformation: {
+          label: "Informações do sistema",
+          detail: "Ler memória, processador e dados do sistema.",
+        },
+      },
+      settings: {
+        alwaysAllow: "Sempre permitir",
+        askEveryTime: "Perguntar sempre",
+      },
+      alwaysAllowDetail:
+        "O que você pedir digitando ou falando é feito sem uma confirmação extra. Ações propostas pelo Agent Brain continuam perguntando.",
+      askEveryTimeDetail: "Aprove cada vez na janela de confirmação.",
+      recommended: "Recomendado",
+      pending: "Aprove esta alteração na janela de confirmação.",
+      busy: "O SERSHI está ocupado. Tente novamente em instantes.",
+      footnote:
+        "Ações de alto risco — apagar arquivos, enviar mensagens, pagamentos, alterações de segurança — nunca podem ficar em Sempre permitir. Cada alteração fica registrada em Atividade.",
     },
     voice: {
       microphone: "Microfone",
@@ -627,6 +710,29 @@ export const ptBR: Messages = {
         },
         brainTime: "Tempo do Agent Brain",
         planSteps: "Passos do plano",
+        session: "Conversa",
+        modality: "Entrada",
+        modalities: {
+          typed: "Digitada",
+          voice: "Voz",
+        },
+        entities: "Entidades ativas",
+        ledger: "Ações lembradas",
+        lastAction: "Última ação",
+        reference: "Referência a partir de",
+        references: {
+          entities: "Aplicativos recentes",
+          ledger: "Registro de ações",
+          clarification: "Resposta a uma pergunta",
+        },
+        authorization: "Permitido por",
+        authorizations: {
+          policy: "Política padrão",
+          storedPermission: "Sua configuração (Sempre permitir)",
+          trustedConfirmation: "Sua aprovação",
+        },
+        voiceSession: "Sessão de voz",
+        bargeIns: "Interrupções",
         promptVersion: "Versão das instruções",
         raw: "Texto",
         normalized: "Normalizado",
@@ -676,6 +782,7 @@ export const ptBR: Messages = {
   },
 
   tools: {
+    permissionChange: "Alteração de permissão",
     systemInfo: "Informações do sistema",
     memory: "Uso de memória",
     cpu: "Uso do processador",
@@ -691,6 +798,12 @@ export const ptBR: Messages = {
   },
 
   confirm: {
+    changePermission: {
+      title: "Permitir “{permission}” sem perguntar?",
+      body: "O que você pedir digitando ou falando será feito sem esta confirmação. Você pode voltar para “Perguntar sempre” em Configurações › Segurança a qualquer momento.",
+      risk: "Ações propostas pelo Agent Brain continuarão perguntando.",
+      confirm: "Sempre permitir",
+    },
     label: "Confirmação necessária",
     trust: "Aprovação do SERSHI",
     closeApplication: {
@@ -705,6 +818,7 @@ export const ptBR: Messages = {
       confirm: "Permitir",
     },
     reason: {
+      permissionChange: "Você pediu isso nas Configurações.",
       permissionUndecided: "Você ainda não concedeu esta permissão.",
       highRisk: "Talvez esta ação não possa ser desfeita.",
       agentInitiatedSensitiveAction: "Esta ação foi proposta automaticamente.",

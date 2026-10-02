@@ -18,6 +18,9 @@ import type { VoiceStatus } from "./generated/VoiceStatus";
 import type { VoiceUpdate } from "./generated/VoiceUpdate";
 import type { SemanticStatus } from "./generated/SemanticStatus";
 import type { PlanReport } from "./generated/PlanReport";
+import type { PermissionChange } from "./generated/PermissionChange";
+import type { PermissionStatus } from "./generated/PermissionStatus";
+import type { VoiceSessionStatus } from "./generated/VoiceSessionStatus";
 
 /** Mirrors `AssistantState::ALL` in Rust. */
 export const ASSISTANT_STATES = [
@@ -141,6 +144,24 @@ export function isCommandOutcome(v: unknown): v is CommandOutcome {
     }
   }
   if (isObj(detail) && detail.kind === "brainAnswer" && !isStr(detail.message)) return false;
+  // A recall reports ledger entries: trusted applications only, bounded.
+  if (isObj(detail) && detail.kind === "recall") {
+    if (
+      !isStr(detail.recall) ||
+      !Array.isArray(detail.items) ||
+      detail.items.length > 32 ||
+      !detail.items.every(
+        (i) =>
+          isObj(i) &&
+          isStr(i.action) &&
+          STEP_ACTIONS.includes(i.action) &&
+          isStr(i.result) &&
+          (i.application === null || isApplicationSummary(i.application)),
+      )
+    ) {
+      return false;
+    }
+  }
   const understood = v.understood;
   if (understood != null && (!isObj(understood) || !isApplicationSummary(understood.application))) {
     return false;
@@ -214,6 +235,7 @@ export function isPresenceUpdate(v: unknown): v is PresenceUpdate {
 const VOICE_UPDATE_KINDS = [
   "heard",
   "answered",
+  "prompt",
   "noSpeech",
   "unclear",
   "cancelled",
@@ -234,7 +256,11 @@ export function isVoiceUpdate(v: unknown): v is VoiceUpdate {
         (v.firstHeard === undefined || isNullable(v.firstHeard, isStr))
       );
     case "answered":
-      return isCommandOutcome(v.outcome);
+      return (
+        isCommandOutcome(v.outcome) &&
+        typeof v.speak === "boolean" &&
+        typeof v.anythingElse === "boolean"
+      );
     case "failed":
       return isStr(v.reason);
     case "timings":
@@ -290,6 +316,57 @@ export function isVoiceStatus(v: unknown): v is VoiceStatus {
 
 export function isCaptureStart(v: unknown): v is CaptureStart {
   return isObj(v) && (v.kind === "started" || (v.kind === "refused" && isStr(v.reason)));
+}
+
+const SESSION_PHASES = [
+  "starting",
+  "listening",
+  "transcribing",
+  "understanding",
+  "planning",
+  "executing",
+  "waitingForClarification",
+  "waitingForConfirmation",
+  "speaking",
+  "ending",
+];
+
+/** The voice session's status (Gate 4.1). */
+export function isVoiceSessionStatus(v: unknown): v is VoiceSessionStatus {
+  return (
+    isObj(v) &&
+    isNum(v.id) &&
+    (v.phase === null || (isStr(v.phase) && SESSION_PHASES.includes(v.phase))) &&
+    isNum(v.turn) &&
+    isNum(v.bargeIns) &&
+    isNum(v.idleTimeoutMs) &&
+    isNullable(v.ended, isStr)
+  );
+}
+
+const PERMISSIONS = ["openApplications", "closeApplications", "systemInformation"];
+const SETTINGS = ["alwaysAllow", "askEveryTime"];
+
+/** The configurable permissions (a closed list) and their settings. */
+export function isPermissionList(v: unknown): v is PermissionStatus[] {
+  return (
+    Array.isArray(v) &&
+    v.length <= PERMISSIONS.length &&
+    v.every(
+      (p) =>
+        isObj(p) &&
+        isStr(p.permission) &&
+        PERMISSIONS.includes(p.permission) &&
+        isStr(p.setting) &&
+        SETTINGS.includes(p.setting) &&
+        isStr(p.defaultSetting) &&
+        SETTINGS.includes(p.defaultSetting),
+    )
+  );
+}
+
+export function isPermissionChange(v: unknown): v is PermissionChange {
+  return v === "applied" || v === "unchanged" || v === "needsConfirmation";
 }
 
 /** `null` payload (e.g. the focus-command event). */

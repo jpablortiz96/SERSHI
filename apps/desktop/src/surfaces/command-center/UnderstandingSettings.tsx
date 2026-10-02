@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 
 import { useI18n } from "../../i18n";
-import { applicationName } from "../../i18n/domain";
+import { applicationName, stepLabel } from "../../i18n/domain";
 import { desktopRuntime } from "../../ipc";
 import { MODEL_ROLES, useUnderstanding, type ModelRole } from "../../state/understanding";
+import { useVoice } from "../../state/voice";
 import styles from "./Page.module.css";
 import { Choices, Pill, Row, Section } from "./SettingsParts";
 
@@ -192,6 +193,7 @@ function ModelCard({ role }: { role: ModelRole }) {
 export function UnderstandingDiagnostics() {
   const { t, format } = useI18n();
   const last = useUnderstanding((s) => s.last);
+  const voiceSession = useVoice((s) => s.session ?? s.lastSession);
   if (!last) {
     return (
       <Section title={t("settings.developer.understanding.title")}>
@@ -200,6 +202,7 @@ export function UnderstandingDiagnostics() {
     );
   }
   const { trace, brain } = last;
+  const session = last.session;
   return (
     <Section title={t("settings.developer.understanding.title")}>
       <p className={styles.footnote}>{t("settings.developer.understanding.footnote")}</p>
@@ -240,6 +243,60 @@ export function UnderstandingDiagnostics() {
         label={t("settings.developer.understanding.result")}
         value={<span className="t-mono">{last.status}</span>}
       />
+      {session && (
+        <>
+          <Row
+            label={t("settings.developer.understanding.session")}
+            value={<span className="t-mono">#{session.session}</span>}
+          />
+          <Row
+            label={t("settings.developer.understanding.modality")}
+            value={t(`settings.developer.understanding.modalities.${session.modality}`)}
+          />
+          <Row
+            label={t("settings.developer.understanding.entities")}
+            value={<span className="t-mono">{format.integer(session.activeEntities)}</span>}
+          />
+          <Row
+            label={t("settings.developer.understanding.ledger")}
+            value={<span className="t-mono">{format.integer(session.ledgerEntries)}</span>}
+          />
+          {session.lastAction && (
+            <Row
+              label={t("settings.developer.understanding.lastAction")}
+              value={stepLabel(t, session.lastAction)}
+            />
+          )}
+          {session.reference && (
+            <Row
+              label={t("settings.developer.understanding.reference")}
+              value={t(`settings.developer.understanding.references.${session.reference}`)}
+            />
+          )}
+          {session.authorization && (
+            <Row
+              label={t("settings.developer.understanding.authorization")}
+              value={t(`settings.developer.understanding.authorizations.${session.authorization}`)}
+            />
+          )}
+        </>
+      )}
+      {voiceSession && (
+        <>
+          <Row
+            label={t("settings.developer.understanding.voiceSession")}
+            value={
+              voiceSession.phase
+                ? t(`session.phase.${voiceSession.phase}`)
+                : t(`session.ended.${voiceSession.ended ?? "stopped"}`)
+            }
+          />
+          <Row
+            label={t("settings.developer.understanding.bargeIns")}
+            value={<span className="t-mono">{format.integer(voiceSession.bargeIns)}</span>}
+          />
+        </>
+      )}
       {trace && (
         <>
           <Row

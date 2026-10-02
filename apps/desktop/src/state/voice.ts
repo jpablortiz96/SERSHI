@@ -12,6 +12,7 @@ import type {
   CaptureStart,
   ModelError,
   VoiceFailure,
+  VoiceSessionStatus,
   VoiceSettings,
   VoiceStatus,
   VoiceTimings,
@@ -66,6 +67,15 @@ interface VoiceStore {
   notice: VoiceNotice | null;
   /** Where the time went for the last spoken command (Developer Mode). */
   latency: LatencyRecord | null;
+  /**
+   * The hands-free voice session while one is active (Gate 4.1). The
+   * microphone listens again after each reply only inside a session.
+   */
+  session: VoiceSessionStatus | null;
+  /** The last session's interruptions, for diagnostics. */
+  lastSession: VoiceSessionStatus | null;
+  startSession: () => Promise<void>;
+  stopSession: () => void;
   refresh: () => Promise<void>;
   setPrefs: (patch: Partial<VoicePrefs>) => void;
   /** Push-to-talk: start, or stop and send if already listening. */
@@ -115,6 +125,34 @@ export const useVoice = create<VoiceStore>((set, get) => ({
   prefs: prefsFrom(loadPreferences()),
   notice: null,
   latency: null,
+  session: null,
+  lastSession: null,
+
+  startSession: async () => {
+    if (!desktopRuntime) return;
+    set({ notice: null });
+    clearSpeechExpectation();
+    let result: CaptureStart;
+    try {
+      result = await sershi.startVoiceSession();
+    } catch {
+      set({ notice: { kind: "failure", reason: "recognitionFailed" } });
+      return;
+    }
+    if (result.kind === "refused") {
+      set({
+        notice:
+          result.reason === "modelMissing"
+            ? { kind: "modelRequired" }
+            : { kind: "failure", reason: result.reason },
+      });
+    }
+  },
+
+  stopSession: () => {
+    stopSpeech();
+    if (desktopRuntime) sershi.stopVoiceSession().catch(() => undefined);
+  },
 
   refresh: async () => {
     if (!desktopRuntime) return;
@@ -203,15 +241,23 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
       return;
     case "answered": {
       conversation.addReply({ kind: "outcome", outcome: update.outcome });
+      if (update.anythingElse) conversation.addReply({ kind: "session", notice: "anythingElse" });
       const heard = [...useConversation.getState().messages]
         .reverse()
         .find((m) => m.role === "user" && m.via === "voice");
       useUnderstanding
         .getState()
         .observe(update.outcome, heard?.role === "user" ? heard.text : null);
-      if (prefs.voiceResponses) speakOutcome(update.outcome);
+      // A reply the user already talked over is shown, never spoken.
+      if (prefs.voiceResponses && update.speak) speakOutcome(update.outcome, update.anythingElse);
+      else if (!update.speak) clearSpeechExpectation();
       return;
     }
+    case "prompt":
+      // "Sí" to "anything else?": SERSHI is listening (nothing ran).
+      conversation.addReply({ kind: "session", notice: "listening" });
+      if (prefs.voiceResponses) speakMessage("session.listening");
+      return;
     case "noSpeech":
     case "unclear":
       conversation.addReply({ kind: "voice", notice: update.kind });
@@ -243,6 +289,23 @@ export function handleVoiceUpdate(update: VoiceUpdate): void {
   }
 }
 
+/** Follows the voice session's status (Gate 4.1). Exported for tests. */
+export function handleVoiceSession(status: VoiceSessionStatus): void {
+  const { prefs, session } = useVoice.getState();
+  if (status.phase !== null) {
+    const starting = session === null || session.id !== status.id;
+    useVoice.setState({ session: status });
+    if (starting) useConversation.getState().addReply({ kind: "session", notice: "listening" });
+    return;
+  }
+  // Ended: the microphone is closed; say why (a farewell is answered).
+  useVoice.setState({ session: null, lastSession: status });
+  const reason = status.ended ?? "stopped";
+  useConversation.getState().addReply({ kind: "session", notice: reason });
+  if (prefs.voiceResponses && reason === "farewell") speakMessage("session.ended.farewell");
+  if (prefs.voiceResponses && reason === "notHeard") speakMessage("session.ended.notHeard");
+}
+
 /**
  * Connects voice to the core (Command Center only, so events are handled
  * once). Pushes the stored preferences, follows downloads. Returns cleanup.
@@ -257,6 +320,14 @@ export function connectVoice(): () => void {
     })
     .catch(() => undefined);
   const stopVoice = sershi.onVoice(handleVoiceUpdate);
+  const stopSession = sershi.onVoiceSession(handleVoiceSession);
+  // A session may already be running (the Command Center was reloaded).
+  sershi
+    .getVoiceSession()
+    .then((status) => {
+      useVoice.setState({ session: status?.phase ? status : null });
+    })
+    .catch(() => undefined);
   // The interface language is a recognition hint: keep the core in sync.
   const stopLocale = useLocaleStore.subscribe((state, previous) => {
     if (state.locale === previous.locale) return;
@@ -288,6 +359,7 @@ export function connectVoice(): () => void {
   });
   return () => {
     stopVoice();
+    stopSession();
     stopModel();
     stopLocale();
   };
